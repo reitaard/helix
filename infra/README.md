@@ -1,13 +1,17 @@
 # Infrastructure
 
-Planned concerns:
+Infrastructure is not selected yet. This directory will hold deployment/configuration once specific needs are validated.
 
-- GPU inference workers
-- API / job service
-- Redis or equivalent queue
-- Postgres experiment/project state
-- S3/R2-compatible object storage
-- worker autoscaling
-- retries and OOM recovery
-- observability and generation cost accounting
-- content provenance / asset metadata
+Potential later concerns include:
+
+- durable database;
+- object storage;
+- queue/cache;
+- GPU workers;
+- retries and OOM recovery;
+- autoscaling;
+- observability;
+- generation cost accounting;
+- media provenance and retention.
+
+Treat these as candidate requirements, not current commitments.

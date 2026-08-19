@@ -1,17 +1,17 @@
-# Research
+# Validation Notes
 
-This directory is the source-of-truth location for deep research supporting Helix.
+Use this directory for evidence and notes that may influence Helix later.
 
-Suggested structure for each research document:
+Material here is **input to decisions, not a decision by itself**. Claims should be treated as provisional until checked against authoritative documentation, implementation tests, or our own measured results.
 
-- Question
-- Date researched
-- Primary sources
-- Secondary sources / practitioner workflows
-- Findings
-- Conflicting evidence
-- Implications for Helix
-- Experiments required
-- Confidence / open questions
+Useful structure for a note:
 
-Do not turn unverified assumptions into architecture decisions without recording the evidence.
+- question;
+- date checked;
+- sources/evidence;
+- observed facts;
+- uncertain claims;
+- conflicts;
+- implications if true;
+- test/validation needed;
+- confidence.

@@ -1,19 +1,19 @@
 # Helix System Outline
 
-> Working architecture. This is a design baseline, not the final deep-research report.
+> Candidate future system shape. This document is intentionally provisional.
 
 ## Objective
 
-Build a high-throughput short-form content experimentation engine that can cheaply test many original content hypotheses, measure actual audience response, and use the resulting data to improve future production decisions.
+Build a reliable system that can coordinate many original short-form video experiments, produce media through interchangeable backends, publish through supported platform workflows, collect performance data, and use the data to improve later creative decisions.
 
-## Core loop
+## Candidate long-term loop
 
 ```text
-Trend / niche inputs
+Topic / niche inputs
       ↓
-Research + idea engine
+Idea + hook generation
       ↓
-Hook / script / shot planning
+Script / shot planning
       ↓
 Asset + video production
       ↓
@@ -21,48 +21,53 @@ Quality control
       ↓
 Publishing queue
       ↓
-YouTube Shorts / Instagram Reels
-      ↓
-Analytics ingestion
+Platform analytics
       ↓
 Experiment scoring
-      ↓
-Winner detection
       ↓
 Variant generation
       ↺
 ```
 
-## Proposed components
+## Components we may need later
 
-- Director / planning agent
-- Niche and trend research layer
-- Hook and script generation
-- Shot planner and reusable asset manager
-- Model router for open and hosted generation backends
-- Generation job queue and GPU workers
-- Object storage for media assets
-- Publishing scheduler / platform adapters
-- Analytics ingestion
-- Experiment database
-- Winner/loser scoring and feedback loop
-- Reitaard app interface
-- n8n orchestration where it remains useful
+These are design candidates, not commitments:
 
-## Current model strategy
+- planning/director layer;
+- niche and trend inputs;
+- hook/script/shot planning;
+- reusable media/reference asset management;
+- provider/model router;
+- asynchronous generation job API;
+- worker queue and GPU/hosted generation workers;
+- object storage for media;
+- publishing adapters;
+- analytics ingestion;
+- experiment/project database;
+- scoring and iteration logic;
+- Reitaard app interface;
+- n8n orchestration where it remains the simplest fit.
 
-Do not assume one model must perform every job. Use cheaper/open workers for exploration and reserve expensive hosted models for cases where their extra quality materially affects the experiment.
+## Preparation boundary
 
-Candidate categories currently under investigation:
+Before implementing the larger architecture, Helix should first standardize the interfaces between the pieces we already know we will touch:
 
-- Omni-modal/reference-driven video models
-- Fast image-to-video models
-- Controlled/VFX-oriented video models
-- Image/keyframe generation
-- Upscaling/detail restoration
-- Audio/voice/music
-- Automated QC
+```text
+request
+  → create job
+  → receive provider task id
+  → poll/receive status
+  → normalize result
+  → store output metadata
+  → hand off to next workflow stage
+```
 
-## Guiding principle
+The existing asynchronous Runway/n8n pattern is the first concrete workflow pattern to preserve. Other providers or self-hosted workers should eventually fit the same normalized contract where practical.
 
-Optimize the complete production-and-learning system rather than benchmark scores from a single model.
+## Model/provider strategy
+
+No video model or provider is selected as the permanent default. Open-weight, self-hosted, rented-GPU, and hosted API options remain candidates. Selection will depend on measured quality, latency, controllability, reliability, hardware requirements, and cost for the actual Helix workload.
+
+## Principle
+
+Prefer stable contracts and replaceable components over committing the system to one model vendor too early.

@@ -2,26 +2,47 @@
 
 ## Current phase
 
-Architecture discovery + deep research preparation.
+Preparation / foundation.
+
+We are not implementing the full Helix architecture yet. The immediate goal is to organize the pieces we will need, preserve working workflow patterns, and turn uncertain future ideas into clearly tracked assumptions.
 
 ## Known direction
 
-Helix is intended to support mass experimentation with short-form video while keeping individual outputs original enough to function as real content experiments rather than duplicate spam.
+- short-form video production and experimentation;
+- YouTube Shorts / Instagram Reels as initial target surfaces;
+- n8n is already useful for orchestration;
+- generation jobs are asynchronous and should have a normalized lifecycle;
+- Reitaard is expected to become the application shell/interface around multiple workflows;
+- generation backends should remain replaceable.
 
 ## Existing work to preserve
 
-- n8n asynchronous video task pattern: create task → task status → output URL
-- Runway-oriented workflow concepts that can be generalized to self-hosted workers
-- Reitaard mobile shell concept
-- Open-weight video model investigation
-- Production pipeline research around shot-based generation, keyframes, QC, upscaling, and post-processing
+- n8n create-task → task-status → output-URL pattern;
+- current Runway workflow concepts;
+- Reitaard mobile shell concept;
+- provider/model comparison work as future input, not a locked decision;
+- shot-based production, references/keyframes, QC, upscaling, and post-processing as possible later pipeline stages.
 
-## Immediate research questions
+## Preparation checklist
 
-1. What measurable factors most strongly predict continued Shorts/Reels distribution?
-2. What experiment unit should Helix optimize: hook, concept, visual style, duration, niche, account, or combinations?
-3. How should winner selection normalize for account size, posting time, and initial distribution?
-4. Which open/self-hosted model stack yields the best cost-adjusted output for high-volume tests?
-5. What content production stages should be deterministic versus generative?
-6. What platform APIs and analytics can be collected reliably at scale?
-7. What publishing cadence/account architecture is operationally sustainable without triggering spam/integrity systems?
+- [ ] Commit sanitized n8n workflow exports as they stabilize.
+- [ ] Define a provider-neutral generation job schema.
+- [ ] Define normalized job states and failure/retry behavior.
+- [ ] Define media asset metadata and storage conventions.
+- [ ] Define project / content / experiment / variant IDs.
+- [ ] Define configuration and secret names in `.env.example`.
+- [ ] Decide what state belongs in n8n versus an application database.
+- [ ] Define the boundary between Reitaard UI, orchestration, and worker services.
+- [ ] Add reproducible local development setup once the first service is chosen.
+- [ ] Validate platform, model, infrastructure, and economics assumptions before promoting them to decisions.
+
+## Near-term implementation order
+
+1. Repository and workflow hygiene.
+2. Common job contract.
+3. Workflow persistence/state model.
+4. Provider adapter boundary.
+5. Media storage conventions.
+6. Minimal service/API only where n8n alone becomes awkward.
+7. UI integration after backend contracts stop moving rapidly.
+8. Larger-scale generation/analytics architecture later.
