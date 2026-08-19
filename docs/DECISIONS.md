@@ -1,23 +1,37 @@
 # Decisions
 
-Only choices we are willing to treat as current project commitments belong here. Uncertain ideas belong in `ASSUMPTIONS.md` until validated.
+Only choices we are willing to treat as current project commitments belong here. Uncertain ideas belong in `ASSUMPTIONS.md`.
 
 ## 2026-08-19 — Project name
 
-**Decision:** Helix
+**Decision:** Helix.
 
 **Reason:** The intended system iterates through content variants, measurement, selection, and further variants.
 
-## 2026-08-19 — Preparation before scale architecture
+## 2026-08-19 — Preparation before implementation scale
 
-**Decision:** Build the project foundation and stable interfaces before committing to the large-scale architecture.
+**Decision:** Build shared vocabulary, boundaries, workflow hygiene, and evidence discipline before committing to large infrastructure.
 
-**Reason:** Provider capabilities, platform behavior, economics, and implementation needs can change. Stable contracts reduce rework while keeping future choices open.
+## 2026-08-19 — Divide the system by responsibility
 
-## 2026-08-19 — Provider-neutral asynchronous job pattern
+**Decision:** Helix is divided into Foundation, Intelligence, Director, Experiment Engine, Production, Distribution, and Analytics/Feedback.
 
-**Decision:** Preserve the existing asynchronous task pattern as the baseline interface for generation workflows.
+**Reason:** Research/decision logic, experimentation logic, and media execution need independent boundaries so one can evolve without locking the others to a specific tool or provider.
 
-**Current shape:** create task → task id → status/result lookup → normalized output metadata.
+## 2026-08-19 — Brain development precedes generation integration
 
-**Reason:** This pattern already matches the current Runway workflow and can later be adapted to additional hosted or self-hosted backends.
+**Decision:** After preparation, the main development order is `Intelligence → Director → Experiment Engine`. Production/generation is a separate workstream and will connect later through stable briefs/contracts.
+
+**Reason:** The valuable decision system should determine what to make and what to test independently of the current generation technology.
+
+## 2026-08-19 — Director is production-agnostic
+
+**Decision:** Director outputs must not depend on a specific model/provider.
+
+**Reason:** Seedance, Runway, open models, editors, renderers, and future production methods should be interchangeable execution options.
+
+## 2026-08-19 — Preserve asynchronous generation pattern as Production knowledge
+
+**Decision:** Keep the known `create task → task id → status/result → normalized output` pattern for generation workflows, but do not treat it as the central Helix brain contract.
+
+**Reason:** It remains useful for Production integration while no longer dictating project order.

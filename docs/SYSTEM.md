@@ -1,73 +1,135 @@
 # Helix System Outline
 
-> Candidate future system shape. This document is intentionally provisional.
+> Working system division. Component internals remain provisional until designed and validated.
 
 ## Objective
 
-Build a reliable system that can coordinate many original short-form video experiments, produce media through interchangeable backends, publish through supported platform workflows, collect performance data, and use the data to improve later creative decisions.
+Helix is not primarily a video generator. It is intended to become a system that researches a niche, develops creative direction, designs controlled content experiments, executes production through replaceable tools, publishes, measures outcomes, and feeds evidence back into later decisions.
 
-## Candidate long-term loop
-
-```text
-Topic / niche inputs
-      ↓
-Idea + hook generation
-      ↓
-Script / shot planning
-      ↓
-Asset + video production
-      ↓
-Quality control
-      ↓
-Publishing queue
-      ↓
-Platform analytics
-      ↓
-Experiment scoring
-      ↓
-Variant generation
-      ↺
-```
-
-## Components we may need later
-
-These are design candidates, not commitments:
-
-- planning/director layer;
-- niche and trend inputs;
-- hook/script/shot planning;
-- reusable media/reference asset management;
-- provider/model router;
-- asynchronous generation job API;
-- worker queue and GPU/hosted generation workers;
-- object storage for media;
-- publishing adapters;
-- analytics ingestion;
-- experiment/project database;
-- scoring and iteration logic;
-- Reitaard app interface;
-- n8n orchestration where it remains the simplest fit.
-
-## Preparation boundary
-
-Before implementing the larger architecture, Helix should first standardize the interfaces between the pieces we already know we will touch:
+## System divisions
 
 ```text
-request
-  → create job
-  → receive provider task id
-  → poll/receive status
-  → normalize result
-  → store output metadata
-  → hand off to next workflow stage
+0. FOUNDATION / PREPARATION
+          ↓
+1. INTELLIGENCE
+   niche research + content understanding
+          ↓
+2. DIRECTOR
+   what to make + how it should work creatively
+          ↓
+3. EXPERIMENT ENGINE
+   what variable to test + selection/mutation logic
+          ↓
+4. PRODUCTION
+   generation/editing/voice/images/video/captions
+          ↓
+5. DISTRIBUTION
+   publishing + scheduling + platform adapters
+          ↓
+6. ANALYTICS / FEEDBACK
+   observed performance
+          └──────────────→ Intelligence / Director / Experiment Engine
 ```
 
-The existing asynchronous Runway/n8n pattern is the first concrete workflow pattern to preserve. Other providers or self-hosted workers should eventually fit the same normalized contract where practical.
+## Boundary rule
 
-## Model/provider strategy
+The upstream brain must not know how media is generated.
 
-No video model or provider is selected as the permanent default. Open-weight, self-hosted, rented-GPU, and hosted API options remain candidates. Selection will depend on measured quality, latency, controllability, reliability, hardware requirements, and cost for the actual Helix workload.
+The Director should output a media-agnostic creative specification. Production can later fulfill that specification using hosted models, open-weight models, editing tools, stock media, deterministic renderers, human work, or combinations of them.
+
+Example boundary:
+
+```text
+NicheModel + Objective
+        ↓
+Director
+        ↓
+ContentSpec
+        ↓
+Experiment Engine
+        ↓
+VariantPlan
+        ↓
+Production
+        ↓
+MediaAsset
+```
+
+## 0. Foundation / Preparation
+
+Prepare repository conventions, shared identifiers, data contracts, workflow preservation, secrets/configuration practices, and boundaries between n8n and durable application state.
+
+Preparation should not be dominated by generation-provider implementation.
+
+## 1. Intelligence
+
+Expected responsibilities:
+
+- niche definition and sub-niche mapping;
+- source discovery;
+- content/example ingestion;
+- feature extraction from successful and unsuccessful content where data is available;
+- hook/format/topic/visual/narrative pattern clustering;
+- trend versus evergreen separation;
+- saturation/novelty observations;
+- evidence provenance and confidence;
+- creation of a queryable `NicheModel`.
+
+## 2. Director
+
+Expected skills are separate concerns rather than one giant agent:
+
+- concept direction;
+- hook direction;
+- narrative/information timing;
+- pacing;
+- visual direction;
+- audio direction;
+- format adaptation;
+- critic/review.
+
+The Director consumes Intelligence and produces a `ContentSpec` or equivalent creative brief.
+
+## 3. Experiment Engine
+
+Expected responsibilities:
+
+- define hypotheses;
+- choose controlled variables;
+- create variants;
+- preserve controls where practical;
+- assign experiment/cohort/variant IDs;
+- define evaluation windows;
+- score results cautiously;
+- detect winners without overreacting to noise;
+- decide discard / continue / mutate / scale;
+- preserve lineage so later learning is attributable.
+
+This is expected to become a central algorithmic layer of Helix.
+
+## 4. Production
+
+Production is deliberately separate. Candidate internal areas include image, video, audio, voice, captions, editing, compositing, QC, upscaling, and rendering.
+
+Provider/model routing belongs here. The existing asynchronous generation workflow pattern should be preserved as useful implementation knowledge, but it is not the main Helix brain contract.
+
+## 5. Distribution
+
+Future platform-specific publishing adapters, scheduling, metadata, account handling, and supported automation interfaces.
+
+## 6. Analytics / Feedback
+
+Collect observed platform and operational metrics, normalize them into `PerformanceSnapshot`-like records, and return evidence to Intelligence/Director/Experiment logic.
+
+## Current build order
+
+1. finish preparation and shared conceptual contracts;
+2. design Niche Intelligence from first principles;
+3. design Director skills and `ContentSpec` boundary;
+4. design Experiment Engine algorithms and lineage;
+5. develop Production separately and connect it to the brief/variant contract;
+6. then Distribution and full feedback automation.
 
 ## Principle
 
-Prefer stable contracts and replaceable components over committing the system to one model vendor too early.
+Optimize the learning-and-decision system. Treat media-generation technology as replaceable execution infrastructure.

@@ -2,47 +2,71 @@
 
 ## Current phase
 
-Preparation / foundation.
+**Preparation / foundation.**
 
-We are not implementing the full Helix architecture yet. The immediate goal is to organize the pieces we will need, preserve working workflow patterns, and turn uncertain future ideas into clearly tracked assumptions.
+The system division is now established at a high level. We are not building the complete architecture yet.
 
-## Known direction
+## Current direction
 
-- short-form video production and experimentation;
-- YouTube Shorts / Instagram Reels as initial target surfaces;
-- n8n is already useful for orchestration;
-- generation jobs are asynchronous and should have a normalized lifecycle;
-- Reitaard is expected to become the application shell/interface around multiple workflows;
-- generation backends should remain replaceable.
+The primary post-preparation workstream is the **Helix brain**:
 
-## Existing work to preserve
+```text
+Niche Intelligence → Director → Experiment Engine
+```
 
-- n8n create-task → task-status → output-URL pattern;
-- current Runway workflow concepts;
-- Reitaard mobile shell concept;
-- provider/model comparison work as future input, not a locked decision;
-- shot-based production, references/keyframes, QC, upscaling, and post-processing as possible later pipeline stages.
+Generation/production is a separate workstream. It will be connected later through stable creative/variant briefs rather than being allowed to shape the Intelligence or Director architecture.
+
+## Current project divisions
+
+- Foundation / Preparation
+- Intelligence
+- Director
+- Experiment Engine
+- Production
+- Distribution
+- Analytics / Feedback
+
+## Existing implementation knowledge to preserve
+
+- n8n orchestration experience;
+- asynchronous generation pattern: create task → task id → status/result → output;
+- Runway workflow concepts and task-monitor behavior;
+- Reitaard as a future application shell/interface;
+- previous provider/model/workflow research as provisional future Production input.
+
+These are preserved without making generation the current implementation priority.
 
 ## Preparation checklist
 
-- [ ] Commit sanitized n8n workflow exports as they stabilize.
-- [ ] Define a provider-neutral generation job schema.
-- [ ] Define normalized job states and failure/retry behavior.
-- [ ] Define media asset metadata and storage conventions.
-- [ ] Define project / content / experiment / variant IDs.
-- [ ] Define configuration and secret names in `.env.example`.
-- [ ] Decide what state belongs in n8n versus an application database.
-- [ ] Define the boundary between Reitaard UI, orchestration, and worker services.
-- [ ] Add reproducible local development setup once the first service is chosen.
-- [ ] Validate platform, model, infrastructure, and economics assumptions before promoting them to decisions.
+- [ ] Keep sanitized n8n exports as workflows stabilize.
+- [ ] Define common IDs and object names across system divisions.
+- [ ] Define draft contracts for `Niche`, `ResearchFinding`, `NicheModel`, `ContentIdea`, `ContentSpec`, `Experiment`, `Variant`, `MediaAsset`, `PublishedPost`, and `PerformanceSnapshot`.
+- [ ] Define evidence/provenance requirements for Intelligence research.
+- [ ] Decide what durable state must live outside n8n.
+- [ ] Keep real credentials outside git and document configuration names only when introduced.
+- [ ] Document Reitaard ↔ Helix boundaries when the backend contracts become clearer.
+- [ ] Preserve provider-neutral generation job notes inside Production/workflows without making them a blocker for Intelligence work.
 
-## Near-term implementation order
+## Next phase
 
-1. Repository and workflow hygiene.
-2. Common job contract.
-3. Workflow persistence/state model.
-4. Provider adapter boundary.
-5. Media storage conventions.
-6. Minimal service/API only where n8n alone becomes awkward.
-7. UI integration after backend contracts stop moving rapidly.
-8. Larger-scale generation/analytics architecture later.
+**Niche Intelligence design.**
+
+The next design work should answer:
+
+1. What exactly is a niche in Helix?
+2. What sources and observations enter the Intelligence system?
+3. What features should be extracted from content/examples?
+4. How do we represent hooks, formats, topics, pacing, visuals, narrative structure, audience, saturation, novelty, and temporal trends?
+5. How do we distinguish observed facts from inferred patterns?
+6. What does a `NicheModel` contain?
+7. How does the Director query and consume it?
+
+## Later
+
+After the Intelligence contract is coherent:
+
+1. Director skill design;
+2. Experiment Engine algorithms;
+3. separate Production implementation;
+4. Distribution;
+5. closed-loop Analytics/Feedback.

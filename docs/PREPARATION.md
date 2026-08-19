@@ -1,94 +1,98 @@
 # Preparation Plan
 
-This is the active workstream before the larger Helix build.
+This is the active phase before Helix brain development begins.
 
-## 1. Preserve working workflows
+## Goal
 
-For every useful n8n workflow, keep a sanitized export plus a short note containing:
+Create enough shared structure that Intelligence, Director, Experiment Engine, and Production can evolve independently without repeatedly breaking each other's interfaces.
+
+## 1. Preserve useful existing work
+
+Keep sanitized n8n exports and notes for workflows that already teach us something useful.
+
+For each workflow preserve:
 
 - purpose;
 - trigger;
-- external providers;
-- required environment variables/credentials by name only;
-- input schema;
-- output schema;
-- task/status lifecycle;
-- known failure modes;
-- which data must persist outside n8n.
+- inputs/outputs;
+- external systems;
+- credentials by name only;
+- state lifecycle;
+- failure modes;
+- persistence requirements.
 
-The first baseline is the current asynchronous video generation pattern:
+The existing asynchronous video task workflow is **preserved as Production knowledge**, not promoted to the central Helix system contract.
 
-```text
-manual/app trigger
-  → generation request
-  → provider task id
-  → task monitor
-  → completed media URL / failure
-```
+## 2. Establish shared vocabulary and IDs
 
-## 2. Define common job metadata
-
-Minimum candidate fields:
+Initial draft domain objects:
 
 ```text
-job_id
-project_id
-provider
-operation
-provider_task_id
-status
-attempt
-created_at
-started_at
-completed_at
-input_asset_ids[]
-output_asset_ids[]
-request_metadata
-provider_metadata
-error_code
-error_message
+Niche
+ResearchSource
+ResearchFinding
+NicheModel
+ContentIdea
+ContentSpec
+Experiment
+Variant
+MediaAsset
+PublishedPost
+PerformanceSnapshot
 ```
 
-This is a draft contract and can change before the first service is implemented.
+These names are provisional. The purpose is to prevent different subsystems from inventing incompatible concepts for the same object.
 
-## 3. Define normalized statuses
+## 3. Establish system boundaries
 
-Candidate state machine:
+Preparation should make these boundaries explicit:
 
 ```text
-queued
-submitted
-running
-succeeded
-failed
-cancelled
+Intelligence → NicheModel
+Director → ContentSpec
+Experiment Engine → VariantPlan / Experiment lineage
+Production → MediaAsset
+Distribution → PublishedPost
+Analytics → PerformanceSnapshot
 ```
 
-Provider-specific statuses should be stored separately so we do not lose debugging detail.
+The exact schemas come next and can change during design.
 
-## 4. Prepare configuration
+## 4. Define evidence discipline
 
-Keep real credentials outside git. Add only variable names and local setup guidance. Likely categories include:
+Intelligence will mix observations, external claims, inferred patterns, and our own experiment results. Every meaningful finding should be able to retain:
 
-- n8n;
-- provider APIs;
-- database;
-- object storage;
-- queue/cache;
-- platform publishing/analytics credentials;
-- application authentication.
+- source/provenance;
+- observation time;
+- evidence type;
+- confidence;
+- raw value where practical;
+- derived interpretation separately;
+- invalidation/recheck status.
+
+This prevents assumptions from quietly becoming facts.
 
 ## 5. Decide persistence boundaries
 
-Before adding many workflows, decide where each kind of state should live:
+Before implementing stateful algorithms, decide where durable records should live versus transient n8n execution state.
 
-- n8n execution state;
-- durable job/project state;
-- media objects;
-- analytics/events;
-- provider metadata;
-- experiment lineage.
+Likely durable categories include niche research, content specs, experiment lineage, media metadata, published-post identity, and performance snapshots. Exact technology is not selected yet.
 
-## 6. Add code only when a boundary is clear
+## 6. Keep Production preparation separate
 
-The first custom service should solve a concrete limitation rather than exist because the future architecture may need microservices. Likely triggers include durable job state, provider normalization, media ownership, or API access from Reitaard.
+Production may later need provider-neutral jobs, task states, storage, queues, GPU workers, and media processing. We can preserve those patterns now, but they are not prerequisites for designing the Intelligence/Director/Experiment algorithms.
+
+## 7. Add custom services only for real boundaries
+
+Do not create microservices merely because the future diagram contains boxes. Introduce code when there is a clear state, performance, reliability, ownership, or API boundary that n8n/documents alone cannot handle well.
+
+## Preparation exit condition
+
+Preparation is good enough to move into Niche Intelligence when:
+
+- the system divisions are documented;
+- shared object vocabulary is drafted;
+- evidence/provenance rules are drafted;
+- stale generation-first assumptions are removed;
+- existing workflows are preserved without dictating the brain architecture;
+- the next Intelligence design questions are explicit.

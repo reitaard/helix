@@ -2,13 +2,17 @@
 
 Store sanitized n8n exports and workflow-specific documentation here.
 
-Suggested naming:
+Workflows may support any Helix division. Do not assume n8n itself is the Intelligence, Director, or Experiment Engine source of truth.
 
-- `generation-*.json`
-- `task-monitor-*.json`
-- `publishing-*.json`
-- `analytics-*.json`
+Suggested categories may eventually include:
 
-For each export, document its expected inputs, outputs, credentials by variable/name only, provider task lifecycle, retries, and external persistence dependencies.
+- `research-*`
+- `orchestration-*`
+- `production-*`
+- `task-monitor-*`
+- `publishing-*`
+- `analytics-*`
+
+For each export document expected inputs, outputs, credentials by name only, retries/state lifecycle, and external persistence dependencies.
 
 Never commit API keys, access tokens, cookies, signed media URLs, webhook secrets, or account credentials.

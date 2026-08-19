@@ -1,33 +1,49 @@
 # Helix
 
-Helix is a planned high-throughput short-form video production and experimentation system for YouTube Shorts, Instagram Reels, and similar platforms.
+Helix is a planned high-throughput short-form content intelligence, directing, experimentation, production, distribution, and feedback system for YouTube Shorts, Instagram Reels, and similar platforms.
 
-The long-term loop is expected to cover concept discovery, variant generation, media production, publishing, analytics, and iterative improvement. The exact architecture, platform strategy, model stack, and economics are **not locked yet**.
+The project is intentionally divided so that the **brain of the system is independent from generation technology**. Video/image/audio generation is a replaceable Production concern, not the core decision-maker.
 
 ## Current status
 
-**Preparation phase.**
+**Preparation / foundation phase.**
 
-The repository is being used to collect the project structure, interfaces, workflow exports, environment requirements, data contracts, and implementation decisions we will need before building the larger system.
+After preparation, the active development path is:
 
-Anything described as a future component or strategy is a **working assumption / candidate direction**, not a confirmed implementation choice.
+```text
+Intelligence
+  → Director
+  → Experiment Engine
+```
 
-## Repository map
+Production/generation will be developed as a separate branch and connected through stable briefs/contracts later.
 
-- `docs/` — system outline, preparation plan, project state, assumptions, and decisions
-- `research/` — notes and evidence to validate later; nothing here is automatically a decision
-- `workflows/` — n8n exports and workflow-specific documentation
-- `infra/` — infrastructure preparation and deployment notes
-- `services/` — future service boundaries and application code
-- `experiments/` — experiment definitions and results once testing begins
+## System divisions
 
-## Current priority
+- `intelligence/` — niche research, source discovery, ingestion, feature extraction, trend/format understanding, niche models
+- `director/` — concept, hook, narrative, visual/audio direction, pacing, and critique
+- `experiments/` — hypothesis design, controlled variants, scoring, selection, mutation, and lineage
+- `production/` — generation/editing execution; model/provider choices live here and remain replaceable
+- `distribution/` — publishing/scheduling/account/platform adapters when implemented
+- `analytics/` — performance snapshots and feedback inputs
+- `shared/schemas/` — cross-system contracts and identifiers
+- `workflows/` — sanitized n8n workflow exports and orchestration notes
+- `research/` — evidence and validation notes; research is input to decisions, not automatically truth
+- `docs/` — system boundaries, preparation, state, assumptions, and decisions
+- `infra/`, `services/` — implementation support once real boundaries require them
 
-Prepare the foundation first:
+## Core principle
 
-1. preserve working n8n workflow patterns and exports;
-2. define task/job contracts and state transitions;
-3. define environment/secrets requirements without committing credentials;
-4. document media inputs/outputs and provider boundaries;
-5. define the initial project/experiment data model;
-6. identify which choices still need validation before implementation.
+```text
+Intelligence tells us what is happening.
+Director decides what should be made.
+Experiment Engine decides what should be tested.
+Production decides how to manufacture it.
+Distribution publishes it.
+Analytics measures what happened.
+Feedback improves the next cycle.
+```
+
+No Director component should depend on a specific model such as Seedance, Wan, H3, Runway, or any future provider.
+
+Anything not recorded as a decision remains a working assumption until validated.

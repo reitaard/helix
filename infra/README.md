@@ -1,17 +1,7 @@
 # Infrastructure
 
-Infrastructure is not selected yet. This directory will hold deployment/configuration once specific needs are validated.
+Infrastructure is not selected yet. Introduce it to support proven system needs rather than to mirror a speculative architecture diagram.
 
-Potential later concerns include:
+Possible later concerns include durable state, evidence/experiment databases, object storage, queues, GPU workers, retries, observability, cost accounting, and media retention.
 
-- durable database;
-- object storage;
-- queue/cache;
-- GPU workers;
-- retries and OOM recovery;
-- autoscaling;
-- observability;
-- generation cost accounting;
-- media provenance and retention.
-
-Treat these as candidate requirements, not current commitments.
+The current priority is system boundaries and Intelligence/Director/Experiment design, not infrastructure scale.

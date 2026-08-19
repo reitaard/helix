@@ -1,17 +1,19 @@
-# Validation Notes
+# Research / Validation Notes
 
-Use this directory for evidence and notes that may influence Helix later.
+Research supports Intelligence and future technical decisions, but a research note is not automatically a project decision.
 
-Material here is **input to decisions, not a decision by itself**. Claims should be treated as provisional until checked against authoritative documentation, implementation tests, or our own measured results.
-
-Useful structure for a note:
+Every meaningful note should distinguish:
 
 - question;
-- date checked;
-- sources/evidence;
-- observed facts;
-- uncertain claims;
-- conflicts;
-- implications if true;
-- test/validation needed;
-- confidence.
+- date checked / observation window;
+- source/provenance;
+- direct observations;
+- external claims;
+- our inference;
+- conflicting evidence;
+- confidence;
+- likely expiration/recheck need;
+- implication if true;
+- validation still needed.
+
+For niche/content research, preserve enough provenance that Intelligence can later separate what was observed from what was inferred.
