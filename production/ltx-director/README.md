@@ -1,116 +1,71 @@
 # LTX Director
 
-This folder is the Helix Production workspace for evaluating and integrating LTX Director-style control surfaces as controllable ComfyUI/LTX backends.
+This folder is the Helix Production workspace for evaluating and integrating LTX Director-style control surfaces and long-video continuation backends.
 
-It is **not** the Helix Director. Helix Director stays model/provider agnostic. This folder is about how Production can compile controlled shot/timeline intent into LTX Director / ComfyUI execution state.
+It is **not** the Helix Director. Helix Director remains model/provider agnostic. This folder is about how Production can compile explicit generation intent into LTX/ComfyUI execution state.
 
-## Current objective
+## Proven local foundation
 
-Build and validate the smallest direct Production slice before adding n8n or agents:
+The workstation has already validated:
 
-```text
-manual test input
-  -> temporary Production/Director shot state
-  -> LTX Director adapter/compiler
-  -> ComfyUI workflow/API
-  -> LTX 2.5 generation
-  -> result + generation metadata
-  -> human review
-```
+- native/local LTX 2.5 two-stage I2V generation;
+- WhatDreamsCost/CGlide-style Director wiring inside the LTX 2.5 subgraph;
+- Prompt Relay with multiple temporal regions;
+- appended image/keyframe guidance;
+- explicit dimensions to avoid accidental source-size latents;
+- CGlide chunk writing, handoff PNGs, audio joining and final assembly.
 
-The trigger remains separate from creative/control input. n8n is intentionally not required for this first path.
+## Current long-video finding
 
-## Current status — 2026-08-21
-
-### D0: single-prompt Director path — PASS
-
-Validated locally:
-
-- WhatDreamsCost `LTX Director` and `LTX Director Guide` load successfully;
-- the known-good native LTX 2.5 I2V backend is preserved separately;
-- Director is integrated inside the LTX 2.5 subgraph because that template keeps the real model/CLIP/VAE/samplers/upscale/decode graph inside the subgraph;
-- the Director topology follows the upstream two-stage pattern: Guide `0.5` -> Stage 1 -> Crop Guides -> x2 latent upscale -> Guide `1.0` -> Stage 2;
-- one starting image + one global prompt completed end-to-end and saved a playable video;
-- successful D0 output: `LTX-2.5_i2v_00017_.mp4`;
-- generation time observed in ComfyUI: about `403.6 s` / `6m43s`.
-
-### Critical dimension lesson
-
-Leaving Director width/height at zero inherited the large source image and generated a `3168x1792` latent, causing extreme memory pressure.
-
-The stable local tests explicitly constrain the Director target and observed an actual legal latent around `1248x704` for the 16:9 source.
-
-Do not leave dimensions implicit when the source guide is much larger than the intended generation size.
-
-### D1: Prompt Relay — PASS
-
-Prompt Relay was verified with three timed local prompts. Runtime logs showed:
+CGlide produced a real two-chunk continuation:
 
 ```text
-PromptRelay Global token range
-PromptRelay Segment 0 token range
-PromptRelay Segment 1 token range
-PromptRelay Segment 2 token range
-Latent temporal segments: [8, 9, 8]
-Prompt Relay penalty matrices built during both sampling stages
+193-frame chunk 1
+193-frame chunk 2
+8-frame overlap
+378-frame final @ 24 fps
+~15.75 s assembled video + aligned audio
 ```
 
-This proves the model was not using the single-prompt bypass path.
+The bike/rider/world remained broadly coherent, so chaining is considered a successful mechanism test. The remaining concerns are:
 
-### D2: extreme Prompt Relay stress test — PASS as mechanism test
+- motion/camera-velocity smoothness at the seam;
+- possible realism/detail degradation in later chunks;
+- unknown drift over more than two chunks.
 
-A deliberately extreme daylight -> thunderstorm -> neon-tunnel sequence caused the generation to attempt the temporal changes. The result also showed the practical limitation: an 8-second window is too short and too strongly anchored for radical world changes to become clean, production-ready transitions.
+## Active comparison: three tracks
 
-Conclusion: Prompt Relay works, but it should be used as within-window temporal control rather than assumed to solve long-scene continuity by itself.
-
-## Next experiment: CGlide scene chaining
-
-Research identified `CGlide/LTX-2.5-Director` as a promising existing implementation rather than building frame chaining from scratch.
-
-The fork adds explicit 2.5-oriented nodes including:
+Do not declare a winner yet. Production will compare:
 
 ```text
-LTX Director CS (2.5)
-LTX Director Guide CS (2.5)
-LTX Director Crop Guides CS (2.5)
-LTX Chunk Writer CS (2.5)
-LTX Chunk Assembler CS (2.5)
+A. CGlide only
+B. Lightricks ComfyUI-LTXVideo only
+C. hybrid, only after A and B are understood
 ```
 
-Its chunk writer saves the final N frames of a generated chunk as lossless PNG handoffs for the next chunk, aligns handoff counts to multiples of 8, and can assemble long runs with explicit seam policies and audio.
+The official Lightricks `LTXVLoopingSampler` is the next test because it uses overlapping temporal tiles and previous-tile conditioning rather than CGlide's current single-handoff-image continuation.
 
-The next validation sequence is:
+See:
 
-```text
-C0  CGlide one-chunk smoke test
-C1  prove 8-frame handoff writing
-C2  prove a two-chunk continuation
-C3  attempt a four-chunk ~32-second logical scene
-```
+- `LONG_VIDEO_COMPARISON.md` — decision tracks, metrics and test order;
+- `CGLIDE_CHUNKING.md` — proven CGlide baseline and limitations;
+- `LIGHTRICKS_LOOPING.md` — official package install and next test plan;
+- `INSTALL.md` — confirmed original workstation setup;
+- `DIRECTOR_SHOT.md` — temporary Production-side test contract.
 
-Do not jump directly to identity banks, Motion Track, automated metrics or agent mutation before C2 proves the existing chaining primitive is useful.
+## Architecture boundary
 
-See `CGLIDE_CHUNKING.md` for install/rollback and the planned experiments.
+The current ComfyUI graphs are execution prototypes, not the final agent-facing interface.
 
-## Architecture note for the future control surface
-
-The current ComfyUI graphs are execution prototypes, **not** the final agent-facing interface.
-
-The eventual Production control surface should make useful controls explicit and machine-writable while keeping LTX-specific serialization inside the adapter. Candidate controls include:
+Useful Production controls may eventually include:
 
 - global prompt;
-- timed local prompts / Prompt Relay segments;
-- duration / fps / output dimensions;
-- image keyframes and per-guide strengths;
-- start/end-frame behavior;
-- motion / IC-LoRA guidance and strengths;
-- audio timeline / inpainting / override behavior;
-- long-scene chunk/handoff policy if CGlide proves reliable;
-- extension;
-- retake range, prompt and strength;
-- model/backend execution settings;
-- seed and reproducibility metadata.
+- timed local prompts;
+- duration/fps/dimensions;
+- image keyframes and strengths;
+- motion / IC-LoRA controls;
+- retake/extension controls;
+- long-video continuation policy;
+- seed/backend execution settings.
 
-An AI agent may later propose replacements or mutations to these controls, but the execution contract should remain explicit so humans can inspect and override exactly what will be sent.
-
-See `INSTALL.md` for the confirmed WhatDreamsCost workstation setup, `CGLIDE_CHUNKING.md` for the alternate scene-chaining test path, `DIRECTOR_SHOT.md` for the temporary input contract, and the D0/D1 notes for validation evidence.
+But backend-specific continuation details should remain behind a Production adapter until experiments show which controls deserve to become stable Helix concepts.

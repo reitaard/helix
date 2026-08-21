@@ -1,229 +1,110 @@
 # LTX Scene Continuity Research
 
 **Checked:** 2026-08-21  
-**Status:** Production research input. Do not treat as a frozen Helix architecture.
+**Status:** active Production research input; not a frozen Helix architecture.
 
 ## Research question
 
-How should a long logical scene be generated when the practical LTX generation window is much shorter, without assuming every chunk will preserve the same subject, camera, world state and motion automatically?
+How should a long logical LTX 2.5 scene be generated when practical generation windows are much shorter, without assuming each new window will preserve subject identity, world state, camera motion and realism automatically?
 
-The immediate motivating failure case is simple: two independently generated motorcycle clips can contain a different bike/rider or an implausible camera/motion reset even if the prompts describe the same scene.
+## Working model
 
-## Main finding
-
-Existing long-video work consistently points toward two kinds of continuity memory:
+Long-scene continuity needs at least two kinds of information:
 
 ```text
-short-term state
-  = what was happening immediately before the boundary
-  = recent frames / pose / camera / motion
+short-term continuity
+  recent visual/motion state across the boundary
 
-long-term state
-  = what must remain the same across the scene
-  = subject identity / wardrobe / vehicle / world / persistent constraints
+long-term continuity
+  subject/world identity and persistent constraints
 ```
 
-Do not rely on prompt text alone, and do not let the immediately previous generated chunk become the only long-term source of truth, because drift can accumulate.
+Prompt text alone is insufficient, and a previous generated frame should not automatically become the only long-term source of truth because drift can accumulate.
 
-This is consistent with research systems such as StreamingT2V, FreeNoise, FIFO-Diffusion and FreeLong, which use different mechanisms to preserve information beyond a short diffusion context.
+## CGlide findings — now locally validated
 
-## Practical techniques ranked for the current stack
+`CGlide/LTX-2.5-Director` is no longer only a research candidate. The local test proved:
 
-### 1. Existing CGlide chunk handoff — test first
+- CGlide Director works with the current LTX 2.5 backend;
+- final Stage-2 Crop Guides is required to remove appended guide frames before decode;
+- corrected short output is 193 frames at 24 fps;
+- Chunk Writer produces 8 lossless handoff PNGs;
+- a second chunk can be generated and automatically assembled;
+- two 193-frame chunks with 8-frame overlap assembled to 378 frames / ~15.75 s;
+- subject/world continuity was promising;
+- the seam still showed a motion/camera-velocity discontinuity;
+- later-chunk realism/detail may degrade, but this requires repeated tests before calling it systematic.
 
-Repository:
+### Important CGlide mechanism correction
 
-`https://github.com/CGlide/LTX-2.5-Director`
+CGlide saves a strip of final handoff frames, but its current timeline continuation logic places one image anchor from the handoff set for the next render window. That means the generation is not receiving a full multi-frame motion history even though multiple handoff PNGs exist for overlap/assembly bookkeeping.
 
-The fork is specifically presented as an LTX 2.5 Director build and already includes a `LTX Chunk Writer CS (2.5)` plus `LTX Chunk Assembler CS (2.5)`.
+This is a plausible reason appearance continuity can work better than motion continuity.
 
-The writer's important behavior is directly visible in source:
+## Lightricks official long-video sampler
 
-- default `handoff_frames = 8`;
-- handoff is snapped to a multiple of the LTX temporal stride of 8 pixel frames;
-- handoff frames are saved as PNG because they are fed back as generation guides;
-- chunk frames and audio can be assembled into a longer output;
-- seam modes include an early shared-state cut and very short blend/S-curve options;
-- the code explicitly warns that long blends reach into regions where independently generated chunks have already diverged.
+The next comparison target is the official `Lightricks/ComfyUI-LTXVideo` package.
 
-This should be tested before Helix invents its own scene-chaining implementation.
+Its `LTXVLoopingSampler` is materially different from CGlide chunk handoff:
 
-### 2. Single-frame handoff — useful baseline
+- it processes one long latent as overlapping temporal tiles;
+- later tiles use `LTXVExtendSampler`;
+- previous temporal output conditions the next tile through an explicit overlap;
+- `temporal_overlap_cond_strength` controls continuation pressure;
+- `adain_factor` is provided to reduce accumulated statistic/oversaturation drift;
+- optional per-tile positive conditioning is available through `MultiPromptProvider`;
+- optional negative-index latents can provide longer-term context;
+- conditioning images/keyframes can also be used.
 
-Use a clean late frame from chunk A as the start guide for chunk B.
+The official documentation recommends meaningful temporal overlap for long video rather than a zero-context restart.
 
-Likely benefit:
+This directly targets the two weaknesses seen in the CGlide baseline: motion seam quality and possible later-window visual drift.
 
-- strong immediate appearance/composition continuity.
+## Three-track comparison
 
-Likely weakness:
-
-- a single still carries little velocity/camera-motion information;
-- motion can reset or stagnate after the boundary.
-
-Use as an A/B baseline, not the presumed final method.
-
-### 3. Multi-frame handoff / overlap — primary continuation candidate
-
-A short sequence of recent frames carries both appearance and motion clues. Eight frames at 24 fps span about 0.33 seconds; sixteen frames span about 0.67 seconds.
-
-The existing CGlide primitive already centers on this idea, so begin with 8 rather than implementing a separate overlap mechanism.
-
-### 4. Persistent identity/reference conditioning — later
-
-For long scenes, previous generated frames alone can gradually mutate the subject. A separate canonical reference package may be useful later for the bike/rider/world.
-
-Possible backends include:
-
-- viewpoint-compatible image anchors;
-- first/last keyframes;
-- official LTX 2.5 IC-LoRA/reference workflows;
-- Motion Track/structural guidance where useful.
-
-Do not enable every reference mechanism at once. Establish whether chunk handoff works first.
-
-## Important LTX 2.5 distinction
-
-Native LTX 2.5 multi-shot generation and cross-inference chaining solve different problems.
-
-Use native multi-shot where a reasonable single generation can contain deliberate editorial cuts while preserving character/scene/style.
-
-Use chunk continuation where one logical continuous scene is longer than the practical generation window.
-
-Do not chain every shot simply because a chunk writer exists.
-
-## What CGlide adds beyond the currently validated Director
-
-The current WhatDreamsCost-based local path has already proved:
-
-- single-prompt Director execution;
-- two-stage Director Guide wiring;
-- Prompt Relay with three active temporal segments;
-- appended image/keyframe guidance;
-- local LTX 2.5 generation at practical 8-second scale.
-
-CGlide adds a concrete long-video implementation candidate:
+Helix Production will now compare:
 
 ```text
-render chunk
-    ↓
-write final N frames as clean handoff PNGs
-    ↓
-feed handoff into next Director window
-    ↓
-repeat
-    ↓
-assemble chunks/audio with explicit seam policy
+A. CGlide only
+   timeline/director + single-anchor continuation + writer/assembler
+
+B. Lightricks only
+   temporal-overlap long-video sampling
+
+C. Hybrid
+   CGlide-style high-level directing mapped into Lightricks continuation, only if the interfaces fit cleanly
 ```
 
-That is more valuable right now than building automatic identity metrics or a new scene-manifest system from scratch.
+The hybrid should not be designed first. Standalone Lightricks behavior must be measured before adding integration complexity.
 
-## CGlide source facts verified
+## Acceptance questions
 
-CGlide README states that the 2.5 build supports:
+For each track:
 
-- timeline image/text/audio/video segments;
-- Prompt Relay;
-- image anchors and end frames;
-- chunk rendering for long videos with audio;
-- packed timelines.
+1. Does subject identity remain stable?
+2. Does rider/wardrobe/object geometry remain stable?
+3. Is the boundary visible?
+4. Does camera velocity continue rather than reset?
+5. Does subject motion continue rather than restart or freeze?
+6. Does realism/detail degrade in later temporal sections?
+7. Is there saturation/contrast drift?
+8. How does runtime scale?
+9. Does the method fit the current 8 GB VRAM + offload environment?
+10. Is the control surface explicit enough for human review and later agent suggestions?
 
-Its 2.5 package registers:
+## Current recommendation
+
+Do not build a custom Helix continuity engine yet.
+
+Next sequence:
 
 ```text
-LTXDirectorCS25
-LTXDirectorGuideCS25
-LTXDirectorCropGuidesCS25
-CleanLatentSliceCS25
-LTXChunkWriterCS25
-LTXChunkAssemblerCS25
+CGlide baseline              DONE
+Lightricks install/node test NEXT
+Lightricks ~16 s comparison
+Lightricks longer limit test
+minimal hybrid proof
+choose the simplest clear winner
 ```
 
-with user-facing names ending in `CS (2.5)`.
-
-Its chunk writer:
-
-- writes handoffs under `input/ltx_director_handoff/<run>`;
-- defaults to 8 handoff frames;
-- always stores handoff frames losslessly as PNG;
-- writes normal chunk frames separately;
-- supports automatic final assembly and h264 output;
-- exposes `early_cut`, `early_scurve`, `early_blend`, `dissolve`, and `hard_cut` seam modes;
-- can level-match assembled chunks;
-- supports chunk audio writing and joining.
-
-## 2.5 reference-feature warning
-
-CGlide intentionally disables older 2.3 `@ref`, Ghost Mask, Licon MSR and related reference modes in this 2.5 build because the author reports that those 2.3-trained behaviors corrupt LTX 2.5 output.
-
-This warning is specific to those fork mechanisms. It does not prove that all official LTX 2.5 IC-LoRA/reference conditioning is unusable.
-
-## Local constraints already learned
-
-The current workstation proved that an implicit source-size Director configuration is dangerous. A 3200x1800 source was inherited and produced a `3168x1792` latent, causing severe memory pressure.
-
-Successful Director runs used a much smaller legal latent around `1248x704` / target `1280x704`, 193 pixel frames and 25 temporal latent frames at 24 fps.
-
-Prompt Relay was confirmed active by logs showing:
-
-```text
-Global token range
-Segment 0 token range
-Segment 1 token range
-Segment 2 token range
-Latent temporal segments: [8, 9, 8]
-Prompt Relay penalty matrices built in both sampling stages
-```
-
-Therefore the next experiment should not be another proof that Prompt Relay executes. The next experiment should be continuation/chunk handoff.
-
-## Recommended minimal experiment order
-
-```text
-C0  CGlide one-chunk smoke test
-    prove the fork works with the known-good local LTX 2.5 backend
-
-C1  Chunk Writer test
-    prove 8 lossless handoff frames are created correctly
-
-C2  Two-chunk continuation
-    compare against an independent second chunk
-
-C3  Four-chunk ~32-second scene
-    only after C2 demonstrates believable continuity
-
-C4  identity/reference reinforcement
-    only if long-range subject drift remains the dominant failure
-```
-
-Do not build optical-flow evaluation, DINO/LPIPS scoring, automated retake logic or agent mutation until C2 establishes that the existing chaining primitive is worth adopting.
-
-## Acceptance questions for C2/C3
-
-Human review is enough initially:
-
-1. Does the motorcycle remain recognizably the same?
-2. Does the rider/helmet remain the same?
-3. Does camera position/velocity feel continuous at the boundary?
-4. Does the bike's lean/speed continue rather than restart?
-5. Is the seam visible?
-6. Does identity drift become worse several seconds after each handoff?
-7. Does stronger conditioning freeze the motion?
-
-These questions are more useful at this stage than a single numeric continuity score.
-
-## Architectural implication if CGlide works
-
-If the chunk writer proves reliable, scene continuity can remain a Production adapter concern for now:
-
-```text
-long scene intent
-      ↓
-CGlide/LTX adapter
-      ↓
-chunk windows + handoff frames + seam policy
-      ↓
-assembled MediaAsset
-```
-
-Helix does not need a large global scene-continuity schema merely to exploit this feature. A broader scene model should be introduced only when real experiments prove which continuity state must be represented upstream.
+If the standalone Lightricks sampler does not materially improve the result, return to CGlide and optimize its seam modes / continuation constraints. If Lightricks wins, use it as the continuation engine and decide separately whether any CGlide Director controls are worth adapting.
