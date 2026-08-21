@@ -33,7 +33,11 @@ cd C:\Users\MSP-PC\Documents\ComfyUI\custom_nodes
 git clone https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI.git
 ```
 
-Then update the two required dependencies using ComfyUI Manager if they are already Manager-managed. Do not blindly reinstall them into a second location. We will first confirm where the active `ComfyUI-LTXVideo` and `ComfyUI-KJNodes` folders live, update those copies, restart ComfyUI, and inspect startup output for import errors.
+Then update the two required dependencies using ComfyUI Manager if they are already Manager-managed. Do not blindly reinstall them into a second location. First confirm where the active `ComfyUI-LTXVideo` and `ComfyUI-KJNodes` folders live, update those copies, restart ComfyUI, and inspect startup output for import errors.
+
+## Workflow note
+
+The upstream example folder currently contains `LTX_Director_2_Workflow_Distilled.json`, but that workflow still references LTX 2.3 assets such as the 2.3 spatial upscaler. Use it as the Director/timeline reference, not as the final LTX 2.5 workflow. The first local task is to keep the Director plumbing and adapt the generation side to the already-working LTX 2.5 stack.
 
 ## Validation sequence
 
@@ -42,8 +46,8 @@ Then update the two required dependencies using ComfyUI Manager if they are alre
 3. Update the active ComfyUI-LTXVideo and ComfyUI-KJNodes copies.
 4. Restart ComfyUI.
 5. Confirm `LTX Director` and `LTX Director Guide` nodes are available.
-6. Import an upstream Director example workflow.
-7. Adapt model selectors to the LTX 2.5 models already installed locally rather than downloading duplicates where possible.
+6. Import `LTX_Director_2_Workflow_Distilled.json` only as a reference/base for Director wiring.
+7. Adapt its model/generation side to the LTX 2.5 models already installed locally rather than downloading duplicate 2.3 assets.
 8. Run the smallest baseline: one image, one global/local prompt segment, no IC-LoRA, no retake, no extension, no custom audio.
 9. Record exact versions/commits and any local changes once that generation succeeds.
 
