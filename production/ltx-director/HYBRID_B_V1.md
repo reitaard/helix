@@ -1,32 +1,110 @@
-# Hybrid B v1 — Prompt Relay + Temporal Overlap + Multi-Frame
+# Hybrid B — Prompt Relay + Lightricks Temporal Continuation
 
 ## Goal
 
-Validate the full hybrid direction without jumping to 30+ seconds.
-
-Hybrid B v1 combines:
+Validate whether a clean hybrid can combine:
 
 - CGlide LTX Director 2.5 for Prompt Relay / timed local prompts
-- Lightricks LTXVLoopingSampler for overlapping temporal continuation
-- native LTX 2.5 I2V conditioning for the opening frame
-- a second visual keyframe for the desired side-tracking motion/composition
+- Lightricks `LTXVLoopingSampler` for overlapping temporal continuation
+- native LTX 2.5 I2V conditioning for source-image fidelity
 
-## Important correction
+Do not increase duration until the 15-second hybrid is stable and realistic.
 
-CGlide's dedicated LTX 2.5 reference-sheet / `@ref` features are currently disabled upstream. The CGlide README says they are hidden because the 2.5 model was not trained for the old 2.3 reference behaviour and enabling it corrupts renders.
+## Confirmed upstream constraints
 
-Therefore Hybrid B v1 does **not** use CGlide `@ref` as an identity system.
+### CGlide references
 
-Instead:
+CGlide's old reference-sheet / `@ref` features are disabled for LTX 2.5 upstream because those trained LTX 2.3 behaviors can corrupt 2.5 renders.
 
-- the front image is the primary opening identity anchor
-- the side image is a weaker Lightricks keyframe / motion-composition target
-- CGlide Director supplies temporal prompt zones
-- Lightricks supplies temporal overlap continuity
+### CGlide negative output
 
-This also becomes our first deliberate multi-frame experiment.
+`LTXDirectorCS25` intentionally emits a neutral / empty negative conditioning. Its source comments explicitly say to wire a separate negative-prompt node downstream when custom negative text is required.
 
-## Test specification
+This matters because the native LTX 2.5 I2V workflow uses the negative prompt:
+
+```text
+pc game, console game, video game, cartoon, childish, ugly
+```
+
+A hybrid that wires Director's neutral negative directly into generation silently loses that native quality guard.
+
+### Lightricks image conditioning
+
+`LTXVLoopingSampler.optional_cond_images` are real I2V/keyframe constraints. They are not a generic style- or motion-only reference channel. A second image of a different motorcycle therefore creates contradictory subject identity pressure.
+
+The LoopingSampler also accepts non-empty latents and uses temporal overlap / extension for subsequent windows.
+
+## Local test history
+
+### Hybrid B v1 / v1.1 — failed
+
+Observed:
+
+- Prompt Relay executed.
+- Lightricks temporal overlap executed.
+- second visual keyframe executed in both stages.
+- early duplicate motorcycle/rider appeared in one configuration.
+- later sections progressively morphed when the different green side-bike keyframe took control.
+- the padded side-reference composition also encouraged the motorcycle to recede / shrink.
+
+Conclusion: image-state ownership was ambiguous and the second visual reference contradicted identity.
+
+### Hybrid B v1.2A — cleaner but below native realism
+
+Observed on the 361-frame / 15.04-second portrait run:
+
+- one motorcycle / one rider was materially better than the earlier hybrid;
+- front-to-side camera evolution worked;
+- road / daylight state was comparatively stable;
+- motorcycle identity still simplified and drifted as the angle changed;
+- the motorcycle receded after the side transition;
+- overall image character was more synthetic / less photographic than the native LTX 2.5 benchmark.
+
+Two important causes were identified:
+
+1. The first-frame asset used in the workflow had been generatively normalized rather than being a pixel-preserving crop of the original photograph.
+2. The hybrid used CGlide Director's intentionally neutral negative output instead of restoring the native LTX negative-prompt path.
+
+## Hybrid B v1.3 — active realism restoration test
+
+### Ownership boundary
+
+```text
+ORIGINAL first-frame photograph
+        ↓
+native LTX I2V conditioning
+Stage 1 strength 0.70
+        ↓
+Lightricks LoopingSampler Stage 1
+        ↓
+latent x2 upscale
+        ↓
+native LTX I2V conditioning
+Stage 2 strength 1.00
+        ↓
+Lightricks LoopingSampler Stage 2
+        ↓
+decode
+
+EMPTY long-video latent
+        ↓
+CGlide Director
+Prompt Relay / model patching only
+        ↓
+conditioning + patched model
+        ↓
+LoopingSampler stages
+```
+
+Rules:
+
+- Director receives the empty latent only so it can build the temporal Prompt Relay masks.
+- Native LTX I2V owns source-image injection.
+- `LoopingSampler.optional_cond_images` is disconnected for this test.
+- no second motorcycle reference is used.
+- native negative conditioning is restored separately from Director.
+
+### Test specification
 
 ```text
 orientation          9:16 portrait
@@ -38,125 +116,53 @@ pixel frames          361
 temporal tile        120
 temporal overlap     40
 overlap strength     0.80
-AdaIN                 0.15
+AdaIN                 0.10
 spatial tiles         1 × 1
+
+Prompt Relay epsilon 0.50
 ```
 
-`361` frames is intentional:
+AdaIN is reduced from 0.15 to 0.10 because Lightricks documents `0.0–0.1` as the high-quality range while still allowing long-video statistic stabilization.
+
+### Prompt strategy
+
+For I2V, the source image supplies appearance. Prompt Relay therefore focuses on motion and camera behavior instead of repeatedly redescribing / negating the subject.
 
 ```text
-first window = 121 frames
-advance      = 120 - 40 = 80 frames
-121 + 80 + 80 + 80 = 361
+0–5 s     close frontal pursuit tracking; gradual acceleration
+5–10 s    continuous front → 3/4 → side camera arc
+10–15 s   close side tracking; stronger acceleration; final whoosh blur
 ```
 
-This reduces the number of temporal reinterpretations compared with the earlier `80 / 24` test while keeping substantial overlap.
+The global prompt carries photographic material / lighting / road realism and stable exposure.
 
-## Visual inputs
+The negative prompt restores the native LTX baseline and adds only targeted synthetic / morphing failures.
 
-### Opening frame
+## Runtime sanity checks for v1.3
 
-Portrait front-tracking motorcycle image.
-
-Role:
-- primary motorcycle/rider identity
-- opening camera composition
-- frame-zero I2V anchor
-
-### Side motion image
-
-Portrait-normalized version of the side-tracking motorcycle image.
-
-Role:
-- desired side framing
-- rider posture
-- motion language
-- target composition during the camera transition
-
-The two source pictures are not the same motorcycle, so the side image is intentionally a weaker guide rather than identity truth.
-
-Current planned keyframe:
+Because `LoopingSampler.optional_cond_images` is disconnected, this workflow should not show the old later-keyframe signature:
 
 ```text
-frame 216 ≈ 9.0 s
-strength 0.45
+Keyframe per tile indices: [(2, 56)]
 ```
 
-## Prompt Relay plan
-
-### 0–5 s — Front tracking
-
-Motorcycle already moving, gains speed, stable centered front tracking, realistic road motion and daylight.
-
-### 5–10 s — Camera transition
-
-Continuous camera arc from front through front three-quarter toward a close side-tracking position. No cut. Full rider becomes visible.
-
-### 10–15 s — Side speed / whoosh
-
-Hold side tracking. Accelerate harder. Final two seconds build strong background and road-edge motion blur while rider and motorcycle remain readable and comparatively sharp.
-
-## Active topology
-
-```text
-front image
-   ↓
-native LTX I2V anchor
-   ↓
-CGlide Director
-Prompt Relay only
-   ↓
-LTXVConditioning
-   ↓
-STGGuiderAdvanced (neutral CFG/STG for distilled model)
-   ↓
-LTXVLoopingSampler — Stage 1
-   ↑
-side image keyframe @ ~9 s
-   ↓
-latent x2 upscale
-   ↓
-re-apply opening I2V anchor
-   ↓
-STGGuiderAdvanced
-   ↓
-LTXVLoopingSampler — Stage 2
-   ↑
-side image keyframe @ ~9 s
-   ↓
-decode / video
-```
-
-## What this test must answer
-
-1. Does Prompt Relay still obey the 3 timed phases while Lightricks owns temporal sampling?
-2. Does `120 / 40` feel more like one stable world than the previous `80 / 24` test?
-3. Can the camera evolve from frontal tracking toward a side view without feeling like a weather/scene reset?
-4. Does the weaker side keyframe improve pose/composition without replacing the opening motorcycle identity?
-5. Does the final whoosh build while keeping the bike and rider readable?
-6. Does portrait orientation remain practical on the current local hardware?
+If that line appears, the wrong / stale hybrid workflow is running.
 
 ## Success criteria
 
 ```text
-same rider / opening-bike identity      good
-scene / weather state                   stable
-front → side camera evolution           intentional
-hard temporal seams                     absent or minor
-side keyframe identity takeover         limited
-final side-view whoosh                  visible
-later-section realism                   not worse than B0
+single motorcycle / rider                stable
+opening frame fidelity                   close to original photograph
+photographic material / texture          improved vs v1.2A
+front → side camera move                 intentional
+bike remains large after side transition improved
+world / daylight state                   stable
+hard temporal seams                      absent or minor
+final whoosh                             visible without subject collapse
 ```
 
-## Next branch after this test
+## Multi-frame next step
 
-Do not increase duration yet.
+Do not reintroduce multi-frame conditioning until v1.3 passes.
 
-If Hybrid B v1 works, tune:
-
-- side keyframe timing / strength
-- temporal overlap strength
-- prompt-zone wording
-- optional long-term latent context
-
-Only after the 15-second hybrid is stable should we test 30+ seconds.
+The next genuine multi-frame test must use a second view of the **same motorcycle identity**. Lightricks keyframes are actual visual constraints, not motion-only references.
