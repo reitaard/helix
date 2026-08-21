@@ -13,6 +13,7 @@ How much of WhatDreamsCost LTX Director can be driven by Helix agents/headless A
 - `ltx_director.py`
 - `ltx_director_guide.py`
 - `js/ltx_director.js`
+- upstream `example_workflows/LTX_Director_2_Workflow_Distilled.json`
 - current upstream issues discussing LTX 2.5 compatibility
 
 ## Direct observations
@@ -42,9 +43,48 @@ LTX Director also adds utility endpoints for:
 
 Smaller image/video assets use ComfyUI's normal upload path.
 
+## Upstream two-stage wiring verified
+
+The current upstream distilled Director example confirms this exact order:
+
+```text
+LTX Director
+    ↓
+LTXVConditioning
+    ↓
+LTX Director Guide (scale_by = 0.5)   ← Stage 1
+    ↓
+Stage 1 sampler
+    ↓
+Separate AV latent
+    ↓
+LTX Director Crop Guides
+    ↓
+x2 latent upscaler
+    ↓
+LTX Director Guide (scale_by = 1.0)   ← Stage 2
+    ↓
+Stage 2 sampler
+```
+
+The Stage 1 Guide receives Director `video_latent`, `guide_data`, `motion_guide_data`, and patched `model`. The Stage 1 sampled video latent then goes through `LTXDirectorCropGuides` before the latent upscaler. Stage 2 applies the 1.0 Guide to the upscaled latent and cropped conditioning.
+
+This is the topology used by the current local D0 adaptation. The local workflow keeps LTX 2.5's existing samplers, dual AV CFG, x2 upscaler, and decode path instead of copying the upstream LTX 2.3 model assets.
+
+## Local installation findings
+
+Node loading is now validated on the actual workstation:
+
+- active base/custom-node/venv root is `C:\Users\MSP-PC\Documents\ComfyUI` even though the Desktop program code is under AppData;
+- WhatDreamsCost-ComfyUI and ComfyUI-KJNodes load from the active `Documents\ComfyUI\custom_nodes` directory;
+- current ComfyUI required `av>=16.0.0`; an older PyAV caused a `ColorPrimaries` import failure before custom-node loading;
+- `LTX Director` and `LTX Director Guide` are visible after the fix;
+- a separate ComfyUI-LTXVideo custom-node folder has not been required so far;
+- runtime LTX 2.5 Director generation remains unvalidated.
+
 ## Upstream compatibility note
 
-The main project documentation still centers on LTX 2.3. In current upstream issue discussion, the maintainer states that the Director core works with LTX 2.5 and that the main remaining work is updated 2.5 workflows/models/features. Treat this as an upstream claim until validated on our pinned ComfyUI/LTX 2.5 stack.
+The main project documentation still centers on LTX 2.3. In current upstream issue discussion, the maintainer states that the Director core works with LTX 2.5 and that the main remaining work is updated 2.5 workflows/models/features. The local node-loading result is encouraging, but model-generation compatibility is not proven until D0 renders successfully.
 
 ## Helix inference
 
@@ -96,11 +136,12 @@ Routing should be decided by Production based on the requested variant, not by H
 
 ## Validation still needed
 
-1. Install/pin the current WhatDreamsCost nodes without disturbing the known-working LTX 2.5 workflow.
-2. Verify LTX 2.5 INT8/ConvRot compatibility on the actual local stack.
+1. Run D0 and prove LTX 2.5 INT8/ConvRot Director compatibility on the actual local stack.
+2. Record the first successful workflow version, prompt id, output, runtime, warnings, and exact upstream commits.
 3. Prove that agent-generated `timeline_data` and related node inputs can be submitted headlessly without relying on browser commit logic.
 4. Export a working API-format Director workflow and document the exact variable fields an adapter must modify.
-5. Test Prompt Relay, first/middle/last guides, Ingredients/reference IC-LoRA, motion guidance, extension, and Retake separately.
-6. Measure runtime, memory, caching behavior, quality, and failure recovery on local hardware.
-7. Validate retake boundary preservation and audio behavior before building automated QA → retake loops.
-8. Pin upstream dependency versions before treating the adapter as production-stable.
+5. Test Prompt Relay with 2-3 timed local segments.
+6. Test first/middle/last guides, Ingredients/reference IC-LoRA, motion guidance, extension, and Retake separately.
+7. Measure runtime, memory, caching behavior, quality, and failure recovery on local hardware.
+8. Validate retake boundary preservation and audio behavior before building automated QA → retake loops.
+9. Pin upstream dependency versions before treating the adapter as production-stable.

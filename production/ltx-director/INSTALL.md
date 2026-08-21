@@ -1,73 +1,110 @@
 # LTX Director installation / validation
 
-Status: not yet validated on the local LTX 2.5 workstation. Keep this file short; after the first successful generation, replace the planned section with only the commands/fixes that actually worked.
+**Status:** installation and node loading validated on the local LTX 2.5 workstation. Director-controlled generation is still pending.
 
-## Upstream requirements
+Keep this file compact. The final recipe should contain only steps that were actually required on this machine.
 
-Current upstream README (`WhatDreamsCost/WhatDreamsCost-ComfyUI`) says to:
+## Confirmed local layout
 
-1. install the repository under `ComfyUI/custom_nodes` by cloning it, or install it through ComfyUI Manager;
-2. if Manager does not show the current release, use the nightly/current listing;
-3. update `ComfyUI-LTXVideo` to the latest version — upstream marks this as required;
-4. update `ComfyUI-KJNodes` to the latest version;
-5. restart ComfyUI and use the example workflows from the upstream `example_workflows/` folder.
-
-Upstream clone command:
-
-```powershell
-git clone https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI.git
-```
-
-## Planned install on this workstation
-
-The active ComfyUI root is expected to be:
+ComfyUI Desktop is split across two locations on this workstation:
 
 ```text
+Program/code:
+C:\Users\MSP-PC\AppData\Local\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI
+
+Active base directory:
 C:\Users\MSP-PC\Documents\ComfyUI
+
+Active custom nodes:
+C:\Users\MSP-PC\Documents\ComfyUI\custom_nodes
+
+Active Python venv:
+C:\Users\MSP-PC\Documents\ComfyUI\.venv
 ```
 
-From PowerShell:
+The important rule is: **install custom nodes under the active base directory, not beside the Desktop program code.** ComfyUI's `--base-directory` changes the default `custom_nodes`, input, output, user, and model paths.
+
+## Confirmed install recipe
+
+Stop ComfyUI first, then run PowerShell:
 
 ```powershell
 cd C:\Users\MSP-PC\Documents\ComfyUI\custom_nodes
+
 git clone https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI.git
+git clone https://github.com/kijai/ComfyUI-KJNodes.git
+
+& "C:\Users\MSP-PC\Documents\ComfyUI\.venv\Scripts\python.exe" -m pip install -r .\ComfyUI-KJNodes\requirements.txt
 ```
 
-Then update the two required dependencies using ComfyUI Manager if they are already Manager-managed. Do not blindly reinstall them into a second location. First confirm where the active `ComfyUI-LTXVideo` and `ComfyUI-KJNodes` folders live, update those copies, restart ComfyUI, and inspect startup output for import errors.
+On this workstation ComfyUI then failed before custom-node loading with:
 
-## Workflow note
+```text
+ImportError: cannot import name 'ColorPrimaries' from 'av.video.reformatter'
+```
 
-The upstream example folder currently contains `LTX_Director_2_Workflow_Distilled.json`, but that workflow still references LTX 2.3 assets such as the 2.3 spatial upscaler. Use it as the Director/timeline reference, not as the final LTX 2.5 workflow. The first local task is to keep the Director plumbing and adapt the generation side to the already-working LTX 2.5 stack.
+Current ComfyUI requires PyAV 16 or newer. The working fix was:
 
-## Validation sequence
+```powershell
+& "C:\Users\MSP-PC\Documents\ComfyUI\.venv\Scripts\python.exe" -m pip install --upgrade "av>=16.0.0"
+```
 
-1. Preserve the currently working native LTX 2.5 workflow; do not modify it.
-2. Install WhatDreamsCost-ComfyUI.
-3. Update the active ComfyUI-LTXVideo and ComfyUI-KJNodes copies.
-4. Restart ComfyUI.
-5. Confirm `LTX Director` and `LTX Director Guide` nodes are available.
-6. Import `LTX_Director_2_Workflow_Distilled.json` only as a reference/base for Director wiring.
-7. Adapt its model/generation side to the LTX 2.5 models already installed locally rather than downloading duplicate 2.3 assets.
-8. Run the smallest baseline: one image, one global/local prompt segment, no IC-LoRA, no retake, no extension, no custom audio.
-9. Record exact versions/commits and any local changes once that generation succeeds.
+After restarting ComfyUI, both nodes were visible:
 
-## Confirmed local recipe
+```text
+LTX Director
+LTX Director Guide
+```
 
-_Not populated yet._
+## What was not required so far
 
-After validation this should become the compact reinstall/recovery recipe and contain only proven steps.
+A separate `ComfyUI-LTXVideo` custom-node installation has **not** been required on this workstation to load the current Director nodes or the native LTX 2.5 workflow.
+
+Upstream README text still tells users to update `ComfyUI-LTXVideo`, but the current Director code imports LTX support from ComfyUI core (`comfy_extras.nodes_lt`) and the local node-loading test succeeded without a separate LTXVideo folder.
+
+Do not add that dependency unless a real runtime feature/error proves it is required.
+
+## Important correction from the first install attempt
+
+The nodes were initially cloned into:
+
+```text
+C:\Users\MSP-PC\AppData\Local\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI\custom_nodes
+```
+
+ComfyUI did not scan that directory because the active base directory is `C:\Users\MSP-PC\Documents\ComfyUI`.
+
+Moving the two repositories into the active `Documents\ComfyUI\custom_nodes` directory fixed discovery.
+
+## Workflow adaptation note
+
+Upstream `example_workflows/LTX_Director_2_Workflow_Distilled.json` still references LTX 2.3 assets. We use it only as the Director topology reference.
+
+The local D0 path keeps the already-working LTX 2.5 stack:
+
+- LTX 2.5 22B distilled INT8 ConvRot transformer;
+- Gemma 4 12B LTX 2.5 text encoder;
+- BF16 video VAE;
+- BF16 audio VAE;
+- LTX 2.5 BF16 x2 latent spatial upscaler;
+- the existing two-stage LTX 2.5 sampler/decode path.
 
 ## Validation record
 
 ```text
-Date:
-ComfyUI version/commit:
-WhatDreamsCost-ComfyUI version/commit:
-ComfyUI-LTXVideo version/commit:
-ComfyUI-KJNodes version/commit:
-LTX 2.5 model files used:
-Workflow file/version:
-Install/update commands actually required:
-Local fixes:
-First successful Comfy prompt id/output:
+Date: 2026-08-21
+Node loading: PASS
+LTX Director visible: PASS
+LTX Director Guide visible: PASS
+ComfyUI-KJNodes installed: PASS
+Separate ComfyUI-LTXVideo installed: NO
+PyAV fix required: av>=16.0.0
+Known-good native LTX 2.5 workflow preserved: YES
+D0 Director workflow built: YES
+D0 Director generation: PENDING
+Pinned WhatDreamsCost commit: PENDING
+Pinned KJNodes commit: PENDING
+First successful Comfy prompt id/output: PENDING
 ```
+
+After D0 generation succeeds, add only the exact working workflow/version and prompt/output record here.

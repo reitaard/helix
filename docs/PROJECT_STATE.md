@@ -37,7 +37,21 @@ Generation/production is a separate workstream. It will be connected later throu
 - WhatDreamsCost LTX Director research: structured timed prompts, keyframes, IC-LoRA motion/reference guidance, audio, and retake state can be treated as a candidate Production control surface rather than a Helix Director dependency;
 - a provisional Production pattern where Helix-owned execution intent is compiled into backend-specific workflows instead of agents manipulating provider UIs directly.
 
-This Production knowledge is being preserved without changing the current next phase: Niche Intelligence design.
+## Active Production-side validation slice
+
+A deliberately narrow LTX Director D0 experiment is active without changing the main Helix build order.
+
+Current status (2026-08-21):
+
+- WhatDreamsCost LTX Director nodes load successfully on the local ComfyUI Desktop installation;
+- ComfyUI-KJNodes is installed in the active `Documents\ComfyUI\custom_nodes` directory;
+- the active ComfyUI venv required `av>=16.0.0` to satisfy current ComfyUI video API imports;
+- no separate ComfyUI-LTXVideo custom-node package has been required so far;
+- the known-good native LTX 2.5 I2V workflow is preserved unchanged;
+- a D0 workflow now follows the upstream two-stage Director topology while retaining the local LTX 2.5 model/upscale/decode path;
+- D0 runtime generation is the next checkpoint; the workflow must not be called working/stable until that render succeeds.
+
+This Production validation remains separate from the primary Niche Intelligence design work.
 
 ## Preparation checklist
 
@@ -50,6 +64,7 @@ This Production knowledge is being preserved without changing the current next p
 - [ ] Document Reitaard ↔ Helix boundaries when the backend contracts become clearer.
 - [ ] Preserve provider-neutral generation job notes inside Production/workflows without making them a blocker for Intelligence work.
 - [ ] When Production implementation resumes, validate whether an internal `ProductionPlan` boundary is useful before promoting it to a shared schema.
+- [ ] Complete LTX Director D0 generation and record the exact working workflow/version before treating that adapter path as validated.
 
 ## Next phase
 
