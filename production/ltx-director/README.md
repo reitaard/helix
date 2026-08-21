@@ -2,87 +2,88 @@
 
 This folder is the Helix Production workspace for evaluating and integrating WhatDreamsCost's LTX Director as a controllable ComfyUI/LTX backend.
 
-It is **not** the Helix Director. Helix Director stays model/provider agnostic. This folder is about how Production translates a small machine-readable shot description into LTX Director / ComfyUI execution state.
+It is **not** the Helix Director. Helix Director stays model/provider agnostic. This folder is about how Production can compile controlled shot/timeline intent into LTX Director / ComfyUI execution state.
 
 ## Current objective
 
-Build the smallest successful vertical slice:
+Build and validate the smallest direct Production slice before adding n8n or agents:
 
 ```text
 manual test input
-  -> DirectorShot
+  -> temporary Production/Director shot state
   -> LTX Director adapter/compiler
-  -> ComfyUI API/workflow
+  -> ComfyUI workflow/API
   -> LTX 2.5 generation
   -> result + generation metadata
   -> human review
 ```
 
-The trigger remains separate from the shot input. n8n is intentionally not required for the first direct path.
+The trigger remains separate from creative/control input. n8n is intentionally not required for this first path.
 
-## Current D0 status
+## Current status — 2026-08-21
 
-As of 2026-08-21:
+### D0: single-prompt Director path — PASS
 
-- WhatDreamsCost-ComfyUI is installed and `LTX Director` / `LTX Director Guide` load successfully;
-- ComfyUI-KJNodes is installed because upstream Director example workflows use KJNodes components;
-- the active workstation uses ComfyUI Desktop code under AppData but `C:\Users\MSP-PC\Documents\ComfyUI` as the active base directory, custom-node directory, user data root, and Python venv;
-- a PyAV compatibility error was fixed by upgrading the active venv to `av>=16.0.0`;
-- the known-good native LTX 2.5 I2V workflow remains preserved separately;
-- a D0 Director-enabled LTX 2.5 workflow has been built and structurally checked, but **runtime generation is not yet validated**.
+Validated locally:
 
-## D0 workflow architecture
+- WhatDreamsCost `LTX Director` and `LTX Director Guide` load successfully;
+- the known-good native LTX 2.5 I2V backend is preserved separately;
+- Director is integrated inside the LTX 2.5 subgraph because that template keeps the real model/CLIP/VAE/samplers/upscale/decode graph inside the subgraph;
+- the Director topology follows the upstream two-stage pattern: Guide `0.5` -> Stage 1 -> Crop Guides -> x2 latent upscale -> Guide `1.0` -> Stage 2;
+- one starting image + one global prompt completed end-to-end and saved a playable video;
+- successful D0 output: `LTX-2.5_i2v_00017_.mp4`;
+- generation time observed in ComfyUI: about `403.6 s` / `6m43s`;
+- output observed at `1280x704`, 24 fps, ~8 seconds.
 
-The upstream Director distilled example uses a two-stage pattern. We keep that pattern while retaining the already-working LTX 2.5 model/sampler/upscale/decode backend:
+### Important D0 lesson: Director dimensions must be explicit
+
+Leaving `LTXDirector.custom_width = 0` and `custom_height = 0` made Director inherit the original 3200x1800 guide image. It produced a `3168x1792` latent and extreme memory pressure.
+
+For the validated local path we explicitly set:
 
 ```text
-LTX 2.5 model + CLIP + audio VAE
-            ↓
-        LTX Director
-            ↓
-      LTXVConditioning
-            ↓
-LTX Director Guide (scale 0.5)
-            ↓
-      Stage 1 sampler
-            ↓
-   separate AV latent
-            ↓
- LTX Director Crop Guides
-            ↓
-      x2 latent upscale
-            ↓
-LTX Director Guide (scale 1.0)
-            ↓
-      Stage 2 sampler
-            ↓
-       decode / save
+custom_width  = 1280
+custom_height = 704
+divisible_by  = 32
+resize_method = maintain aspect ratio
 ```
 
-This matches the topology of upstream `LTX_Director_2_Workflow_Distilled.json`: the 0.5 Guide is Stage 1, its sampled video latent is cropped for guide alignment, the latent is upscaled, and the 1.0 Guide is applied for Stage 2.
+Do not leave these at zero when the source guide is much larger than the intended generation size.
 
-## Why Director is inside the LTX 2.5 subgraph
+## D1: Prompt Relay — next runtime test
 
-The current ComfyUI LTX 2.5 template wraps the real model, CLIP, VAE, samplers, latent upscale, and decode nodes inside `Image to Video (LTX-2.5)`.
+D1 keeps the same LTX 2.5 backend, image and seed but changes Director from one prompt to:
 
-Therefore the D0 integration places LTX Director **inside that subgraph**, next to the execution nodes it must control. This is an implementation detail of this ComfyUI template, not a Helix contract. Workflows that expose their LTX execution graph at the top level can place Director at the top level instead.
+```text
+global prompt
++
+0.0-2.5 s local prompt
+2.5-5.5 s local prompt
+5.5-8.0 s local prompt
+```
 
-Production should eventually hide either layout behind the same adapter.
+This is the first test where Prompt Relay temporal attention should be visibly distinguishable from ordinary single-prompt I2V.
 
-## D0 scope
+See `TEST_D1.md`.
 
-The first runtime test contains only:
+## Architecture note for the future control surface
 
-- one starting image;
-- one global prompt;
-- 8 seconds at 24 fps;
-- Director image guidance;
-- existing LTX 2.5 two-stage generation;
-- no Prompt Relay transitions yet;
-- no IC-LoRA/motion track;
-- no custom audio track;
-- no retake or extension;
-- no automated QA;
-- no n8n dependency.
+The current ComfyUI graph is an execution prototype, **not** the final agent-facing interface.
 
-See `INSTALL.md` for the confirmed local setup, `DIRECTOR_SHOT.md` for the temporary input contract, and `TEST_D0.md` for the current runtime test procedure.
+The final Production control surface should make the useful Director controls explicit and machine-writable while keeping LTX-specific serialization inside the adapter. Candidate controls include:
+
+- global prompt;
+- timed local prompts / Prompt Relay segments;
+- duration / fps / output dimensions;
+- image keyframes and per-guide strengths;
+- start/end-frame behavior;
+- motion / IC-LoRA guidance and strengths;
+- audio timeline / inpainting / override behavior;
+- extension;
+- retake range, prompt and strength;
+- model/backend execution settings;
+- seed and reproducibility metadata.
+
+An AI agent may later propose replacements or mutations to these controls, but the execution contract should remain explicit so humans can inspect and override exactly what will be sent.
+
+See `INSTALL.md` for the confirmed workstation setup, `DIRECTOR_SHOT.md` for the temporary input contract, and the D0/D1 test notes for current validation evidence.

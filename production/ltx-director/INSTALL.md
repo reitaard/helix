@@ -1,12 +1,12 @@
 # LTX Director installation / validation
 
-**Status:** installation and node loading validated on the local LTX 2.5 workstation. Director-controlled generation is still pending.
+**Status:** installation, node loading, and D0 Director-controlled LTX 2.5 generation validated on the local workstation.
 
-Keep this file compact. The final recipe should contain only steps that were actually required on this machine.
+Keep this file compact. It records only steps and fixes that were actually required on this machine.
 
 ## Confirmed local layout
 
-ComfyUI Desktop is split across two locations on this workstation:
+ComfyUI Desktop is split across two locations:
 
 ```text
 Program/code:
@@ -22,11 +22,11 @@ Active Python venv:
 C:\Users\MSP-PC\Documents\ComfyUI\.venv
 ```
 
-The important rule is: **install custom nodes under the active base directory, not beside the Desktop program code.** ComfyUI's `--base-directory` changes the default `custom_nodes`, input, output, user, and model paths.
+Important rule: **install custom nodes under the active base directory, not beside the Desktop program code.**
 
 ## Confirmed install recipe
 
-Stop ComfyUI first, then run PowerShell:
+Stop ComfyUI, then run PowerShell:
 
 ```powershell
 cd C:\Users\MSP-PC\Documents\ComfyUI\custom_nodes
@@ -37,57 +37,66 @@ git clone https://github.com/kijai/ComfyUI-KJNodes.git
 & "C:\Users\MSP-PC\Documents\ComfyUI\.venv\Scripts\python.exe" -m pip install -r .\ComfyUI-KJNodes\requirements.txt
 ```
 
-On this workstation ComfyUI then failed before custom-node loading with:
+The active ComfyUI version then failed before custom-node loading with:
 
 ```text
 ImportError: cannot import name 'ColorPrimaries' from 'av.video.reformatter'
 ```
 
-Current ComfyUI requires PyAV 16 or newer. The working fix was:
+Working fix:
 
 ```powershell
 & "C:\Users\MSP-PC\Documents\ComfyUI\.venv\Scripts\python.exe" -m pip install --upgrade "av>=16.0.0"
 ```
 
-After restarting ComfyUI, both nodes were visible:
+Restart ComfyUI and confirm these nodes exist:
 
 ```text
 LTX Director
 LTX Director Guide
 ```
 
-## What was not required so far
+## What was not required
 
-A separate `ComfyUI-LTXVideo` custom-node installation has **not** been required on this workstation to load the current Director nodes or the native LTX 2.5 workflow.
+A separate `ComfyUI-LTXVideo` custom-node installation was **not required** for the validated D0 path on this workstation.
 
-Upstream README text still tells users to update `ComfyUI-LTXVideo`, but the current Director code imports LTX support from ComfyUI core (`comfy_extras.nodes_lt`) and the local node-loading test succeeded without a separate LTXVideo folder.
+Do not add it unless a later Director feature or real runtime error proves it is needed.
 
-Do not add that dependency unless a real runtime feature/error proves it is required.
+## LTX 2.5 workflow adaptation
 
-## Important correction from the first install attempt
+The upstream Director distilled example still contains LTX 2.3-era assets, so it is used as a **topology reference**, not copied as the final local workflow.
 
-The nodes were initially cloned into:
-
-```text
-C:\Users\MSP-PC\AppData\Local\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI\custom_nodes
-```
-
-ComfyUI did not scan that directory because the active base directory is `C:\Users\MSP-PC\Documents\ComfyUI`.
-
-Moving the two repositories into the active `Documents\ComfyUI\custom_nodes` directory fixed discovery.
-
-## Workflow adaptation note
-
-Upstream `example_workflows/LTX_Director_2_Workflow_Distilled.json` still references LTX 2.3 assets. We use it only as the Director topology reference.
-
-The local D0 path keeps the already-working LTX 2.5 stack:
+The validated local path keeps the existing LTX 2.5 stack:
 
 - LTX 2.5 22B distilled INT8 ConvRot transformer;
 - Gemma 4 12B LTX 2.5 text encoder;
 - BF16 video VAE;
 - BF16 audio VAE;
 - LTX 2.5 BF16 x2 latent spatial upscaler;
-- the existing two-stage LTX 2.5 sampler/decode path.
+- existing two-stage sampler/decode path.
+
+## Critical local runtime rule
+
+Do not leave Director width/height at zero when using a large source image.
+
+First attempt inherited the 3200x1800 source and logged:
+
+```text
+Auto-generated LTXV latent: 3168x1792, 193 pixel frames
+```
+
+That caused extreme shared-memory/RAM pressure.
+
+Validated D0 settings:
+
+```text
+Director custom_width: 1280
+Director custom_height: 704
+resize_method: maintain aspect ratio
+divisible_by: 32
+duration: 8 s
+fps: 24
+```
 
 ## Validation record
 
@@ -100,11 +109,13 @@ ComfyUI-KJNodes installed: PASS
 Separate ComfyUI-LTXVideo installed: NO
 PyAV fix required: av>=16.0.0
 Known-good native LTX 2.5 workflow preserved: YES
-D0 Director workflow built: YES
-D0 Director generation: PENDING
+D0 Director generation: PASS
+D0 output: LTX-2.5_i2v_00017_.mp4
+D0 generation time: ~403.6 s / 6m43s
+D0 output target: 1280x704 @ 24 fps, ~8 s
+D1 Prompt Relay: PENDING
 Pinned WhatDreamsCost commit: PENDING
 Pinned KJNodes commit: PENDING
-First successful Comfy prompt id/output: PENDING
 ```
 
-After D0 generation succeeds, add only the exact working workflow/version and prompt/output record here.
+Pin exact dependency commits before treating this as a stable Production deployment recipe.
