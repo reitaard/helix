@@ -5,20 +5,19 @@
 
 ## Question
 
-How much of WhatDreamsCost LTX Director can be driven by Helix agents/headless APIs while humans keep manual creative control where it is useful?
+How much of LTX Director-style control can be driven by Helix agents/headless APIs while humans keep manual creative control where it is useful?
 
 ## Sources checked
 
-- https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI
-- `ltx_director.py`
-- `ltx_director_guide.py`
-- `js/ltx_director.js`
-- upstream `example_workflows/LTX_Director_2_Workflow_Distilled.json`
-- current upstream issues discussing LTX 2.5 compatibility
+- `https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI`
+- `https://github.com/CGlide/LTX-2.5-Director`
+- Director Python/JS implementation files
+- upstream example workflows
+- local LTX 2.5 runtime logs and generated outputs
 
 ## Direct observations
 
-The LTX Director node is not only a visual editor. Its Python node accepts structured inputs including:
+The Director node is not only a visual editor. Its backend accepts structured state including:
 
 - `global_prompt`;
 - `timeline_data`;
@@ -29,68 +28,98 @@ The LTX Director node is not only a visual editor. Its Python node accepts struc
 - resize/compression settings;
 - custom audio/motion flags.
 
-Its timeline state contains separate image/video, motion/IC-LoRA, and audio segments. Retake state includes a base video, retake start/length, prompt, and strength.
+Timeline state can represent image/video, motion, and audio segments. Retake-capable variants also carry base video, retake range, prompt and strength.
 
-`LTXDirectorGuide` consumes the resulting guide data and exposes IC-LoRA/model controls such as IC-LoRA name/strength, image attention strength, scaling, crop/resize behavior, tiled encoding, and retake mode. Retake uses a temporal noise mask so preserved ranges can remain frozen while the selected region is regenerated.
+The browser editor serializes machine-readable state into workflow/node inputs, so direct state compilation is a better automation target than mouse/drag automation of the visual timeline.
 
-The browser editor hides several machine values from the normal ComfyUI widget view, but those values are serialized into node/workflow state and consumed by the Python backend. This makes direct state compilation more appropriate for automation than mouse/drag automation of the timeline UI.
+## Two-stage wiring validated locally
 
-LTX Director also adds utility endpoints for:
-
-- checking/reusing uploaded files: `GET /ltx_director_check_file`;
-- extracting audio/waveform data: `GET /ltx_director_get_audio`;
-- chunked large-video upload: `POST /ltx_director_upload_chunk`.
-
-Smaller image/video assets use ComfyUI's normal upload path.
-
-## Upstream two-stage wiring verified
-
-The current upstream distilled Director example confirms this exact order:
+The current local Director adaptation uses:
 
 ```text
 LTX Director
     ↓
 LTXVConditioning
     ↓
-LTX Director Guide (scale_by = 0.5)   ← Stage 1
+LTX Director Guide (scale_by = 0.5)
     ↓
 Stage 1 sampler
-    ↓
-Separate AV latent
     ↓
 LTX Director Crop Guides
     ↓
 x2 latent upscaler
     ↓
-LTX Director Guide (scale_by = 1.0)   ← Stage 2
+LTX Director Guide (scale_by = 1.0)
     ↓
 Stage 2 sampler
+    ↓
+decode / save
 ```
 
-The Stage 1 Guide receives Director `video_latent`, `guide_data`, `motion_guide_data`, and patched `model`. The Stage 1 sampled video latent then goes through `LTXDirectorCropGuides` before the latent upscaler. Stage 2 applies the 1.0 Guide to the upscaled latent and cropped conditioning.
+The local path keeps the already-working LTX 2.5 transformer, Gemma 4 encoder, BF16 VAEs, latent upscaler and two-stage sampling/decode stack.
 
-This is the topology used by the current local D0 adaptation. The local workflow keeps LTX 2.5's existing samplers, dual AV CFG, x2 upscaler, and decode path instead of copying the upstream LTX 2.3 model assets.
+## Local runtime evidence
 
-## Local installation findings
+### D0 — PASS
 
-Node loading is now validated on the actual workstation:
+Single-image + single-global-prompt Director generation completed successfully.
 
-- active base/custom-node/venv root is `C:\Users\MSP-PC\Documents\ComfyUI` even though the Desktop program code is under AppData;
-- WhatDreamsCost-ComfyUI and ComfyUI-KJNodes load from the active `Documents\ComfyUI\custom_nodes` directory;
-- current ComfyUI required `av>=16.0.0`; an older PyAV caused a `ColorPrimaries` import failure before custom-node loading;
-- `LTX Director` and `LTX Director Guide` are visible after the fix;
-- a separate ComfyUI-LTXVideo custom-node folder has not been required so far;
-- runtime LTX 2.5 Director generation remains unvalidated.
+Observed output/runtime:
 
-## Upstream compatibility note
+- playable LTX 2.5 video;
+- roughly 8 seconds at 24 fps;
+- generation time about `403.6 s`;
+- successful small Director target with actual latent around `1248x704` for the 16:9 source.
 
-The main project documentation still centers on LTX 2.3. In current upstream issue discussion, the maintainer states that the Director core works with LTX 2.5 and that the main remaining work is updated 2.5 workflows/models/features. The local node-loading result is encouraging, but model-generation compatibility is not proven until D0 renders successfully.
+A failed earlier configuration left Director width/height at zero. That inherited the 3200x1800 source and generated a `3168x1792` latent, causing extreme memory pressure. Explicit dimensions are required on this workstation.
+
+### D1 — Prompt Relay PASS
+
+Prompt Relay with three timed local prompts was confirmed active by runtime logs showing:
+
+```text
+Global token range
+Segment 0 token range
+Segment 1 token range
+Segment 2 token range
+Latent temporal segments: [8, 9, 8]
+Prompt Relay penalty matrices built in both sampling stages
+```
+
+This confirms the workflow was not taking the single-prompt bypass.
+
+### D2 — extreme Prompt Relay stress test
+
+An intentionally large daylight -> thunderstorm -> neon-tunnel progression caused the model to attempt temporal changes, but an 8-second window was not sufficient for clean radical scene transformation.
+
+Conclusion: Prompt Relay is validated as a within-window temporal control mechanism. It is not, by itself, a long-scene continuity solution.
+
+## CGlide long-scene finding
+
+`CGlide/LTX-2.5-Director` is now the next candidate because it already implements long-video chunking instead of requiring Helix to invent frame chaining immediately.
+
+Its 2.5 package exposes:
+
+```text
+LTX Director CS (2.5)
+LTX Director Guide CS (2.5)
+LTX Director Crop Guides CS (2.5)
+Clean Latent Slice CS (2.5)
+LTX Chunk Writer CS (2.5)
+LTX Chunk Assembler CS (2.5)
+```
+
+The chunk writer can save the final N frames of each chunk as lossless PNG handoff frames, snap handoff length to an 8-frame temporal stride, and assemble later chunks with explicit seam modes and audio handling.
+
+This is the first existing implementation to validate before creating a broader Helix scene-continuity abstraction.
+
+See `research/LTX_SCENE_CONTINUITY.md` and `production/ltx-director/CGLIDE_CHUNKING.md`.
 
 ## Helix inference
 
-LTX Director should be treated as one Production adapter/control surface, not as Helix Director itself.
+LTX Director remains a Production adapter/control surface, not Helix Director itself.
 
-A useful provisional boundary is:
+A useful provisional boundary remains:
 
 ```text
 ContentSpec + VariantPlan
@@ -102,46 +131,37 @@ ProductionPlan
 Backend adapter
    ├── native LTX
    ├── LTX Director / ComfyUI
+   ├── CGlide long-scene Director
    ├── hosted provider
    └── future backend
         ↓
 MediaAsset
 ```
 
-`ProductionPlan` is only a working internal name. Helix should not adopt LTX Director's `timeline_data` as its canonical cross-system schema.
+`ProductionPlan` remains only a working internal name. Helix should not adopt one tool's timeline/chunk JSON as its canonical cross-system schema.
 
-## Agent opportunities
+## Agent opportunities after the execution primitives are proven
 
 Agents can plausibly automate:
 
-- converting creative beats into timed prompt segments;
-- selecting/generating start, middle, and end keyframes;
-- selecting reference assets and motion/IC-LoRA guidance;
-- compiling timeline/audio/motion state;
-- choosing native I2V versus a timeline-directed route;
+- creative beats -> timed prompt segments;
+- start/middle/end keyframe selection;
+- reference/motion guidance selection;
+- timeline/audio/motion compilation;
+- continuation/chunk planning if CGlide proves reliable;
 - seed/parameter sweeps;
-- job submission and monitoring through ComfyUI;
-- technical/visual QA;
-- detecting failed intervals and requesting targeted retakes/retries;
-- preserving manifests, lineage, cost, and latency metadata.
+- ComfyUI job submission/monitoring;
+- failure diagnosis and targeted retry/retake suggestions;
+- manifests, lineage, cost and latency metadata.
 
-Humans remain useful for subjective pacing, artistic changes, ambiguous failures, and final approval. Manual edits should be representable as overrides to the same structured production plan where practical.
+Human review remains important for subjective pacing, continuity judgment, ambiguous failures and final approval.
 
-## Likely routing pattern
+## Current validation order
 
-- **Native I2V:** simple single-action shots where source fidelity and a small control surface are preferable.
-- **Timeline-directed production:** shots that benefit from timed prompt changes, multiple keyframes, reference/motion guidance, audio layout, extension, or targeted retakes.
-
-Routing should be decided by Production based on the requested variant, not by Helix Director knowing a specific model/tool.
-
-## Validation still needed
-
-1. Run D0 and prove LTX 2.5 INT8/ConvRot Director compatibility on the actual local stack.
-2. Record the first successful workflow version, prompt id, output, runtime, warnings, and exact upstream commits.
-3. Prove that agent-generated `timeline_data` and related node inputs can be submitted headlessly without relying on browser commit logic.
-4. Export a working API-format Director workflow and document the exact variable fields an adapter must modify.
-5. Test Prompt Relay with 2-3 timed local segments.
-6. Test first/middle/last guides, Ingredients/reference IC-LoRA, motion guidance, extension, and Retake separately.
-7. Measure runtime, memory, caching behavior, quality, and failure recovery on local hardware.
-8. Validate retake boundary preservation and audio behavior before building automated QA → retake loops.
-9. Pin upstream dependency versions before treating the adapter as production-stable.
+1. Install CGlide safely as an alternate Director package without losing the proven WhatDreamsCost setup.
+2. Prove one CGlide-controlled LTX 2.5 render on the current workstation.
+3. Prove `LTX Chunk Writer CS (2.5)` creates the intended 8 PNG handoff frames.
+4. Prove a two-chunk continuation is more coherent than an independent second chunk.
+5. Only then attempt a four-chunk approximately 32-second continuous scene.
+6. After chaining is useful, test long-term identity reinforcement and official LTX 2.5 IC-LoRA/motion controls separately.
+7. Only after the execution path is reliable should Helix expose a broader agent-facing continuity contract.

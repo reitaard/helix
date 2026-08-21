@@ -1,6 +1,6 @@
 # LTX Director
 
-This folder is the Helix Production workspace for evaluating and integrating WhatDreamsCost's LTX Director as a controllable ComfyUI/LTX backend.
+This folder is the Helix Production workspace for evaluating and integrating LTX Director-style control surfaces as controllable ComfyUI/LTX backends.
 
 It is **not** the Helix Director. Helix Director stays model/provider agnostic. This folder is about how Production can compile controlled shot/timeline intent into LTX Director / ComfyUI execution state.
 
@@ -32,45 +32,71 @@ Validated locally:
 - the Director topology follows the upstream two-stage pattern: Guide `0.5` -> Stage 1 -> Crop Guides -> x2 latent upscale -> Guide `1.0` -> Stage 2;
 - one starting image + one global prompt completed end-to-end and saved a playable video;
 - successful D0 output: `LTX-2.5_i2v_00017_.mp4`;
-- generation time observed in ComfyUI: about `403.6 s` / `6m43s`;
-- output observed at `1280x704`, 24 fps, ~8 seconds.
+- generation time observed in ComfyUI: about `403.6 s` / `6m43s`.
 
-### Important D0 lesson: Director dimensions must be explicit
+### Critical dimension lesson
 
-Leaving `LTXDirector.custom_width = 0` and `custom_height = 0` made Director inherit the original 3200x1800 guide image. It produced a `3168x1792` latent and extreme memory pressure.
+Leaving Director width/height at zero inherited the large source image and generated a `3168x1792` latent, causing extreme memory pressure.
 
-For the validated local path we explicitly set:
+The stable local tests explicitly constrain the Director target and observed an actual legal latent around `1248x704` for the 16:9 source.
 
-```text
-custom_width  = 1280
-custom_height = 704
-divisible_by  = 32
-resize_method = maintain aspect ratio
-```
+Do not leave dimensions implicit when the source guide is much larger than the intended generation size.
 
-Do not leave these at zero when the source guide is much larger than the intended generation size.
+### D1: Prompt Relay — PASS
 
-## D1: Prompt Relay — next runtime test
-
-D1 keeps the same LTX 2.5 backend, image and seed but changes Director from one prompt to:
+Prompt Relay was verified with three timed local prompts. Runtime logs showed:
 
 ```text
-global prompt
-+
-0.0-2.5 s local prompt
-2.5-5.5 s local prompt
-5.5-8.0 s local prompt
+PromptRelay Global token range
+PromptRelay Segment 0 token range
+PromptRelay Segment 1 token range
+PromptRelay Segment 2 token range
+Latent temporal segments: [8, 9, 8]
+Prompt Relay penalty matrices built during both sampling stages
 ```
 
-This is the first test where Prompt Relay temporal attention should be visibly distinguishable from ordinary single-prompt I2V.
+This proves the model was not using the single-prompt bypass path.
 
-See `TEST_D1.md`.
+### D2: extreme Prompt Relay stress test — PASS as mechanism test
+
+A deliberately extreme daylight -> thunderstorm -> neon-tunnel sequence caused the generation to attempt the temporal changes. The result also showed the practical limitation: an 8-second window is too short and too strongly anchored for radical world changes to become clean, production-ready transitions.
+
+Conclusion: Prompt Relay works, but it should be used as within-window temporal control rather than assumed to solve long-scene continuity by itself.
+
+## Next experiment: CGlide scene chaining
+
+Research identified `CGlide/LTX-2.5-Director` as a promising existing implementation rather than building frame chaining from scratch.
+
+The fork adds explicit 2.5-oriented nodes including:
+
+```text
+LTX Director CS (2.5)
+LTX Director Guide CS (2.5)
+LTX Director Crop Guides CS (2.5)
+LTX Chunk Writer CS (2.5)
+LTX Chunk Assembler CS (2.5)
+```
+
+Its chunk writer saves the final N frames of a generated chunk as lossless PNG handoffs for the next chunk, aligns handoff counts to multiples of 8, and can assemble long runs with explicit seam policies and audio.
+
+The next validation sequence is:
+
+```text
+C0  CGlide one-chunk smoke test
+C1  prove 8-frame handoff writing
+C2  prove a two-chunk continuation
+C3  attempt a four-chunk ~32-second logical scene
+```
+
+Do not jump directly to identity banks, Motion Track, automated metrics or agent mutation before C2 proves the existing chaining primitive is useful.
+
+See `CGLIDE_CHUNKING.md` for install/rollback and the planned experiments.
 
 ## Architecture note for the future control surface
 
-The current ComfyUI graph is an execution prototype, **not** the final agent-facing interface.
+The current ComfyUI graphs are execution prototypes, **not** the final agent-facing interface.
 
-The final Production control surface should make the useful Director controls explicit and machine-writable while keeping LTX-specific serialization inside the adapter. Candidate controls include:
+The eventual Production control surface should make useful controls explicit and machine-writable while keeping LTX-specific serialization inside the adapter. Candidate controls include:
 
 - global prompt;
 - timed local prompts / Prompt Relay segments;
@@ -79,6 +105,7 @@ The final Production control surface should make the useful Director controls ex
 - start/end-frame behavior;
 - motion / IC-LoRA guidance and strengths;
 - audio timeline / inpainting / override behavior;
+- long-scene chunk/handoff policy if CGlide proves reliable;
 - extension;
 - retake range, prompt and strength;
 - model/backend execution settings;
@@ -86,4 +113,4 @@ The final Production control surface should make the useful Director controls ex
 
 An AI agent may later propose replacements or mutations to these controls, but the execution contract should remain explicit so humans can inspect and override exactly what will be sent.
 
-See `INSTALL.md` for the confirmed workstation setup, `DIRECTOR_SHOT.md` for the temporary input contract, and the D0/D1 test notes for current validation evidence.
+See `INSTALL.md` for the confirmed WhatDreamsCost workstation setup, `CGLIDE_CHUNKING.md` for the alternate scene-chaining test path, `DIRECTOR_SHOT.md` for the temporary input contract, and the D0/D1 notes for validation evidence.

@@ -34,7 +34,7 @@ Generation/production is a separate workstream connected through stable creative
 - Reitaard as a future application shell/interface;
 - provider/model/workflow research as provisional future Production input;
 - local LTX 2.5 / ComfyUI production research, including reproducible generation manifests and controlled prompt/seed/workflow testing;
-- WhatDreamsCost LTX Director research: timed prompts, keyframes, IC-LoRA motion/reference guidance, audio and retake state are a candidate **Production control surface**, not a Helix Director dependency;
+- LTX Director research: timed prompts, keyframes, IC-LoRA/motion/reference guidance, audio, retake and long-video chunking are candidate **Production control surfaces**, not Helix Director dependencies;
 - a provisional pattern where Helix-owned execution intent is compiled into backend-specific workflows instead of agents manipulating provider UIs directly.
 
 ## Active Production-side validation slice
@@ -46,13 +46,17 @@ Current status (2026-08-21):
 - WhatDreamsCost LTX Director nodes load successfully on the local ComfyUI Desktop installation;
 - ComfyUI-KJNodes is installed in the active `Documents\ComfyUI\custom_nodes` directory;
 - the active ComfyUI venv required `av>=16.0.0`;
-- no separate ComfyUI-LTXVideo custom-node package has been required so far;
+- no separate ComfyUI-LTXVideo custom-node package has been required for the validated WhatDreamsCost path;
 - the known-good native LTX 2.5 I2V workflow remains preserved;
 - the Director-enabled workflow follows the upstream two-stage Director topology while retaining the local LTX 2.5 model/upscale/decode backend;
-- **D0 single-prompt Director generation passed**: playable `1280x704`, 24 fps, ~8 s output saved in about `403.6 s`;
+- **D0 single-prompt Director generation passed**: playable output saved in about `403.6 s`;
 - D0 discovered an important runtime rule: Director width/height must be explicit for large guide images; zero inherited the 3200x1800 source and created a 3168x1792 latent;
-- **D1 Prompt Relay with three timed local prompts is the next runtime checkpoint**;
-- the current Comfy graph is an execution prototype, not the final agent-facing Director control surface.
+- **D1 Prompt Relay passed as a mechanism test**: logs showed three active token ranges, temporal latent regions `[8, 9, 8]`, and Prompt Relay penalty matrices in both sampling stages;
+- **D2 extreme Prompt Relay stress test passed as a mechanism test**: the model attempted large temporal world changes but 8 seconds was too short for clean radical transitions;
+- Prompt Relay is therefore considered validated for within-window temporal control, not a complete long-scene continuity solution;
+- research identified `CGlide/LTX-2.5-Director` as the next Production experiment because it already implements chunk writing, handoff frames and assembly for long videos;
+- the next sequence is C0 CGlide smoke test -> C1 handoff writer -> C2 two-chunk continuation -> C3 four-chunk ~32-second scene;
+- the current Comfy graphs remain execution prototypes, not the final agent-facing Director control surface.
 
 This Production validation remains separate from the primary Niche Intelligence design work.
 
@@ -68,8 +72,12 @@ This Production validation remains separate from the primary Niche Intelligence 
 - [ ] Preserve provider-neutral generation job notes inside Production/workflows without making them a blocker for Intelligence work.
 - [ ] When Production implementation resumes, validate whether an internal `ProductionPlan` boundary is useful before promoting it to a shared schema.
 - [x] Complete LTX Director D0 single-prompt generation and record the working settings/result.
-- [ ] Validate D1 Prompt Relay temporal control.
-- [ ] Pin WhatDreamsCost and KJNodes commits before treating the local Director stack as stable.
+- [x] Validate D1 Prompt Relay temporal control.
+- [x] Stress-test Prompt Relay with intentionally large temporal changes.
+- [ ] Validate CGlide LTX 2.5 Director on the local workstation.
+- [ ] Validate CGlide 8-frame handoff writing and two-chunk continuation.
+- [ ] Attempt a four-chunk ~32-second continuous scene only after the two-chunk test passes.
+- [ ] Pin exact Director/KJNodes commits before treating a local Director stack as stable.
 
 ## Next phase
 
