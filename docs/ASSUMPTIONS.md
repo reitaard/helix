@@ -23,6 +23,8 @@ Everything in this file is **unconfirmed until validated by implementation, meas
 - Different production backends may be better for different creative specifications and quality/cost targets.
 - Open/self-hosted models may reduce marginal cost in some workloads, but this still requires measurement.
 - Shot-based/reference-driven production, post-processing, QC, and regeneration may improve reliability for some formats.
+- A machine-readable Production execution plan may provide a useful boundary between `ContentSpec` / `VariantPlan` and backend-specific workflow state.
+- Agents will likely be more reliable when they compile structured production state and use APIs, while humans provide subjective review/overrides, than when agents attempt to automate visual editing interfaces directly.
 
 ## Platform assumptions
 

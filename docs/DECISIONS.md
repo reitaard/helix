@@ -35,3 +35,9 @@ Only choices we are willing to treat as current project commitments belong here.
 **Decision:** Keep the known `create task → task id → status/result → normalized output` pattern for generation workflows, but do not treat it as the central Helix brain contract.
 
 **Reason:** It remains useful for Production integration while no longer dictating project order.
+
+## 2026-08-21 — Tool-specific directors stay inside Production
+
+**Decision:** Tool-specific generation/control layers such as LTX Director and ComfyUI workflow state belong inside Production adapters. They are not the Helix Director contract.
+
+**Reason:** Helix Director should express creative intent independently. Production can translate that intent into timeline segments, keyframes, IC-LoRA guidance, audio controls, retake regions, sampler/model settings, or equivalent backend-specific controls without coupling the brain to one generation stack.

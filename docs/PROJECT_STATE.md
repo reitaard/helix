@@ -32,9 +32,12 @@ Generation/production is a separate workstream. It will be connected later throu
 - asynchronous generation pattern: create task → task id → status/result → output;
 - Runway workflow concepts and task-monitor behavior;
 - Reitaard as a future application shell/interface;
-- previous provider/model/workflow research as provisional future Production input.
+- previous provider/model/workflow research as provisional future Production input;
+- local LTX 2.5 / ComfyUI production research, including reproducible generation manifests and controlled prompt/seed/workflow testing;
+- WhatDreamsCost LTX Director research: structured timed prompts, keyframes, IC-LoRA motion/reference guidance, audio, and retake state can be treated as a candidate Production control surface rather than a Helix Director dependency;
+- a provisional Production pattern where Helix-owned execution intent is compiled into backend-specific workflows instead of agents manipulating provider UIs directly.
 
-These are preserved without making generation the current implementation priority.
+This Production knowledge is being preserved without changing the current next phase: Niche Intelligence design.
 
 ## Preparation checklist
 
@@ -46,6 +49,7 @@ These are preserved without making generation the current implementation priorit
 - [ ] Keep real credentials outside git and document configuration names only when introduced.
 - [ ] Document Reitaard ↔ Helix boundaries when the backend contracts become clearer.
 - [ ] Preserve provider-neutral generation job notes inside Production/workflows without making them a blocker for Intelligence work.
+- [ ] When Production implementation resumes, validate whether an internal `ProductionPlan` boundary is useful before promoting it to a shared schema.
 
 ## Next phase
 

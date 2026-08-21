@@ -21,6 +21,14 @@ Working boundary: `ContentSpec`.
 
 A ContentSpec may eventually describe the topic, angle, audience, hook, narrative beats, target duration, visual/audio intent, constraints, references, and experiment-relevant labels.
 
+## Production handoff
+
+Director may express production-relevant intent such as beats, timing, continuity, references, camera intent, and audio intent. Translation into model settings, workflow graphs, timeline JSON, keyframe strengths, IC-LoRAs, retake masks, or provider-specific parameters belongs to Production.
+
+## Naming clarification
+
+Helix Director is not LTX Director. LTX Director is a tool-specific production control surface that may be used by a Production adapter. Helix Director must remain useful when that backend is replaced.
+
 ## Hard boundary
 
-Director must not care whether Production later uses Seedance, Wan, H3, Runway, stock footage, motion graphics, a human editor, or another tool.
+Director must not care whether Production later uses LTX, Seedance, Wan, H3, Runway, stock footage, motion graphics, a human editor, or another tool.
