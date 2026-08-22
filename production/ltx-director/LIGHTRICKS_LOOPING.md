@@ -1,23 +1,45 @@
 # Lightricks ComfyUI-LTXVideo / Looping Sampler
 
-**Status:** installed and locally proven, but role is being narrowed after hybrid failures.  
+**Status:** installed and locally proven as a continuation engine; not the default for short native shots.  
 **Upstream:** `https://github.com/Lightricks/ComfyUI-LTXVideo`
 
 ## What the LoopingSampler is actually for
 
-The upstream design is a long-video / memory-management sampler. It divides a video latent into overlapping temporal windows, generates the first window, then extends later windows from the preceding temporal context.
+The upstream design is a long-video / memory-management sampler. It divides a video latent into overlapping temporal windows, generates the first window, then extends later windows from preceding temporal context.
 
-That makes it a strong candidate for:
+Strong fit:
 
-- videos that are longer than a convenient single generation;
-- continuous motion that can be extended from recent visual context;
+- videos longer than a convenient single native generation;
+- continuous motion extended from recent visual context;
 - memory-efficient long-form generation;
-- moderate prompt evolution through its own tile-aware conditioning tools;
+- moderate prompt evolution through tile-aware conditioning;
 - later experiments with long-term context latents.
 
-It is **not** itself a shot Director. It does not inherently know a global camera timeline such as `front at 0–5 s, orbit at 5–10 s, side at 10–15 s` unless that timing is mapped into the temporal tiles correctly.
+It is **not** itself a shot Director. A global camera timeline must be mapped to its temporal tiles correctly.
 
-For Helix, do not make LoopingSampler the default backend for every short shot merely because it can generate a long sequence. Native LTX 2.5 remains preferable when the requested shot comfortably fits in one stable generation. LoopingSampler becomes useful when continuation length or memory is the actual problem.
+## New native-quality evidence changes the boundary
+
+A bare full-resolution native LTX motorcycle test now passes at both 4 and 8 seconds:
+
+```text
+4 s  → 97 frames
+8 s  → 193 frames
+24 fps
+736 × 1280 decoded
+```
+
+The same motorcycle/rider survived the 8-second native generation without duplicate or replacement subjects. Remaining errors were mainly decals/logos and tiny detail drift.
+
+Therefore:
+
+```text
+4–8 s shot already fits native LTX reliably
+→ do not add LoopingSampler by default
+```
+
+Use Lightricks when continuation is the actual problem, not simply to make the graph more sophisticated.
+
+See `FULL_RES_NATIVE_I2V.md`.
 
 ## Core behavior confirmed from upstream code
 
@@ -25,13 +47,13 @@ Later temporal windows use `LTXVExtendSampler`.
 
 The extension path:
 
-1. selects the final overlap latents from the previous generated result;
+1. selects final overlap latents from the preceding generated result;
 2. creates the next temporal latent;
 3. inserts the previous overlap as a latent guide at the beginning of the new window;
-4. uses `temporal_overlap_cond_strength` as that guide's strength;
-5. generates only the new continuation frames while preserving the overlap context.
+4. uses `temporal_overlap_cond_strength` as that guide strength;
+5. generates the continuation while preserving recent context.
 
-This is **not** a simple cross-fade between two independently generated temporal clips.
+This is **not** a simple cross-fade between independent clips.
 
 The node default for:
 
@@ -41,7 +63,7 @@ temporal_overlap_cond_strength
 
 is `0.50`.
 
-Higher values can improve continuity, but they also more strongly preserve mistakes in the preceding window. If a subject is already drifting or leaving frame, a very high strength can propagate that failure.
+Higher values can improve continuity but can also preserve mistakes in the preceding window. If a subject is leaving frame, a high strength can propagate that failure.
 
 ## Important controls
 
@@ -58,7 +80,7 @@ optional_normalizing_latents
 
 `optional_positive_conditionings` is the intended hook for different positive conditioning per temporal tile, normally supplied by `LTXVMultiPromptProvider`.
 
-`optional_negative_index_latents` exists specifically to provide long-term context to each temporal extension. Do not add it until the basic continuation path is calibrated.
+`optional_negative_index_latents` can provide long-term context to each extension. Do not add it until base continuation/integration is stable.
 
 ## Local baseline history
 
@@ -89,13 +111,13 @@ Observed:
 - motorcycle/rider consistency was good;
 - boundary motion was smoother than the first CGlide single-image handoff;
 - later detail remained competitive;
-- world/background/lighting could feel as if it was slowly changing across windows.
+- world/background/lighting drifted subtly across windows.
 
-This proved that LoopingSampler works locally. It did **not** prove that stronger/larger temporal settings are always better.
+This proved LoopingSampler works locally. It did **not** prove that stronger/larger settings are always better.
 
-## What we over-tuned later
+## What was over-tuned later
 
-A later hybrid changed several variables at once:
+A failed hybrid changed several variables simultaneously:
 
 ```text
 80 / 24 / 0.65
@@ -105,13 +127,11 @@ A later hybrid changed several variables at once:
 
 while also adding CGlide Prompt Relay and changing prompt structure.
 
-Because tile size, overlap amount, overlap strength and temporal direction all changed together, those runs cannot establish which setting caused each failure.
-
 Important correction:
 
 - `120 / 40` is a reasonable one-third overlap geometry;
-- `0.80` was a Helix experiment, not an upstream recommended optimum;
-- stronger continuity is not automatically higher quality.
+- `0.80` was a Helix experiment, not an upstream optimum;
+- stronger continuation conditioning is not automatically higher quality.
 
 ## Intended Helix usage
 
@@ -119,24 +139,24 @@ Important correction:
 
 Use LoopingSampler when:
 
-- a single scene must extend beyond a comfortable native LTX generation length;
-- camera/motion state evolves continuously rather than jumping between unrelated shots;
-- recent temporal context is useful for continuation;
-- the shot can be described with one stable prompt or prompts explicitly aligned to temporal tiles.
+- one scene must exceed a comfortable native LTX duration;
+- camera/motion state evolves continuously;
+- recent context is useful for extension;
+- prompts are stable or explicitly aligned to temporal tiles.
 
 Examples:
 
 ```text
-vehicle continues driving down one road
+vehicle continues down one road
 character keeps walking through the same space
 slow dolly/tracking movement
-continuous atmospheric/environmental action
+continuous environmental action
 long establishing motion
 ```
 
 ### Higher-risk fit
 
-Treat LoopingSampler cautiously when one long generation demands large internal camera choreography, for example:
+Treat LoopingSampler cautiously when one long generation demands large internal choreography:
 
 ```text
 front tracking
@@ -145,42 +165,11 @@ front tracking
 → another camera mode
 ```
 
-That is not forbidden, but it creates more opportunity for a temporal extension to inherit a bad framing state. If precise choreography is required, prefer either:
+For precise choreography, prefer:
 
-- one native shot if duration permits;
-- several deliberately designed shots connected at a higher level;
-- tile-aware prompt conditioning rather than a full-video attention schedule applied independently inside every tile.
-
-## Current calibration test
-
-Before another hybrid, run a clean Lightricks-only calibration:
-
-```text
-native first-frame I2V
-15 s / 24 fps
-704 × 1280
-120-frame temporal tile
-40-frame overlap
-0.50 overlap conditioning
-AdaIN 0.10
-1 × 1 spatial tiles
-one continuous positive prompt
-no CGlide Prompt Relay
-no secondary keyframe
-no long-memory latent
-```
-
-The camera should remain comparatively stable. The purpose is to measure what LoopingSampler itself does to subject identity and realism.
-
-If this passes, tune one variable at a time:
-
-```text
-0.50 → 0.60 → 0.65
-```
-
-only if the observed seam/continuity problem justifies it.
-
-Do not jump straight back to `0.80`.
+- one native shot when duration permits;
+- multiple deliberate shots at a higher level;
+- tile-aware positive conditioning rather than one full-video attention schedule replayed inside every tile.
 
 ## Relationship to CGlide / Director
 
@@ -188,33 +177,52 @@ Current interpretation:
 
 ```text
 Native LTX
-  = preferred for a shot that already fits comfortably in one generation
+  = preferred when the shot already fits comfortably in one generation
 
-CGlide Director
-  = useful authoring/control surface and proven chunk-handoff baseline
+CGlide / Director
+  = authoring/control surface; not a current 2.5 identity-reference layer
 
 Lightricks LoopingSampler
-  = long temporal continuation engine
+  = temporal extension engine
 
 Hybrid
-  = valid only when Director intent is translated into tile-aware Lightricks timing,
+  = valid when Director intent is translated into tile-aware Lightricks timing,
     or Prompt Relay is modified to understand each tile's true global offset
 ```
 
-Do not directly layer a full-duration Prompt Relay mask over LoopingSampler again until that temporal mapping is validated.
+CGlide's old LTX 2.3 `@ref` / reference-sheet behavior is disabled for LTX 2.5. Do not attach CGlide merely as an identity reference.
 
-## Installation
+## Next hybrid re-entry
 
-Stop ComfyUI first.
+Preferred first C4 topology:
 
-```powershell
-cd C:\Users\MSP-PC\Documents\ComfyUI\custom_nodes
-git clone https://github.com/Lightricks/ComfyUI-LTXVideo.git
-
-& "C:\Users\MSP-PC\Documents\ComfyUI\.venv\Scripts\python.exe" -m pip install -r .\ComfyUI-LTXVideo\requirements.txt
+```text
+CGlide / Director timeline intent
+        ↓
+compile intent into per-tile prompt conditioning
+        ↓
+LTXVMultiPromptProvider
+        ↓
+LoopingSampler
 ```
 
-Restart and verify:
+For the first pass:
+
+- same proven green motorcycle source;
+- modest camera/motion changes;
+- one source image;
+- `0.50` previous-tile strength first;
+- no second keyframe;
+- no long-memory latent;
+- no direct full-duration Prompt Relay over the tiles.
+
+A standalone `120 / 40 / 0.50` Lightricks calibration remains useful if the C4 result exposes a continuation-specific problem that needs isolation.
+
+## Installation / current worker note
+
+The repo's current infrastructure note documents the standalone ComfyUI worker and pinned custom-node commits. Prefer that pinned worker state over speculative upgrades while these comparisons are active.
+
+Verify the node family after startup:
 
 ```text
 LTXV Looping Sampler
