@@ -3,13 +3,59 @@
 **Status:** active Production experiment  
 **Started:** 2026-08-21
 
-Helix is comparing existing LTX 2.5 continuation approaches before choosing a long-scene Production backend. This is an implementation comparison, not a new Helix-wide schema.
+Helix is comparing native LTX 2.5 generation and long-video continuation approaches before choosing when each backend should be used. This is an implementation comparison, not a new Helix-wide schema.
 
-## Decision tracks
+## Track N — Native full-resolution LTX 2.5
 
-### A. CGlide only
+A new bare-LTX baseline now exists and changes the comparison substantially.
 
-Use `CGlide/LTX-2.5-Director` for Director timeline control, chunk handoff, audio writing and final assembly.
+The F0 path removed:
+
+- CGlide Director / Prompt Relay;
+- Lightricks LoopingSampler;
+- temporal overlap;
+- secondary keyframes;
+- latent ×2 upscaling in the executed path;
+- Stage-2 diffusion in the executed path.
+
+It generated directly at final spatial resolution from the first/only sampling stage.
+
+### F0 4-second result — PASS
+
+```text
+97 frames
+24 fps
+736 × 1280 decoded
+```
+
+The motorcycle/rider remained the same subject with strong gross geometry and realism. Main weaknesses were small logo/decal drift and some composition movement.
+
+### F0 8-second duration control — PASS
+
+```text
+193 frames
+24 fps
+736 × 1280 decoded
+```
+
+The same motorcycle/rider survived the full 8 seconds without duplicate subjects, disappearance or replacement-bike failure. Fine decals/logos still drifted, but the error stayed local rather than becoming whole-object identity collapse.
+
+Important: changing duration changed the generation trajectory from the beginning. The 8-second render is not the 4-second render plus four appended seconds.
+
+Implication:
+
+```text
+short/medium shot already fits one native generation
+→ do not add a continuation engine by default
+```
+
+See `FULL_RES_NATIVE_I2V.md`.
+
+---
+
+## Track A — CGlide only
+
+Use `CGlide/LTX-2.5-Director` for timeline control, chunk handoff, audio writing and final assembly.
 
 Confirmed local baseline:
 
@@ -19,17 +65,21 @@ Confirmed local baseline:
 - Chunk Writer creates 8 lossless PNG handoff frames;
 - a second 193-frame chunk was generated from the handoff and automatically assembled;
 - assembled result is 378 frames / 15.75 s plus aligned audio;
-- motorcycle/rider/world continuity is promising;
-- motion/camera velocity at the boundary is still perceptible;
-- later-chunk realism may degrade, but that is not yet proven systematic.
+- motorcycle/rider/world continuity was promising;
+- motion/camera velocity at the boundary remained perceptible;
+- later-chunk realism may degrade.
 
-CGlide remains a working continuation baseline and a useful directing/orchestration surface.
+CGlide remains a working continuation baseline and a useful Director/control surface.
 
-### B. Lightricks only
+CGlide must **not** be treated as an identity-reference system for LTX 2.5. Its old LTX 2.3 `@ref` / reference-sheet behavior is disabled on 2.5.
+
+---
+
+## Track B — Lightricks only
 
 Use official `Lightricks/ComfyUI-LTXVideo` long-video sampling without CGlide Prompt Relay.
 
-#### B0 confirmed result — PASS as continuation mechanism
+### B0 confirmed result — PASS as continuation mechanism
 
 ```text
 LTXVLoopingSampler on both generation stages
@@ -53,34 +103,43 @@ spatial tiles                   1 × 1
 Findings:
 
 - true overlapping temporal continuation works locally;
-- bike/rider consistency was good across the sequence;
-- motion continuity and seam quality were visibly stronger than the first CGlide single-image handoff baseline;
+- bike/rider consistency was good;
+- motion continuity and seam quality were stronger than the first CGlide single-image handoff baseline;
 - later sections retained useful detail;
-- scene/world/lighting state could still drift subtly between temporal windows.
+- scene/world/lighting state could drift subtly between temporal windows.
 
-Important correction: after B0, Helix changed several Lightricks parameters simultaneously (`80/24/0.65 → 120/40/0.80`) while also adding Director Prompt Relay. Those later hybrid failures cannot be attributed to Lightricks alone.
+Important correction: later experiments changed `80/24/0.65 → 120/40/0.80` while also adding Director Prompt Relay and changing prompt structure. Those failures cannot be attributed to Lightricks alone.
 
-#### What Lightricks is for
+### What Lightricks is for
 
-`LTXVLoopingSampler` is primarily a temporal-extension / memory-efficient long-video engine. It is useful when a single continuous scene must exceed a comfortable native generation length.
+`LTXVLoopingSampler` is primarily a temporal-extension / long-video engine.
 
-It should not automatically replace native LTX for every short or medium shot. If a shot already fits reliably in one native generation, the simpler native path should remain the default.
-
-Lightricks is most natural for continuous extension with a stable camera/motion relationship or tile-aware prompt changes. Large whole-shot camera choreography needs additional care.
-
-### C. Hybrid B — PAUSED after v1.3 failure
-
-The attempted hybrid was:
+Use it when:
 
 ```text
-CGlide Director Prompt Relay
-        ↓
-Lightricks LoopingSampler temporal extension
-        ↓
-two-stage native LTX I2V / upscale path
+shot must exceed a comfortable native generation length
++ recent temporal context is useful for continuation
 ```
 
-The latest v1.3 run used:
+Do not use it merely because the shot is 4–8 seconds. The F0 native baseline shows that LTX itself can already handle that class well under restrained motion.
+
+---
+
+## Track C — Hybrid B
+
+### Previous v1.3 — FAIL / PAUSED
+
+The failed hybrid was:
+
+```text
+CGlide full-duration Prompt Relay
+        ↓
+Lightricks temporal windows
+        ↓
+two-stage native LTX path
+```
+
+Settings included:
 
 ```text
 704 × 1280
@@ -93,133 +152,91 @@ Prompt Relay epsilon 0.50
 549.18 s runtime
 ```
 
-Overall verdict: **FAIL**.
+The original motorcycle was initially preserved, then left frame, and a completely different motorcycle was synthesized later. Overall verdict: **FAIL**.
 
-The original motorcycle was initially preserved, then left the frame, and a completely different motorcycle model was synthesized later in the same continuous shot. This invalidates the run even though parts of the later rendering were photorealistic.
+### Confirmed/hypothesized failure contributors
 
-## What likely went wrong in the hybrid
+1. **Temporal coordinate mismatch hypothesis** — Prompt Relay has a full-video timeline while LoopingSampler executes shorter overlapping windows; the current Prompt Relay scaling path does not receive each tile's true global start offset.
+2. **Prompt Relay over-softening** — `epsilon=0.50` greatly broadened local-prompt leakage compared with the earlier strict setting.
+3. **Aggressive overlap propagation** — `temporal_overlap_cond_strength=0.80` was above the Lightricks `0.50` default and could strongly preserve a bad framing state.
+4. **Earlier reference mistakes** — a different motorcycle was once supplied as a later keyframe; padded references and generatively redrawn benchmark images also contaminated earlier tests.
+5. **Too many variables changed together** — tile size, overlap, overlap strength, prompt structure and control layers were changed simultaneously.
 
-### 1. Prompt Relay and LoopingSampler may be using different time coordinate systems
+The new native full-resolution PASS demonstrates that catastrophic motorcycle replacement is **not** an unavoidable property of LTX 2.5 itself.
 
-Source inspection shows that CGlide Prompt Relay builds a full-timeline temporal mask, while Lightricks generates the video in overlapping temporal chunks.
+---
 
-When Prompt Relay operates on a shorter attention query, its scaled mapping does not receive the Lightricks tile's global start offset.
+## Hybrid re-entry design
 
-Strong current hypothesis:
+The next hybrid must give each component a narrow job:
 
 ```text
-Director intent:
-0–5 front
-5–10 camera arc
-10–15 side
+native LTX
+= visual generation quality
 
-may be locally re-scaled/replayed inside multiple Lightricks temporal windows
+Lightricks
+= temporal extension when duration requires it
+
+CGlide / Director
+= authoring of timed shot intent
 ```
 
-This must be validated with a no-Prompt-Relay control run before being treated as a confirmed root cause.
+### Do not repeat the old direct wiring
 
-### 2. Prompt Relay was over-softened
+Do not put a full-duration Prompt Relay attention schedule directly inside every Lightricks temporal window until global tile timing is explicitly supported.
 
-The hybrid used:
+### Preferred first integration
 
 ```text
-epsilon = 0.50
+CGlide/Director timeline intent
+        ↓
+compile timeline into per-tile prompt intent
+        ↓
+LTXVMultiPromptProvider / tile-aware positive conditioning
+        ↓
+Lightricks LoopingSampler
+        ↓
+LTX generation
 ```
 
-CGlide's sigma formula makes this much broader than the earlier `0.001`, increasing local-prompt leakage across temporal zones.
+This uses both systems according to their intended roles without asking Prompt Relay to infer global time from a local tile.
 
-Do not use `0.50` as the default merely because the transition is intended to be smooth.
+For the first re-entry:
 
-### 3. Lightricks overlap conditioning was pushed above its default
+- use the successful green motorcycle source;
+- keep the bike continuously in frame;
+- use modest physical camera/motion changes;
+- no second visual keyframe;
+- no IC-LoRA yet;
+- no negative-index memory yet;
+- no `0.80` overlap strength;
+- no broad `epsilon=0.50` Prompt Relay schedule;
+- one experimental variable at a time.
 
-The hybrid used:
+If actual temporal extension is not needed for the requested duration, stay on native full-resolution LTX instead of forcing Lightricks into the graph.
 
-```text
-temporal_overlap_cond_strength = 0.80
-```
+---
 
-Lightricks defaults to `0.50`. The value directly controls how strongly the previous overlap latents guide the next extension.
+## Decision principle
 
-A high value can preserve good motion continuity, but it can also propagate a bad framing state. If the preceding tile ends with the bike leaving frame, `0.80` strongly encourages that state to persist.
-
-### 4. Earlier hybrid runs also had separate visual-reference mistakes
-
-Avoid repeating these known failures:
-
-- second keyframe from a different motorcycle identity;
-- padded reference image that made the motorcycle small in frame;
-- generatively redrawn first frame when benchmarking fidelity;
-- using CGlide's neutral negative output instead of the native negative path;
-- changing many controls simultaneously and then trying to infer one cause.
-
-## Updated decision principle
-
-Do not choose a long-video backend based on maximum control count.
-
-Prefer the simplest backend that satisfies the actual shot requirement.
+Prefer the smallest backend that satisfies the shot.
 
 ```text
-shot fits native LTX comfortably
+short/medium shot fits native LTX
 → native LTX first
 
-shot needs longer continuous temporal extension
-→ evaluate Lightricks
+identity/detail-critical short shot
+→ full-resolution native LTX candidate
 
-shot needs explicit Director timeline control + extension
-→ hybrid only after temporal mapping is proven
+long continuous extension
+→ Lightricks
 
-shot is better represented as multiple intentional shots
-→ do not force one huge LoopingSampler generation
+explicit timed control + extension
+→ Director intent compiled to tile-aware Lightricks timing
+
+multiple intentional camera shots
+→ represent as multiple shots rather than one overloaded long generation
 ```
-
-## Next test — B0.1 clean Lightricks calibration
-
-Before another Hybrid B run, isolate Lightricks:
-
-```text
-original first-frame photograph
-native LTX 2.5 I2V
-15 s / 24 fps / 704 × 1280
-120 temporal tile
-40 temporal overlap
-0.50 overlap conditioning
-AdaIN 0.10
-one continuous positive prompt
-native negative conditioning
-NO CGlide Prompt Relay
-NO secondary keyframe
-NO long-term memory latent
-```
-
-Keep the camera relationship comparatively stable. The purpose is not to prove a fancy shot; it is to determine what LoopingSampler itself does to identity, realism and world continuity.
-
-Questions:
-
-1. Does the original motorcycle remain the same motorcycle for 15 seconds?
-2. Does it remain in frame across all temporal windows?
-3. Is realism close to the native benchmark?
-4. Are temporal boundaries smooth at the default `0.50` strength?
-5. Does the scene/world still drift without Director?
-
-If B0.1 passes, tune only one variable at a time. If more overlap conditioning is needed, test `0.60` or `0.65` before considering `0.80`.
-
-## Hybrid re-entry criteria
-
-Hybrid work resumes only after Lightricks-only behavior is understood.
-
-Preferred first hybrid re-entry path:
-
-```text
-Director timeline / shot intent
-        ↓
-compile into Lightricks tile-aware positive conditioning
-        ↓
-LTXVMultiPromptProvider / equivalent per-tile conditioning
-        ↓
-LoopingSampler
-```
-
-Only consider a custom Prompt Relay + LoopingSampler integration if Prompt Relay is made aware of each temporal tile's true global start offset.
 
 ## Comparison criteria
 
@@ -232,24 +249,25 @@ Score each track on:
 5. scene/world/weather stability;
 6. realism / later-section AI look;
 7. sharpness/detail retention;
-8. color/saturation/contrast drift;
-9. prompt/control adherence;
-10. multi-frame/keyframe behavior;
-11. reproducibility;
-12. runtime and VRAM/RAM behavior;
-13. workflow complexity and debuggability;
-14. suitability for explicit human controls and later agent suggestions.
+8. logo/decal/micro-detail persistence;
+9. color/saturation/contrast drift;
+10. prompt/control adherence;
+11. multi-frame/keyframe behavior;
+12. reproducibility;
+13. runtime and VRAM/RAM behavior;
+14. workflow complexity and debuggability;
+15. suitability for explicit human controls and later agent suggestions.
 
 ## Current test order
 
 ```text
-A0/A1  CGlide baseline                              PASS
-B0     Lightricks 80/24/0.65 baseline              PASS as mechanism
-C0-C3  Hybrid experiments                          FAIL / PAUSED
-B0.1   Lightricks 120/40/0.50 calibration          NEXT
-B0.2   tune one Lightricks parameter if justified
-C4     tile-aware hybrid only after B0.x understood
-DECISION choose simplest path that clearly wins
+N0-4s  native full-resolution baseline                PASS
+N0-8s  native full-resolution duration control       PASS
+A0/A1  CGlide continuation baseline                  PASS
+B0     Lightricks 80/24/0.65 continuation baseline  PASS as mechanism
+C0-C3  old direct PromptRelay + Lightricks hybrids   FAIL / PAUSED
+C4     tile-aware hybrid re-entry                     NEXT integration target
+B0.1   standalone Lightricks 120/40/0.50             still useful if continuation needs isolated calibration
 ```
 
-Do not increase to 30+ seconds yet.
+Do not increase to 30+ seconds until the tile-aware hybrid and/or clean Lightricks calibration has a stable identity result.
