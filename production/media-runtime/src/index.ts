@@ -85,10 +85,14 @@ const workers =
 const jobRepository =
   new JobRepository(db);
 
+const deliveryRepository =
+  new DeliveryRepository(db);
+
 const jobs =
   new JobService(
     jobRepository,
-    registry
+    registry,
+    deliveryRepository
   );
 
 const reconciler =
@@ -102,9 +106,6 @@ const reconciler =
 
     config.jobTimeoutMs
   );
-
-const deliveryRepository =
-  new DeliveryRepository(db);
 
 const deliveryWorker =
   config.telegram

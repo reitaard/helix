@@ -5,6 +5,10 @@ import {
 } from "../repositories/job-repository.js";
 
 import {
+  DeliveryRepository
+} from "../repositories/delivery-repository.js";
+
+import {
   WorkerRegistry
 } from "../workers/registry.js";
 
@@ -69,11 +73,28 @@ export class JobService {
       JobRepository,
 
     private readonly workers:
-      WorkerRegistry
+      WorkerRegistry,
+
+    private readonly deliveries:
+      DeliveryRepository
   ) {}
 
-  get(id: string) {
-    return this.jobs.get(id);
+  async get(id: string) {
+    const job =
+      await this.jobs.get(id);
+
+    if (!job) {
+      return null;
+    }
+
+    const deliveries =
+      await this.deliveries
+        .listForJob(id);
+
+    return {
+      ...job,
+      deliveries
+    };
   }
 
   async cancel(

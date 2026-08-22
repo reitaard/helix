@@ -69,11 +69,139 @@ export interface ClaimedDelivery {
     string | null;
 }
 
+interface DeliveryStatusRow {
+  artifact_index: number;
+  provider: string;
+  status: string;
+  attempt_count: number;
+
+  metadata_message_id:
+    string | null;
+
+  document_message_id:
+    string | null;
+
+  error: unknown | null;
+
+  next_attempt_at:
+    Date | null;
+
+  created_at:
+    Date;
+
+  updated_at:
+    Date;
+
+  delivered_at:
+    Date | null;
+}
+
+export interface JobDelivery {
+  artifactIndex: number;
+  provider: string;
+  status: string;
+  attemptCount: number;
+
+  metadataMessageId:
+    string | null;
+
+  documentMessageId:
+    string | null;
+
+  error:
+    unknown | null;
+
+  nextAttemptAt:
+    string | null;
+
+  createdAt:
+    string;
+
+  updatedAt:
+    string;
+
+  deliveredAt:
+    string | null;
+}
+
 export class DeliveryRepository {
   constructor(
     private readonly db:
       Pool
   ) {}
+
+  async listForJob(
+    jobId: string
+  ): Promise<JobDelivery[]> {
+    const result =
+      await this.db.query<
+        DeliveryStatusRow
+      >(
+        `
+        SELECT
+          artifact_index,
+          provider,
+          status,
+          attempt_count,
+          metadata_message_id,
+          document_message_id,
+          error,
+          next_attempt_at,
+          created_at,
+          updated_at,
+          delivered_at
+        FROM media_deliveries
+        WHERE job_id = $1
+        ORDER BY
+          artifact_index,
+          provider
+        `,
+        [jobId]
+      );
+
+    return result.rows.map(
+      row => ({
+        artifactIndex:
+          row.artifact_index,
+
+        provider:
+          row.provider,
+
+        status:
+          row.status,
+
+        attemptCount:
+          row.attempt_count,
+
+        metadataMessageId:
+          row.metadata_message_id,
+
+        documentMessageId:
+          row.document_message_id,
+
+        error:
+          row.error,
+
+        nextAttemptAt:
+          row.next_attempt_at
+            ?.toISOString() ??
+          null,
+
+        createdAt:
+          row.created_at
+            .toISOString(),
+
+        updatedAt:
+          row.updated_at
+            .toISOString(),
+
+        deliveredAt:
+          row.delivered_at
+            ?.toISOString() ??
+          null
+      })
+    );
+  }
 
   async claimDue(
     provider: string
