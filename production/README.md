@@ -1,17 +1,15 @@
 # Production
 
-Production is the execution layer. This area contains the currently active ComfyUI worker/runtime work as well as model/workflow experiments.
+Production is the execution layer. This area contains the active ComfyUI worker/runtime work as well as model/workflow experiments.
 
 ## Current active execution workstream
-
-The immediate implementation focus is the dedicated ComfyUI GPU worker:
 
 ```text
 n8n / caller
     ↓
 helix-runtime
     ↓
-helix-db + worker/job state
+helix-db + worker/job/delivery state
     ↓
 ComfyAdapter
     ↓
@@ -20,9 +18,13 @@ ComfyUI over Tailscale
 helix-rtx4060-01
     ↓
 generated asset
+    ↓
+VPS temporary spool
+    ↓
+Telegram delivery
 ```
 
-The worker and runtime are already connected and healthy. Readiness is persisted in PostgreSQL. The next milestone is to accept a durable job through `helix-runtime`, submit a Comfy API workflow through `/prompt`, track the resulting `prompt_id`, and return generated asset metadata.
+The worker/runtime path now supports durable job acceptance, Comfy submission, `prompt_id` tracking, queue/history reconciliation, restart recovery, artifact capture, artifact retrieval, media probing, durable Telegram delivery, retry state, and temporary spool cleanup.
 
 See [`production/comfyui-worker/`](comfyui-worker/) for the focused worker state and roadmap.
 
@@ -30,7 +32,7 @@ See [`production/media-runtime/`](media-runtime/) for the deployed TypeScript ru
 
 ## Current ComfyUI/LTX validation
 
-The standalone RTX 4060 worker has validated native LTX 2.5 generation and currently exposes the known-good ComfyUI/custom-node stack through the private API on port `8188`.
+The standalone RTX 4060 worker has validated native LTX 2.5 generation and exposes the known-good ComfyUI/custom-node stack through the private API on port `8188`.
 
 LTX/Director workflow experiments remain execution research, not a frozen runtime contract. Existing findings include:
 
@@ -45,19 +47,23 @@ See [`production/ltx-director/`](ltx-director/) for those experiment notes.
 
 ## Current rule for workflow integration
 
-Do not make the runtime wait for a final workflow abstraction before proving API execution.
-
-The first runtime-controlled generation may accept a raw Comfy API-format workflow graph and an already-staged worker input. Once a graph is selected as a stable baseline, it can be frozen into a versioned workflow package with semantic bindings.
+Do not make the runtime wait for a final workflow abstraction, but also do not hard-code a large semantic input contract while the workflows are still changing.
 
 ```text
-raw API workflow first
+raw Comfy API workflow
         ↓
-prove /prompt + tracking + outputs
+prove execution + outputs
         ↓
-freeze known-good workflow
+continue workflow optimization in ComfyUI
         ↓
-add bindings/versioning
+choose stable I2V / T2V workflow families
+        ↓
+freeze/version those graphs
+        ↓
+add semantic bindings around stable controls
 ```
+
+The current raw workflow submission path is intentionally useful while I2V controls, Prompt Relay behavior, sampler settings, prompt surfaces, and future T2V graphs are still evolving.
 
 ## Worker/runtime ownership
 
@@ -67,8 +73,10 @@ The runtime owns:
 - durable job IDs/state/events;
 - submission to ComfyUI;
 - execution tracking/reconciliation;
-- generated output metadata;
-- later cancellation/recovery and asset retention.
+- generated artifact metadata;
+- artifact retrieval and temporary spooling;
+- delivery state/retry and Telegram transport;
+- next: controlled artifact retention and later cancellation/timeouts.
 
 ComfyUI owns:
 
@@ -77,4 +85,10 @@ ComfyUI owns:
 - worker-local input/output files;
 - native queue/history/WebSocket execution state.
 
-For the current milestone, keep this workstream limited to getting the ComfyUI worker to accept jobs and produce retrievable assets reliably.
+## Immediate next work
+
+Input staging and semantic prompt/sampler/relay bindings are intentionally deferred until the workflow control surface stabilizes.
+
+The next workflow-independent runtime milestone is controlled worker output retention cleanup: retain Helix-managed worker artifacts for an initial 24-hour safety window, then remove only known Helix outputs rather than sweeping the whole Comfy output tree.
+
+After retention cleanup, harden generation timeout/cancellation and delivery observability. Persistent WebSocket execution tracking remains optional because queue/history reconciliation already provides correctness.

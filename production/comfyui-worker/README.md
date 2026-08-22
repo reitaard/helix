@@ -2,7 +2,7 @@
 
 This folder records the active ComfyUI execution workstream only.
 
-The goal is to make Helix control the dedicated ComfyUI worker reliably from input staging through generation, durable tracking, artifact delivery, and cleanup. It does not define the rest of Helix.
+The goal is to make Helix control the dedicated ComfyUI worker reliably from job submission through generation, durable tracking, artifact delivery, retention, and recovery. It does not define the rest of Helix.
 
 ## Current path
 
@@ -20,6 +20,10 @@ helix-rtx4060-01
 ComfyUI :8188
     ↓
 C:\AI\ComfyUI-CLI\output
+    ↓
+VPS spool
+    ↓
+Telegram
 ```
 
 ## Stable worker
@@ -32,7 +36,7 @@ VRAM: 8188 MiB
 ComfyUI: 0.33.0
 Python: 3.12.11
 PyTorch: 2.10.0+cu130
-capability: video.i2v
+validated capability: video.i2v
 max concurrent GPU jobs: 1
 ```
 
@@ -56,16 +60,13 @@ LTX 2.3 and 2.5 assets are available. LTX 2.5 is the validated generation path.
 - restart recovery;
 - live `queued -> running -> succeeded` tracking;
 - artifact metadata capture from Comfy history;
-- compact job status response that does not dump the entire workflow.
-
-Observed readiness baseline on 2026-08-22:
-
-```text
-/live       ~410 ms
-/readiness  ~3.2 s
-node classes: 1219
-worker state: cold_ready
-```
+- semantic `LoadImage` override source;
+- artifact file retrieval through Comfy `/view`;
+- durable `media_deliveries` state;
+- Telegram metadata message + original MP4 document delivery;
+- ffprobe metadata inspection for resolution/duration/size/audio state;
+- delivery retries with durable claim state;
+- immediate VPS spool cleanup after each attempt.
 
 ## Proven generations
 
@@ -106,64 +107,43 @@ backend_job_id / prompt_id
 reconcile durable state
 ```
 
-This means `helix-runtime` can restart and recover unfinished/completed jobs. WebSocket event tracking can be added later for faster updates, but it is not required for correctness.
+This means `helix-runtime` can restart and recover unfinished/completed jobs. WebSocket event tracking can be added later for lower latency, but is not required for correctness.
 
-## Artifact state
+## Output delivery state
 
-Helix currently captures artifact metadata such as:
-
-```json
-{
-  "filename": "LTX-2.5_i2v_00005_.mp4",
-  "subfolder": "video",
-  "type": "output",
-  "nodeId": "75"
-}
-```
-
-The file itself still remains on the Windows worker. Artifact retrieval/delivery is the next milestone.
-
-## Input state
-
-Semantic `LoadImage` override code has been implemented and built.
-
-It finds the unique `LoadImage` node, preferring title `Load First Frame`, validates a relative worker input filename, clones the workflow, and changes only that clone.
-
-Functional check against the C6 API graph passed:
+Checkpoint `301be69` added and validated the complete current output path:
 
 ```text
-original: Ninja.jpg
-changed:  helix-test/example.jpg
-original preserved: true
-node count preserved: true
+Comfy artifact
+    ↓
+/view retrieval
+    ↓
+VPS temporary spool
+    ↓
+ffprobe
+    ↓
+Telegram metadata
+    ↓
+Telegram document
+    ↓
+durable message IDs
+    ↓
+spool removed
 ```
 
-This source checkpoint is committed for continuation. Confirm deployment after pulling/rebuilding the VPS runtime.
+The final delivery test used the already-generated C6 artifact, completed in one attempt, persisted both Telegram message IDs, and left the spool empty.
 
-Actual image upload/staging through Comfy `POST /upload/image` is not implemented yet.
+Generation success and delivery success are intentionally separate states.
 
-## LTX hybrid workflow control gap
+## Input state: defer semantic expansion
 
-The C6 API graph proved that raw workflow submission works, but the user-facing LTX controls are not fully bound yet.
+The current semantic image override is useful, but actual `/upload/image` staging and broader workflow bindings are postponed while LTX workflows are still being optimized.
 
-The minimum semantic bindings needed are:
+This is deliberate. Future I2V graphs may expose more prompt/sampler/relay controls, and a T2V workflow will have a different input surface.
 
-```text
-inputs.image
-  -> LoadImage / Load First Frame
+Keep raw Comfy API workflow submission available and avoid hard-coding an unstable large input schema.
 
-inputs.prompt
-  -> PrimitiveStringMultiline / Prompt
-
-inputs.chunkPrompts
-  -> LTXV Multi Prompt Provider
-```
-
-For the hybrid workflow, changing only the outer/global prompt is insufficient when old tile/chunk prompts remain in `LTXV Multi Prompt Provider`.
-
-CGlide/Director prompt authoring is not the main active prompt path while Prompt Relay is disabled.
-
-Until `prompt` and `chunkPrompts` are exposed, use Comfy WebUI for runs that require full prompt control.
+When workflow families stabilize, add semantic bindings around the chosen graphs rather than around temporary node layouts.
 
 ## C6 workflow note
 
@@ -177,33 +157,7 @@ It is not frozen into the repository.
 
 The export had 54 nodes. A serialization mismatch was caught before generation: `temporal_overlap_cond_strength` exported as `0.5` even though the UI named value showed `0.35`. The test API copy was corrected to `0.35`, then successfully generated.
 
-Do not freeze/package this workflow until the user declares a stable baseline.
-
-## Next milestone: Telegram output delivery
-
-Resume here.
-
-Build this path before spending GPU time on another end-to-end test:
-
-```text
-Comfy artifact
-    ↓
-controlled /view retrieval
-    ↓
-VPS temporary spool
-    ↓
-TelegramDelivery
-    ↓
-durable delivery success/failure + retry
-    ↓
-remove VPS temporary file after confirmed delivery
-```
-
-Keep generation status and delivery status separate: a successful generation remains `succeeded` even if Telegram delivery fails.
-
-After Telegram delivery works, add controlled worker output retention cleanup. Initial discussion used a 24-hour safety window rather than immediate worker deletion.
-
-Then implement Comfy input upload/staging and the missing prompt/chunk-prompt bindings.
+Do not freeze/package this workflow until a stable baseline is explicitly chosen.
 
 ## Focused roadmap
 
@@ -219,18 +173,27 @@ prompt_id persistence                 DONE
 Running/completion reconciliation     DONE
 Restart recovery                      DONE
 Artifact metadata capture             DONE
-Semantic image override source        DONE (deploy confirmation pending)
+Semantic image override source        DONE
+Artifact file retrieval               DONE
+Telegram delivery                     DONE
+Durable delivery retry/state          DONE
+VPS temporary cleanup                 DONE
 
-Artifact file retrieval               NEXT
-Telegram delivery                     NEXT
-Durable delivery retry/state          NEXT
-VPS temporary cleanup                 NEXT
 Worker retention cleanup              NEXT
-Image upload / staging                AFTER OUTPUT
-Prompt + chunkPrompt bindings         AFTER OUTPUT
-Cancellation                          LATER
-Freeze first workflow                 ONLY AFTER BASELINE IS CHOSEN
+Generation timeout/cancellation       AFTER RETENTION
+Delivery observability hardening      AFTER RETENTION
+Image upload / staging                DEFERRED
+Prompt / relay / sampler bindings     DEFERRED
+T2V semantic bindings                 DEFERRED
+Persistent WS tracking                OPTIONAL LATER
+Freeze workflow package               ONLY AFTER BASELINE IS CHOSEN
 ```
+
+## Immediate next milestone: worker retention cleanup
+
+VPS temporary copies are already removed. Worker originals are not.
+
+Implement controlled cleanup with an initial 24-hour safety window and delete only artifacts known to Helix. Do not blindly sweep the entire Comfy output tree because the worker can also contain manual/experimental outputs.
 
 ## Operational rules
 
@@ -240,5 +203,5 @@ Freeze first workflow                 ONLY AFTER BASELINE IS CHOSEN
 - Avoid competing GPU workloads during LTX generation.
 - Do not let n8n own low-level Comfy polling/tracking.
 - Do not store Telegram tokens or other secrets in Git.
-- Do not delete worker output immediately after delivery; use a controlled retention policy.
 - Do not package/freeze the current experimental LTX workflow yet.
+- Do not force semantic input work while the workflow control surface is still changing.

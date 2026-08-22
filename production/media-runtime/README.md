@@ -2,9 +2,9 @@
 
 Execution service currently used to control the dedicated ComfyUI GPU worker.
 
-The active scope is intentionally narrow: accept durable media jobs, submit them to ComfyUI, reconcile execution, capture artifacts, and build a reliable input/output boundary around the worker.
+The active scope is intentionally narrow: accept durable media jobs, submit raw Comfy API workflows, reconcile execution, capture artifacts, deliver generated media, and keep the worker/runtime boundary reliable while workflow experiments continue changing.
 
-See [`../comfyui-worker/README.md`](../comfyui-worker/README.md) for the focused worker checkpoint and resume plan.
+See [`../comfyui-worker/README.md`](../comfyui-worker/README.md) for the focused worker checkpoint and roadmap.
 
 ## Current deployed path
 
@@ -18,17 +18,22 @@ WorkerService + JobService
     │   ├── workers
     │   ├── worker_observations
     │   ├── media_jobs
-    │   └── media_job_events
+    │   ├── media_job_events
+    │   └── media_deliveries
     ↓
 WorkerRegistry
     ↓
-ComfyAdapter
-    ↓
-ComfyClient
+ComfyAdapter / ComfyClient
     ↓ Tailscale
 helix-rtx4060-01
     ↓
 ComfyUI :8188
+    ↓
+artifact
+    ↓
+VPS temporary spool
+    ↓
+TelegramDelivery
 ```
 
 ## Current worker
@@ -36,7 +41,7 @@ ComfyUI :8188
 - ID: `helix-rtx4060-01`
 - Profile: `comfy-video-ltx-stable`
 - Adapter: `comfy`
-- Capability: `video.i2v`
+- Capability currently validated: `video.i2v`
 - GPU: RTX 4060, 8188 MiB VRAM
 - ComfyUI: 0.33.0
 - LTX 2.5: available and validated
@@ -58,11 +63,11 @@ Media jobs:
 - `POST /v1/media/jobs`
 - `GET /v1/media/jobs/:jobId`
 
-`POST /v1/media/jobs` accepts a Comfy API-format workflow and returns immediately after durable acceptance/submission. The long-running generation is asynchronous.
+`POST /v1/media/jobs` accepts a Comfy API-format workflow and returns immediately after durable acceptance/submission. Long-running generation is asynchronous.
 
 ## Proven execution lifecycle
 
-The runtime now persists and reconciles:
+The runtime persists and reconciles:
 
 ```text
 accepted
@@ -76,11 +81,11 @@ succeeded
 
 Comfy's `prompt_id` is stored as `backend_job_id`.
 
-The current reconciler uses Comfy `/history/{prompt_id}` plus `/queue` as the correctness/source-of-truth path. It runs inside `helix-runtime`, so unfinished jobs can be recovered after a runtime restart. WebSocket tracking can be added later as a latency optimization; correctness does not depend on it.
+Correctness comes from Comfy `/history/{prompt_id}` plus `/queue`. The reconciler runs inside `helix-runtime`, so unfinished jobs can be recovered after a runtime restart. WebSocket tracking remains an optional latency optimization.
 
 Artifact discovery walks Comfy history outputs and records filename, subfolder, type, and source node where available.
 
-## Validated runs on 2026-08-22
+## Proven runs on 2026-08-22
 
 First runtime-controlled replay:
 
@@ -91,7 +96,7 @@ Result:       succeeded
 Artifact:     video/LTX-2.5_i2v_00004_.mp4
 ```
 
-This job was deliberately reconciled after completion to prove restart/recovery behavior.
+This was deliberately reconciled after completion to prove restart/recovery behavior.
 
 C6 hybrid runtime run:
 
@@ -104,7 +109,45 @@ Result:       succeeded
 Artifact:     video/LTX-2.5_i2v_00005_.mp4
 ```
 
-This proved live `queued -> running -> succeeded` reconciliation and automatic artifact capture.
+This proved live `queued -> running -> succeeded` reconciliation and artifact capture.
+
+## Durable Telegram output delivery
+
+Implemented and validated in checkpoint `301be69`.
+
+```text
+job succeeded
+    ↓
+artifact metadata
+    ↓
+media_deliveries row
+    ↓
+Comfy /view
+    ↓
+VPS temporary spool
+    ↓
+ffprobe
+    ├── width / height
+    ├── duration
+    ├── size
+    └── audio present / absent
+    ↓
+Telegram metadata message
+    ↓
+Telegram original MP4 as document
+    ↓
+persist metadata + document message IDs
+    ↓
+remove VPS temporary copy
+```
+
+Generation state and delivery state are separate. A successful generation stays `succeeded` even if a delivery attempt fails.
+
+Delivery claims use durable PostgreSQL state, retry/backoff, `FOR UPDATE SKIP LOCKED`, and stale-delivery recovery. Telegram metadata and document message IDs are persisted separately so retries do not need to resend already-completed steps.
+
+The delivery path was validated against the existing C6 artifact without another GPU generation. The final delivery completed in one attempt and the VPS spool was empty afterward.
+
+The Telegram bot token and chat ID remain deployment secrets outside Git.
 
 ## C6 workflow note
 
@@ -114,84 +157,46 @@ The active experimental API graph is stored on the VPS at:
 /opt/helix-runtime/workflows/c6.api.json
 ```
 
-It is intentionally not frozen into the repository yet.
+It is intentionally not frozen into the repository.
 
-The API export contained 54 executable nodes and `Load First Frame -> Ninja.jpg`.
+The API export contained 54 executable nodes. A UI/API serialization mismatch was discovered for `LTXVLoopingSampler.temporal_overlap_cond_strength`: the UI workflow's named value said `0.35`, while the exported API graph contained `0.5`. The runtime test copy was corrected to `0.35` before the successful C6 run.
 
-A UI/API serialization mismatch was discovered for `LTXVLoopingSampler.temporal_overlap_cond_strength`: the UI workflow's named value said `0.35`, while the exported API graph contained `0.5`. The runtime test copy was explicitly corrected to `0.35` before the successful C6 run.
+## Input state: intentionally deferred
 
-## Image override support
+A semantic image override already exists. It finds the unique `LoadImage` node, preferring title `Load First Frame`, validates a relative Comfy input filename, clones the graph, and changes only the clone.
 
-A semantic image override has now been implemented in source.
+Actual upload/staging through Comfy `/upload/image` is not implemented yet.
 
-Request shape:
+Full LTX semantic input bindings are also intentionally deferred because the workflow is still changing. Current/future graphs may expose additional prompt paths, Prompt Relay controls, sampler controls, image inputs, and separate T2V behavior.
 
-```json
-{
-  "workerId": "helix-rtx4060-01",
-  "workflow": { "...": "..." },
-  "inputs": {
-    "image": "some-worker-input.png"
-  }
-}
-```
+Do not spend time hard-coding a large unstable input schema now.
 
-The runtime:
-
-1. clones the workflow;
-2. finds `class_type = LoadImage`;
-3. prefers the unique node titled `Load First Frame`;
-4. validates that the requested image is a relative Comfy input filename;
-5. changes only that node's `inputs.image`;
-6. keeps the stored source workflow unchanged.
-
-The helper was validated against the real C6 API graph: `Ninja.jpg` changed to a test filename, the original graph remained unchanged, and the node count remained 54.
-
-Typecheck and build passed. Deployment of this image-override checkpoint should be confirmed after pulling it on the VPS/home continuation.
-
-## LTX controls not exposed yet
-
-Full LTX workflow control is not yet first-class in the Helix job API.
-
-For the current hybrid graph, the next bindings that need explicit support are:
-
-- `inputs.prompt` -> the main/global prompt node (`PrimitiveStringMultiline`, title `Prompt`);
-- `inputs.chunkPrompts` -> `LTXV Multi Prompt Provider`;
-- uploaded/staged image -> `inputs.image`.
-
-The CGlide/Director authoring text is not the main execution control while Prompt Relay is disabled.
-
-Until prompt and chunk-prompt bindings are implemented, use the Comfy WebUI for runs that need full prompt authoring control.
-
-## Next milestone: output delivery
-
-The next work item is not another generation test. Build the output boundary first:
+Current policy:
 
 ```text
-job succeeded
-    ↓
-artifact metadata
-    ↓
-GET artifact from Comfy /view
-    ↓
-VPS temporary spool
-    ↓
-Telegram delivery adapter
-    ↓
-durable delivery result / retry
-    ↓
-remove VPS temporary copy
-    ↓
-worker retention cleanup later
+raw Comfy API workflow remains the execution contract
+        ↓
+workflow experiments continue in ComfyUI
+        ↓
+I2V / T2V graphs can be submitted raw when needed
+        ↓
+freeze semantic bindings only after a workflow family stabilizes
 ```
 
-Telegram should be treated as a delivery adapter, not part of `ComfyAdapter`.
+Known future bindings include image, main prompt, chunk prompts, Prompt Relay-related prompts, and other workflow-specific controls discovered during optimization.
 
-Do not store the Telegram bot token in Git. Put it in the VPS runtime environment/secret file when wiring resumes.
+## Next workflow-independent work
 
-Initial retention policy discussed: delete the temporary VPS copy immediately after confirmed delivery, but retain the worker output for a safety window (initially 24 hours) before controlled cleanup.
+Prioritize work that does not depend on the final I2V/T2V input schema:
 
-After output delivery is reliable, add `POST /upload/image` input staging and then first-class prompt/chunk-prompt bindings.
+1. controlled worker output retention cleanup;
+2. generation timeout and cancellation semantics;
+3. delivery failure/terminal-state hardening and observability;
+4. optional faster WebSocket event tracking after correctness paths remain stable.
+
+The first item is the immediate next milestone because VPS spool cleanup is already proven but worker originals are still retained indefinitely.
+
+Initial retention policy: keep worker outputs for a 24-hour safety window, then delete only Helix-managed artifacts. Never blindly clear the entire Comfy output tree.
 
 ## Runtime stack
 
@@ -201,16 +206,16 @@ After output delivery is reliable, add `POST /upload/image` input staging and th
 - ws
 - PostgreSQL via `pg`
 - Node 24 production container
+- ffprobe/FFmpeg in the production image
 - strict TypeScript
 - multi-stage Docker build
 
-## Resume from home
+## Resume rules
 
-1. `git pull --ff-only` in `/opt/helix`.
-2. Run `npm run typecheck && npm run build` under `production/media-runtime`.
-3. Rebuild `helix-runtime` and confirm `/v1/health`.
-4. Continue with Comfy artifact retrieval (`/view`) and Telegram delivery wiring.
-5. Add durable delivery/retry state and temporary spool cleanup.
-6. Then implement Comfy image upload/staging and full LTX prompt bindings.
-
-Do not change the pinned worker stack, model layout, Tailscale exposure, or Caddy configuration as part of this continuation.
+- Keep raw ComfyUI private over Tailscale.
+- Keep `maxConcurrentGpuJobs: 1` for the current RTX 4060 worker.
+- Do not alter the pinned ComfyUI/custom-node/model stack casually.
+- Do not let n8n own low-level Comfy polling/tracking.
+- Do not store Telegram tokens or other secrets in Git.
+- Do not freeze/package the experimental LTX workflow until a stable baseline is chosen.
+- Do not force semantic input bindings while workflow controls are still moving.
