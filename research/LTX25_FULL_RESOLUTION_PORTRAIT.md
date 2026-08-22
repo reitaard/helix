@@ -1,34 +1,28 @@
-# LTX 2.5 Full-Resolution + Portrait Research Notebook
+# LTX 2.5 Full-Resolution Research Notebook
 
-**Status:** evidence collection / analysis only  
-**Purpose:** collect external findings before designing the next Production workflow. Do not treat any single post or workflow as the final Helix recipe.
+**Status:** motorcycle evidence collection / locally validated baseline  
+**Purpose:** separate native generation quality from temporal-extension and Director-control failures before designing the next Production hybrid.
 
-## Current question
+> The earlier planned portrait/influencer source was not available and is deferred. Current analysis remains focused on the motorcycle experiments.
 
-We are trying to separate several different problems that became mixed together during the motorcycle experiments:
+## Research question
+
+The motorcycle experiments mixed several variables that must be separated:
 
 1. native LTX 2.5 image fidelity and realism;
-2. viewpoint changes that reveal geometry not visible in the opening image;
-3. long-video continuation / temporal tiling;
-4. subject identity persistence;
-5. timed shot direction;
-6. portrait / short-form quality requirements.
-
-The next sources should be analyzed against these categories rather than immediately merged into one large workflow.
+2. viewpoint changes that reveal geometry absent from the opening frame;
+3. two-stage low-resolution → latent-upscale generation versus direct full-resolution sampling;
+4. long-video temporal continuation;
+5. exact subject identity persistence;
+6. timed shot direction.
 
 ---
 
-## Source A — Reddit: LTX 2.5 full-resolution workflows without the normal latent-upscale path
+## Source A — Reddit full-resolution LTX 2.5 workflow discussion
 
-Source discussed on 2026-08-22:
+The community post argues that the normal two-stage LTX 2.5 I2V path can lose detail when motion/viewpoint changes require content that was not visible in the opening image.
 
-`r/comfyui — LTX 2.5 full-resolution workflows / no latent upscale`
-
-### Source-derived claim
-
-The post argues that the normal LTX 2.5 two-stage I2V path can lose detail when motion or viewpoint changes force the model to invent content that is not visible in the opening image.
-
-The normal path is conceptually:
+Normal path:
 
 ```text
 source image
@@ -40,15 +34,23 @@ latent ×2 upscaler
 Stage 2 — short final-resolution refinement
 ```
 
-The alternative workflow samples at the final spatial resolution from the beginning instead of relying on low-resolution generation followed by latent upscaling.
+Alternative path:
 
-The post reports a substantial runtime increase, but claims better detail retention in demanding I2V cases. It also states that the full-resolution approach can be used with the INT8 ConvRot model family relevant to the current local setup.
+```text
+source image
+    ↓
+full-resolution latent from the beginning
+    ↓
+single full-resolution generation path
+```
 
-This is community evidence, not yet a locally confirmed Helix result.
+The source reports higher runtime but better detail retention in demanding I2V cases and says the approach works with the INT8 ConvRot model family used locally.
 
-### Why this matters to the motorcycle failure
+The original external claim remains community evidence. Helix has now locally validated that the full-resolution path itself works well on the motorcycle benchmark, but has **not** yet run a strict same-image/same-prompt two-stage A/B proving that full-resolution is universally superior.
 
-The motorcycle test started from a frontal image but asked the model to reveal increasingly different views:
+## Why this mattered to the earlier motorcycle failure
+
+The earlier frontal-bike experiment demanded:
 
 ```text
 front
@@ -58,275 +60,192 @@ front 3/4
 side
 ```
 
-A frontal source image does not contain direct visual evidence for many side-view details:
+That forces synthesis of unseen side fairing, tank, mechanical, rear-bodywork, wheel/brake and rider details.
 
-- full side fairing geometry;
-- fuel-tank side shape;
-- side mechanical components;
-- rear bodywork;
-- exact side wheel / brake geometry;
-- rider anatomy and clothing from the new angle.
-
-Therefore the model has to synthesize unseen geometry.
-
-A plausible failure path is:
+A plausible two-stage weakness remains:
 
 ```text
 unseen geometry required
       ↓
 created first at lower Stage-1 resolution
       ↓
-coarse / generic structure becomes established
+coarse/generic structure becomes established
       ↓
-latent upscale + short Stage-2 refinement
+latent upscale + short refinement
       ↓
-Stage 2 improves texture but may not reconstruct exact identity geometry
+texture improves without necessarily restoring exact identity geometry
 ```
 
-This may help explain why a motorcycle can remain photorealistic while gradually becoming a different motorcycle model.
+This remains a hypothesis about the two-stage path, not a proven explanation of the earlier replacement-bike failure.
 
-### Important: this does not replace the temporal-integration diagnosis
-
-Current evidence supports multiple possible failure mechanisms acting together:
+The earlier catastrophic hybrid also had independent temporal/control problems:
 
 ```text
 Prompt Relay / LoopingSampler timing mismatch
              +
+over-soft Prompt Relay zones
+             +
 aggressive overlap propagation
              +
-subject temporarily leaving frame
-             +
-low-resolution generation of newly exposed geometry
+subject leaving frame
              ↓
 identity collapse / re-synthesis
 ```
 
-The full-resolution hypothesis primarily concerns **spatial detail and identity during large viewpoint changes**. It does not by itself explain repeated or conflicting camera instructions across temporal tiles.
+---
 
-### What the source does NOT prove
+## Local F0 validation — bare full-resolution motorcycle I2V
 
-Do not record these as facts until locally tested:
+F0 deliberately removed all external control/continuation systems.
 
-- full-resolution sampling always has better identity consistency;
-- full-resolution sampling fixes long-video continuation;
-- full-resolution sampling removes the need for identity references;
-- full-resolution sampling is automatically better for every shot;
-- full-resolution sampling is worth the runtime for simple motion.
+Not used:
 
-It may be a shot-class optimization rather than a universal default.
+- CGlide Director;
+- Prompt Relay;
+- Lightricks LoopingSampler;
+- temporal tiles/overlap;
+- second reference/keyframe;
+- latent ×2 upscaler in the executed path;
+- Stage-2 diffusion in the executed path.
+
+Input: photorealistic green sport motorcycle + rider, portrait composition.
+
+Prompt class: restrained forward motion, nearly fixed front-three-quarter tracking camera, realistic wheel/suspension motion, stable daylight and crisp materials. No large orbit, no scene change and no deliberate heavy blur.
+
+Shared settings:
+
+```text
+requested canvas      704 × 1280
+actual decoded size   736 × 1280 after LTX dimension snapping
+fps                   24
+Prompt Enhance        OFF
+native I2V strength   0.70
+fixed seed            held for duration comparison
+```
+
+### 4-second result
+
+```text
+97 frames
+24 fps
+736 × 1280
+```
+
+Observed:
+
+- same motorcycle retained;
+- rider/helmet/gear coherent;
+- no duplicate or replacement motorcycle;
+- no subject disappearance;
+- gross fairing/headlight/windscreen geometry stable;
+- photographic materials and road motion strong;
+- composition drifted more than requested near the end;
+- logos/decals and tiny surface details morphed.
+
+Verdict: **PASS as a native full-resolution quality baseline.**
+
+### 8-second duration control
+
+Only duration was increased while retaining the same source, seed, prompt family and full-resolution architecture.
+
+```text
+193 frames
+24 fps
+736 × 1280
+```
+
+Observed:
+
+- same green motorcycle and rider survived all 8 seconds;
+- no catastrophic identity substitution;
+- gross geometry remained stable;
+- rider consistency remained strong;
+- framing was more stable than the 4-second trajectory;
+- micro-detail/logos/decals still drifted;
+- the fine-detail errors did not grow into whole-object identity collapse.
+
+Verdict: **PASS for an 8-second restrained native full-resolution shot.**
+
+### Duration changes the whole trajectory
+
+Important experimental result: the first four seconds of the 8-second generation were not simply the same four-second render followed by an extension. Changing duration changes the denoising/generative trajectory from the beginning.
+
+Therefore:
+
+```text
+duration != append-only parameter
+```
+
+When comparing durations, treat each duration as a distinct generation condition even when the seed and prompt are fixed.
 
 ---
 
-## Emerging shot-class hypothesis
+## What is now supported locally
 
-Instead of forcing one universal LTX workflow, Production may eventually choose a generation strategy based on shot requirements.
+- LTX 2.5 itself can preserve a detailed motorcycle/rider strongly for 4–8 seconds under restrained motion.
+- The catastrophic replacement-bike failure is not an unavoidable base-model behavior.
+- A short shot that fits one native generation does not need Lightricks temporal extension by default.
+- Gross identity can remain strong while logos/decals and tiny mechanical details drift.
+- Local masked repair/inpainting is a sensible later Production strategy for small logo/decal defects; do not over-condition the whole generation solely to preserve tiny text.
+- Full-resolution native sampling is now a credible quality path for identity/detail-critical short shots.
 
-Provisional research model:
+## What remains unproven
+
+- direct full-resolution superiority over two-stage generation on the exact same source/prompt;
+- stability under large front→side viewpoint changes;
+- stability at 15–30+ seconds without continuation machinery;
+- exact logo/text persistence from prompting alone;
+- generalization to every subject class.
+
+---
+
+## Updated shot-class hypothesis
 
 ```text
-simple shot / limited viewpoint change
-    → native two-stage LTX 2.5
+short/medium shot fits native duration
+    → native LTX first
 
-identity-critical hero shot
-or major viewpoint change
-    → test full-resolution LTX 2.5
+identity/detail-critical short shot
+    → full-resolution native LTX is a validated candidate
 
-long continuous motion / duration extension
-    → test Lightricks LoopingSampler
+long continuous motion beyond comfortable native duration
+    → Lightricks LoopingSampler
 
 precise timed direction
-    → Director / compiled shot controls
+    → CGlide/Director intent compiled into backend-compatible timing
 
-known start + known destination frame
-    → evaluate first/last-frame or multi-keyframe path
+known start + known destination
+    → separately evaluate first/last-frame or keyframe path
 ```
 
-This is an analysis hypothesis, not a frozen Production architecture.
+This is still Production research policy, not a frozen Helix contract.
 
----
+## Next hybrid principle
 
-## Portrait / AI-influencer analysis lens for the next source
+Do not return to the old "everything connected at once" graph.
 
-The next source is expected to focus on AI-influencer / short-form portrait video. Analyze it independently first, then compare it with the motorcycle findings.
-
-### A. Portrait composition
-
-Record:
-
-- exact resolution and aspect ratio;
-- whether generation happens natively in portrait or is cropped afterward;
-- framing of face, torso, hands and legs;
-- whether the subject stays close to camera or changes scale;
-- camera movement type;
-- amount of background motion.
-
-### B. Human identity consistency
-
-Human portrait content makes identity errors much more visible than motorcycle geometry.
-
-Look for:
-
-- facial identity retention;
-- hair consistency;
-- eye / mouth stability;
-- skin texture;
-- body proportions;
-- hand/finger stability;
-- wardrobe and accessory persistence;
-- jewelry / glasses / tattoos / small identity markers;
-- whether the workflow uses repeated identity anchors or only the first image.
-
-### C. Realism / anti-AI-look
-
-Record specifically:
-
-- skin detail and pore retention;
-- natural hair strands;
-- cloth texture;
-- natural motion blur;
-- lighting consistency;
-- exposure / white-balance stability;
-- background coherence;
-- whether realism degrades as duration increases;
-- whether the workflow uses full-resolution sampling, upscaling, restoration or post-processing.
-
-### D. Motion class
-
-Separate:
+The next controlled hybrid should preserve the native quality baseline and assign each system one job:
 
 ```text
-micro-motion
-(head / eyes / expression / breathing)
+CGlide / Director intent
+    = shot/timeline authoring
 
-body motion
-(walk / turn / gesture / dance)
+Lightricks
+    = temporal extension only when needed
 
-camera motion
-(push / orbit / handheld / tracking)
-
-scene change
-(background / location / lighting transition)
+native LTX
+    = image/video generation quality
 ```
 
-A workflow that excels at subtle influencer motion may not be appropriate for aggressive camera or scene transitions.
+Critical rules:
 
-### E. Temporal strategy
-
-Determine whether the source uses:
-
-- one native-duration generation;
-- Lightricks temporal tiles;
-- conventional chunk chaining;
-- first/last-frame interpolation;
-- overlapping frame continuation;
-- latent continuation;
-- explicit keyframes;
-- prompt changes per tile / segment.
-
-Also record whether transitions are produced during generation or assembled afterward.
-
-### F. Identity / reference strategy
-
-Look for:
-
-- source-image I2V strength;
-- multi-view references;
-- IC-LoRA / Ingredients;
-- reference video;
-- keyframes;
-- long-term negative-index latent context;
-- face-specific restoration or identity tools;
-- whether identity tools are part of LTX itself or external post-processing.
-
-Do not assume an additional image is merely a style/motion reference; determine how the actual node consumes it.
-
-### G. Sampling architecture
-
-Record whether it uses:
-
-```text
-two-stage low-res → latent upscale → refine
-```
-
-or:
-
-```text
-full-resolution sampling from the beginning
-```
-
-This is now a first-class comparison variable because Source A suggests it can matter when newly exposed identity detail has to be synthesized.
-
-### H. Performance / practical Production cost
-
-Record:
-
-- seconds per generation;
-- duration generated;
-- GPU / VRAM if reported;
-- model precision / quantization;
-- number of diffusion stages;
-- retry rate if mentioned;
-- whether the result shown is cherry-picked or reproducible;
-- whether a faster draft / final-quality split exists.
-
-### I. Applicability to Helix
-
-For every technique from the portrait source, classify it as one of:
-
-```text
-DIRECTLY RELEVANT
-worth testing locally
-
-SHOT-SPECIFIC
-useful only for human portrait / influencer content
-
-LONG-VIDEO SPECIFIC
-continuation technique, not short-shot default
-
-POST-PROCESSING
-not a generation architecture
-
-UNVERIFIED
-interesting claim without enough evidence
-```
-
-This prevents a strong portrait workflow from being copied blindly into unrelated shot classes.
-
----
-
-## Current experiment order — HOLD until more sources are read
-
-Do not design the final optimized workflow yet.
-
-Existing clean diagnostics remain available:
-
-```text
-F0 candidate
-native full-resolution I2V baseline
-(no Director, no Lightricks)
-
-B0.1 candidate
-Lightricks-only continuation calibration
-120 / 40 / 0.50
-(no Director)
-```
-
-But the next source(s) should be analyzed first. After the portrait/influencer evidence is added, compare all findings and then decide which baseline(s) are worth rendering.
+- CGlide is **not** the current motorcycle identity-reference layer; old LTX 2.3 reference-sheet behavior is disabled for 2.5.
+- Do not directly place a full-duration Prompt Relay schedule inside each Lightricks temporal tile until global tile offsets are handled.
+- First hybrid re-entry should translate Director timing into Lightricks tile-aware positive conditioning (`LTXVMultiPromptProvider` / equivalent).
+- Keep the motorcycle visible and the camera motion modest in the first re-entry.
+- Do not introduce a second motorcycle image, IC-LoRA, negative-index memory and aggressive prompt choreography in the same run.
+- Change one control variable at a time.
 
 ## Decision principle
 
-Do not optimize for maximum number of control nodes.
-
-Choose the smallest workflow that satisfies the shot's actual requirements:
-
-```text
-quality
-identity
-motion
-camera control
-duration
-portrait framing
-runtime
-```
-
-Only combine systems when a measured weakness requires the additional system.
+Choose the smallest workflow that satisfies the actual shot requirement. Add another system only when a measured weakness requires it.
