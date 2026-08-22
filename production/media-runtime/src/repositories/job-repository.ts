@@ -460,7 +460,7 @@ export class JobRepository {
 
   async markRunning(
     id: string
-  ) {
+  ): Promise<boolean> {
     const client =
       await this.db.connect();
 
@@ -477,21 +477,35 @@ export class JobRepository {
         [id]
       );
 
-      await client.query(
-        `
-        UPDATE media_jobs
-        SET
-          status = 'running',
-          started_at =
-            COALESCE(
-              started_at,
-              NOW()
-            ),
-          updated_at = NOW()
-        WHERE id = $1
-        `,
-        [id]
-      );
+      const updated =
+        await client.query(
+          `
+          UPDATE media_jobs
+          SET
+            status = 'running',
+            started_at =
+              COALESCE(
+                started_at,
+                NOW()
+              ),
+            updated_at = NOW()
+          WHERE id = $1
+            AND status IN (
+              'accepted',
+              'queued',
+              'finalizing'
+            )
+          RETURNING id
+          `,
+          [id]
+        );
+
+      if (
+        (updated.rowCount ?? 0) === 0
+      ) {
+        await client.query("COMMIT");
+        return false;
+      }
 
       await client.query(
         `
@@ -518,11 +532,10 @@ export class JobRepository {
       );
 
       await client.query("COMMIT");
+      return true;
     }
     catch (error) {
-      await client.query(
-        "ROLLBACK"
-      );
+      await client.query("ROLLBACK");
       throw error;
     }
     finally {
@@ -535,7 +548,7 @@ export class JobRepository {
     result: unknown,
     artifacts: unknown[],
     deliveryProviders: string[]
-  ) {
+  ): Promise<boolean> {
     const client =
       await this.db.connect();
 
@@ -552,26 +565,41 @@ export class JobRepository {
         [id]
       );
 
-      await client.query(
-        `
-        UPDATE media_jobs
-        SET
-          status = 'succeeded',
-          result = $2::jsonb,
-          started_at =
-            COALESCE(
-              started_at,
-              NOW()
-            ),
-          finished_at = NOW(),
-          updated_at = NOW()
-        WHERE id = $1
-        `,
-        [
-          id,
-          JSON.stringify(result)
-        ]
-      );
+      const updated =
+        await client.query(
+          `
+          UPDATE media_jobs
+          SET
+            status = 'succeeded',
+            result = $2::jsonb,
+            started_at =
+              COALESCE(
+                started_at,
+                NOW()
+              ),
+            finished_at = NOW(),
+            updated_at = NOW()
+          WHERE id = $1
+            AND status IN (
+              'accepted',
+              'queued',
+              'running',
+              'finalizing'
+            )
+          RETURNING id
+          `,
+          [
+            id,
+            JSON.stringify(result)
+          ]
+        );
+
+      if (
+        (updated.rowCount ?? 0) === 0
+      ) {
+        await client.query("COMMIT");
+        return false;
+      }
 
       await client.query(
         `
@@ -645,12 +673,10 @@ export class JobRepository {
       }
 
       await client.query("COMMIT");
+      return true;
     }
     catch (error) {
-      await client.query(
-        "ROLLBACK"
-      );
-
+      await client.query("ROLLBACK");
       throw error;
     }
     finally {
@@ -661,7 +687,7 @@ export class JobRepository {
   async markBackendFailed(
     id: string,
     message: string
-  ) {
+  ): Promise<boolean> {
     const client =
       await this.db.connect();
 
@@ -683,21 +709,36 @@ export class JobRepository {
           message
         });
 
-      await client.query(
-        `
-        UPDATE media_jobs
-        SET
-          status = 'failed',
-          error = $2::jsonb,
-          finished_at = NOW(),
-          updated_at = NOW()
-        WHERE id = $1
-        `,
-        [
-          id,
-          payload
-        ]
-      );
+      const updated =
+        await client.query(
+          `
+          UPDATE media_jobs
+          SET
+            status = 'failed',
+            error = $2::jsonb,
+            finished_at = NOW(),
+            updated_at = NOW()
+          WHERE id = $1
+            AND status IN (
+              'accepted',
+              'queued',
+              'running',
+              'finalizing'
+            )
+          RETURNING id
+          `,
+          [
+            id,
+            payload
+          ]
+        );
+
+      if (
+        (updated.rowCount ?? 0) === 0
+      ) {
+        await client.query("COMMIT");
+        return false;
+      }
 
       await client.query(
         `
@@ -727,11 +768,98 @@ export class JobRepository {
       );
 
       await client.query("COMMIT");
+      return true;
     }
     catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+    finally {
+      client.release();
+    }
+  }
+
+  async markCancelled(
+    id: string,
+    backendJobId: string
+  ): Promise<boolean> {
+    const client =
+      await this.db.connect();
+
+    try {
+      await client.query("BEGIN");
+
       await client.query(
-        "ROLLBACK"
+        `
+        SELECT id
+        FROM media_jobs
+        WHERE id = $1
+        FOR UPDATE
+        `,
+        [id]
       );
+
+      const updated =
+        await client.query(
+          `
+          UPDATE media_jobs
+          SET
+            status = 'cancelled',
+            finished_at = NOW(),
+            updated_at = NOW()
+          WHERE id = $1
+            AND status IN (
+              'accepted',
+              'queued',
+              'running',
+              'finalizing'
+            )
+          RETURNING id
+          `,
+          [id]
+        );
+
+      if (
+        (updated.rowCount ?? 0) === 0
+      ) {
+        await client.query("COMMIT");
+        return false;
+      }
+
+      await client.query(
+        `
+        INSERT INTO media_job_events (
+          job_id,
+          sequence,
+          event_type,
+          stage,
+          payload
+        )
+        SELECT
+          $1,
+          COALESCE(
+            MAX(sequence),
+            0
+          ) + 1,
+          'job.cancelled',
+          'cancelled',
+          $2::jsonb
+        FROM media_job_events
+        WHERE job_id = $1
+        `,
+        [
+          id,
+          JSON.stringify({
+            backendJobId
+          })
+        ]
+      );
+
+      await client.query("COMMIT");
+      return true;
+    }
+    catch (error) {
+      await client.query("ROLLBACK");
       throw error;
     }
     finally {

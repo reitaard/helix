@@ -52,6 +52,17 @@ export class JobSubmissionError
   }
 }
 
+export class JobCancellationError
+  extends Error {
+
+  constructor(
+    readonly jobId: string,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
 export class JobService {
   constructor(
     private readonly jobs:
@@ -63,6 +74,102 @@ export class JobService {
 
   get(id: string) {
     return this.jobs.get(id);
+  }
+
+  async cancel(
+    id: string
+  ) {
+    const job =
+      await this.jobs.get(id);
+
+    if (!job) {
+      return null;
+    }
+
+    if (
+      [
+        "succeeded",
+        "failed",
+        "cancelled"
+      ].includes(job.status)
+    ) {
+      return {
+        jobId: id,
+        cancelled: false,
+        status: job.status
+      };
+    }
+
+    if (
+      !job.workerId ||
+      !job.backendJobId
+    ) {
+      return {
+        jobId: id,
+        cancelled: false,
+        status: job.status
+      };
+    }
+
+    try {
+      const backendCancelled =
+        await this.workers.cancel(
+          job.workerId,
+          job.backendJobId
+        );
+
+      if (backendCancelled === null) {
+        throw new Error(
+          "Worker adapter unavailable"
+        );
+      }
+
+      if (!backendCancelled) {
+        const current =
+          await this.jobs.get(id);
+
+        return {
+          jobId: id,
+          cancelled: false,
+          status:
+            current?.status ??
+            job.status
+        };
+      }
+
+      const marked =
+        await this.jobs
+          .markCancelled(
+            id,
+            job.backendJobId
+          );
+
+      const current =
+        await this.jobs.get(id);
+
+      return {
+        jobId: id,
+        cancelled: marked,
+        status:
+          current?.status ??
+          (
+            marked
+              ? "cancelled"
+              : job.status
+          )
+      };
+    }
+    catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : String(error);
+
+      throw new JobCancellationError(
+        id,
+        message
+      );
+    }
   }
 
   async create(

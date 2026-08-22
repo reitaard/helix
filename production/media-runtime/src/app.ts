@@ -6,6 +6,7 @@ import type {
 } from "./workers/service.js";
 
 import {
+  JobCancellationError,
   JobSubmissionError,
   WorkerNotFoundError
 } from "./jobs/service.js";
@@ -294,6 +295,57 @@ export function createApp(
             .send({
               error:
                 "backend_submission_failed",
+
+              jobId:
+                error.jobId,
+
+              message:
+                error.message
+            });
+        }
+
+        throw error;
+      }
+    }
+  );
+
+  app.post<{
+    Params: {
+      jobId: string;
+    };
+  }>(
+    "/v1/media/jobs/:jobId/cancel",
+    async (
+      request,
+      reply
+    ) => {
+      try {
+        const result =
+          await jobs.cancel(
+            request.params.jobId
+          );
+
+        if (!result) {
+          return reply
+            .code(404)
+            .send({
+              error:
+                "job_not_found"
+            });
+        }
+
+        return result;
+      }
+      catch (error) {
+        if (
+          error instanceof
+          JobCancellationError
+        ) {
+          return reply
+            .code(502)
+            .send({
+              error:
+                "backend_cancellation_failed",
 
               jobId:
                 error.jobId,

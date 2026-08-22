@@ -131,6 +131,15 @@ export class ComfyAdapter
     );
   }
 
+  cancel(
+    backendJobId: string
+  ) {
+    return this.client
+      .cancelPrompt(
+        backendJobId
+      );
+  }
+
   downloadArtifact(
     artifact: {
       filename: string;

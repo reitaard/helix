@@ -91,6 +91,10 @@ export interface MediaAdapter {
     backendJobId: string
   ): Promise<AdapterExecutionStatus>;
 
+  cancel(
+    backendJobId: string
+  ): Promise<boolean>;
+
   downloadArtifact(
     artifact: AdapterArtifact,
     destinationPath: string

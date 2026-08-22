@@ -170,6 +170,22 @@ export class WorkerRegistry {
     );
   }
 
+  async cancel(
+    id: string,
+    backendJobId: string
+  ) {
+    const adapter =
+      this.adapters.get(id);
+
+    if (!adapter) {
+      return null;
+    }
+
+    return adapter.cancel(
+      backendJobId
+    );
+  }
+
   async downloadArtifact(
     id: string,
 

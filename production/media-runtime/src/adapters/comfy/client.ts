@@ -267,6 +267,33 @@ export class ComfyClient {
     );
   }
 
+  async cancelPrompt(
+    promptId: string
+  ): Promise<boolean> {
+    const response =
+      await this.postJson<{
+        cancelled?: boolean;
+      }>(
+        `/api/jobs/${
+          encodeURIComponent(
+            promptId
+          )
+        }/cancel`,
+        {}
+      );
+
+    if (
+      typeof response.cancelled !==
+      "boolean"
+    ) {
+      throw new Error(
+        "Comfy cancel endpoint returned invalid response"
+      );
+    }
+
+    return response.cancelled;
+  }
+
   statusSocket(
     timeoutMs = 5000
   ): Promise<unknown> {
