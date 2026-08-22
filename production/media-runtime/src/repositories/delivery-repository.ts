@@ -228,10 +228,8 @@ export class DeliveryRepository {
               d.provider = $1
               AND (
                 (
-                  d.status IN (
-                    'pending',
-                    'failed'
-                  )
+                  d.status =
+                    'pending'
                   AND (
                     d.next_attempt_at
                       IS NULL
@@ -239,6 +237,16 @@ export class DeliveryRepository {
                     d.next_attempt_at
                       <= NOW()
                   )
+                )
+                OR (
+                  d.status =
+                    'failed'
+                  AND
+                  d.next_attempt_at
+                    IS NOT NULL
+                  AND
+                  d.next_attempt_at
+                    <= NOW()
                 )
                 OR (
                   d.status =
@@ -589,7 +597,7 @@ export class DeliveryRepository {
       message: string;
 
       retryAfterSeconds:
-        number;
+        number | null;
     }
   ) {
     const client =
@@ -610,10 +618,16 @@ export class DeliveryRepository {
         [input.jobId]
       );
 
+      const terminal =
+        input.retryAfterSeconds ===
+        null;
+
       const payload =
         JSON.stringify({
           message:
-            input.message
+            input.message,
+
+          terminal
         });
 
       await client.query(
@@ -627,11 +641,18 @@ export class DeliveryRepository {
             $2::jsonb,
 
           next_attempt_at =
-            NOW() +
-            (
-              $3 *
-              INTERVAL '1 second'
-            ),
+            CASE
+              WHEN $3::integer
+                IS NULL
+              THEN NULL
+
+              ELSE
+                NOW() +
+                (
+                  $3::integer *
+                  INTERVAL '1 second'
+                )
+            END,
 
           updated_at =
             NOW()
@@ -680,7 +701,12 @@ export class DeliveryRepository {
               input.artifactIndex,
 
             message:
-              input.message
+              input.message,
+
+            terminal,
+
+            retryAfterSeconds:
+              input.retryAfterSeconds
           })
         ]
       );

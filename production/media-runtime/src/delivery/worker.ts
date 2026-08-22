@@ -30,6 +30,9 @@ import {
   probeMedia
 } from "./media-probe.js";
 
+class PermanentDeliveryError
+  extends Error {}
+
 function parseArtifact(
   value: unknown
 ): AdapterArtifact {
@@ -38,7 +41,7 @@ function parseArtifact(
     typeof value !== "object" ||
     Array.isArray(value)
   ) {
-    throw new Error(
+    throw new PermanentDeliveryError(
       "Invalid artifact metadata"
     );
   }
@@ -55,7 +58,7 @@ function parseArtifact(
     typeof artifact.type !==
       "string"
   ) {
-    throw new Error(
+    throw new PermanentDeliveryError(
       "Artifact is missing filename, subfolder, or type"
     );
   }
@@ -103,7 +106,10 @@ export class DeliveryWorker {
       string,
 
     private readonly intervalMs =
-      3000
+      3000,
+
+    private readonly maxAttempts =
+      5
   ) {}
 
   start() {
@@ -170,27 +176,40 @@ export class DeliveryWorker {
           break;
         }
 
-        const artifact =
-          parseArtifact(
-            delivery.artifact
-          );
-
-        const safeFilename =
-          basename(
-            artifact.filename
-              .replaceAll(
-                "\\",
-                "/"
-              )
-          );
-
-        const destination =
-          join(
-            this.spoolDir,
-            `${delivery.id}-${safeFilename}`
-          );
+        let destination:
+          string | null =
+            null;
 
         try {
+          if (
+            delivery.attemptCount >
+            this.maxAttempts
+          ) {
+            throw new PermanentDeliveryError(
+              "Delivery attempt limit already exceeded"
+            );
+          }
+
+          const artifact =
+            parseArtifact(
+              delivery.artifact
+            );
+
+          const safeFilename =
+            basename(
+              artifact.filename
+                .replaceAll(
+                  "\\",
+                  "/"
+                )
+            );
+
+          destination =
+            join(
+              this.spoolDir,
+              `${delivery.id}-${safeFilename}`
+            );
+
           const downloaded =
             await this.workers
               .downloadArtifact(
@@ -313,6 +332,12 @@ export class DeliveryWorker {
               ? error.message
               : String(error);
 
+          const terminal =
+            error instanceof
+              PermanentDeliveryError ||
+            delivery.attemptCount >=
+              this.maxAttempts;
+
           await this.deliveries
             .markFailed({
               id:
@@ -330,23 +355,29 @@ export class DeliveryWorker {
               message,
 
               retryAfterSeconds:
-                this.retryDelay(
-                  delivery.attemptCount
-                )
+                terminal
+                  ? null
+                  : this.retryDelay(
+                      delivery.attemptCount
+                    )
             });
 
           console.error(
-            `[delivery] ${delivery.jobId} failed`,
-            message
+            `[delivery] ${delivery.jobId} ` +
+            `${terminal
+              ? "terminal failure"
+              : "failed"}: ${message}`
           );
         }
         finally {
-          await rm(
-            destination,
-            {
-              force: true
-            }
-          );
+          if (destination) {
+            await rm(
+              destination,
+              {
+                force: true
+              }
+            );
+          }
         }
       }
     }
