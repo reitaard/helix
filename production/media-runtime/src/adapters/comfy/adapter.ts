@@ -2,6 +2,10 @@ import {
   ComfyClient
 } from "./client.js";
 
+import {
+  readComfyExecutionStatus
+} from "./execution-status.js";
+
 import type {
   AdapterLiveness,
   AdapterReadiness,
@@ -92,6 +96,39 @@ export class ComfyAdapter
         error: errorText(error)
       };
     }
+  }
+
+  async submit(
+    workflow:
+      Record<string, unknown>
+  ) {
+    const response =
+      await this.client.prompt(
+        workflow
+      );
+
+    if (!response.prompt_id) {
+      throw new Error(
+        "Comfy /prompt did not return prompt_id"
+      );
+    }
+
+    return {
+      backendJobId:
+        response.prompt_id,
+
+      backendResponse:
+        response
+    };
+  }
+
+  status(
+    backendJobId: string
+  ) {
+    return readComfyExecutionStatus(
+      this.client,
+      backendJobId
+    );
   }
 
   async readiness():

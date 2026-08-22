@@ -153,6 +153,39 @@ export class WorkerRegistry {
     };
   }
 
+  async submit(
+    id: string,
+    workflow:
+      Record<string, unknown>
+  ) {
+    const adapter =
+      this.adapters.get(id);
+
+    if (!adapter) {
+      return null;
+    }
+
+    return adapter.submit(
+      workflow
+    );
+  }
+
+  async status(
+    id: string,
+    backendJobId: string
+  ) {
+    const adapter =
+      this.adapters.get(id);
+
+    if (!adapter) {
+      return null;
+    }
+
+    return adapter.status(
+      backendJobId
+    );
+  }
+
   /*
    * Temporary compatibility route.
    *

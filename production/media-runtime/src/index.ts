@@ -11,8 +11,20 @@ import {
 } from "./db/client.js";
 
 import {
+  JobRepository
+} from "./repositories/job-repository.js";
+
+import {
   WorkerRepository
 } from "./repositories/worker-repository.js";
+
+import {
+  JobReconciler
+} from "./jobs/reconciler.js";
+
+import {
+  JobService
+} from "./jobs/service.js";
 
 import {
   WorkerRegistry
@@ -31,18 +43,19 @@ await db.query(
   "SELECT 1"
 );
 
-const repository =
+const workerRepository =
   new WorkerRepository(db);
 
 for (
   const worker of
   config.workers
 ) {
-  await repository.upsertWorker({
-    id: worker.id,
-    profile: worker.profile,
-    adapter: worker.adapter
-  });
+  await workerRepository
+    .upsertWorker({
+      id: worker.id,
+      profile: worker.profile,
+      adapter: worker.adapter
+    });
 }
 
 const registry =
@@ -53,11 +66,29 @@ const registry =
 const workers =
   new WorkerService(
     registry,
-    repository
+    workerRepository
+  );
+
+const jobRepository =
+  new JobRepository(db);
+
+const jobs =
+  new JobService(
+    jobRepository,
+    registry
+  );
+
+const reconciler =
+  new JobReconciler(
+    jobRepository,
+    registry
   );
 
 const app =
-  createApp(workers);
+  createApp(
+    workers,
+    jobs
+  );
 
 async function shutdown(
   signal: string
@@ -66,6 +97,8 @@ async function shutdown(
     { signal },
     "shutting down"
   );
+
+  reconciler.stop();
 
   await app.close();
   await db.end();
@@ -76,14 +109,18 @@ async function shutdown(
 process.on(
   "SIGTERM",
   () => {
-    void shutdown("SIGTERM");
+    void shutdown(
+      "SIGTERM"
+    );
   }
 );
 
 process.on(
   "SIGINT",
   () => {
-    void shutdown("SIGINT");
+    void shutdown(
+      "SIGINT"
+    );
   }
 );
 
@@ -92,9 +129,13 @@ try {
     host: "0.0.0.0",
     port: config.port
   });
+
+  reconciler.start();
 }
 catch (error) {
   app.log.error(error);
+
+  reconciler.stop();
 
   await db.end();
 
