@@ -1,24 +1,33 @@
 # Helix Media Runtime
 
-Provider-neutral Production control plane for media execution.
+Execution service currently used to control the dedicated ComfyUI GPU worker.
 
-## Current checkpoint
+The immediate goal is narrow: accept a durable job, submit it to ComfyUI, track execution, and return generated asset metadata.
 
-Read-only worker discovery and health validation are operational.
+See [`../comfyui-worker/README.md`](../comfyui-worker/README.md) for the focused ComfyUI worker state and roadmap.
 
-Current path:
+## Current deployed path
 
-    Helix / n8n
-        ↓
-    helix-runtime
-        ↓
-    Worker Registry
-        ↓
-    Adapter layer
-        ↓
-    Comfy transport
-        ↓
-    GPU worker
+```text
+n8n / caller
+    ↓
+helix-runtime
+    ↓
+WorkerService
+    ├── helix-db
+    ↓
+WorkerRegistry
+    ↓
+MediaAdapter
+    ↓
+ComfyAdapter
+    ↓
+ComfyClient
+    ↓
+helix-rtx4060-01
+    ↓
+ComfyUI
+```
 
 ## Current worker
 
@@ -29,24 +38,40 @@ Current path:
 - GPU: RTX 4060
 - LTX 2.3: available
 - LTX 2.5: available and validated
+- Max concurrent GPU jobs: 1
 
 ## Current API
 
 - `GET /v1/health`
 - `GET /v1/workers`
 - `GET /v1/workers/:workerId`
-- `GET /v1/workers/:workerId/health`
+- `GET /v1/workers/:workerId/live`
+- `GET /v1/workers/:workerId/readiness`
+- `GET /v1/workers/:workerId/health` compatibility route
 
-Current worker health checks:
+`/live` performs a cheap Comfy runtime probe.
+
+`/readiness` performs the heavier worker validation using:
 
 - `/system_stats`
 - `/queue`
 - `/object_info`
 - `/ws`
 
-Passing these checks produces `cold_ready`.
+Passing full readiness while idle currently produces `cold_ready`. Readiness observations are persisted in the dedicated runtime PostgreSQL database.
 
-`ready` is reserved for a later versioned production canary.
+## Durable runtime state
+
+Migration `0001_runtime_core.sql` currently creates:
+
+```text
+workers
+worker_observations
+media_jobs
+media_job_events
+```
+
+Worker registration and readiness history are active. The job tables are present but job submission/execution APIs are the next implementation target.
 
 ## Runtime stack
 
@@ -54,17 +79,43 @@ Passing these checks produces `cold_ready`.
 - Fastify
 - Zod
 - ws
+- PostgreSQL via `pg`
 - Node 24 production container
 - strict TypeScript
 - multi-stage Docker build
 
-## Deliberately deferred
+## Current execution boundary
 
-- workflow packages
-- semantic bindings
-- prompt submission
-- cancellation
-- artifacts
-- scheduler
-- durable jobs
-- production canaries
+```text
+MediaAdapter
+    ↑
+ComfyAdapter
+    ↑
+ComfyClient
+```
+
+`ComfyClient` owns raw Comfy HTTP/WebSocket transport. `ComfyAdapter` should translate Comfy execution into runtime job states rather than exposing Comfy event shapes to callers.
+
+## Next implementation target
+
+The first real runtime-generated asset should use a Comfy API-format workflow graph directly.
+
+Required path:
+
+```text
+POST durable job
+    ↓
+media_jobs + initial event
+    ↓
+Comfy POST /prompt
+    ↓
+store prompt_id as backend_job_id
+    ↓
+track WebSocket/history
+    ↓
+collect output metadata
+    ↓
+mark job succeeded
+```
+
+For this milestone, do not add a multi-provider scheduler or freeze a large workflow abstraction. The existing LTX graphs are still being tested; a workflow package/binding layer can be added after one graph is selected as the stable API execution baseline.
