@@ -14,6 +14,10 @@ import type {
   JobService
 } from "./jobs/service.js";
 
+import {
+  WorkflowInputError
+} from "./jobs/workflow-inputs.js";
+
 const createJobSchema =
   z.object({
     workerId:
@@ -22,8 +26,20 @@ const createJobSchema =
     workflow:
       z.record(
         z.string(),
-        z.unknown()
+        z.record(
+          z.string(),
+          z.unknown()
+        )
       ),
+
+    inputs:
+      z.object({
+        image:
+          z.string()
+            .min(1)
+            .optional()
+      })
+      .default({}),
 
     idempotencyKey:
       z.string()
@@ -219,6 +235,15 @@ export function createApp(
               parsed.data
                 .workflow,
 
+            inputs:
+              parsed.data.inputs.image ===
+              undefined
+                ? {}
+                : {
+                    image:
+                      parsed.data.inputs.image
+                  },
+
             idempotencyKey:
               parsed.data
                 .idempotencyKey ??
@@ -230,6 +255,21 @@ export function createApp(
           .send(job);
       }
       catch (error) {
+        if (
+          error instanceof
+          WorkflowInputError
+        ) {
+          return reply
+            .code(400)
+            .send({
+              error:
+                "invalid_workflow_input",
+
+              message:
+                error.message
+            });
+        }
+
         if (
           error instanceof
           WorkerNotFoundError

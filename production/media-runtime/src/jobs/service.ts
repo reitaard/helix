@@ -8,11 +8,22 @@ import {
   WorkerRegistry
 } from "../workers/registry.js";
 
+import {
+  applyImageInput
+} from "./workflow-inputs.js";
+
 export interface CreateMediaJobInput {
   workerId: string;
 
   workflow:
-    Record<string, unknown>;
+    Record<
+      string,
+      Record<string, unknown>
+    >;
+
+  inputs: {
+    image?: string;
+  };
 
   idempotencyKey:
     string | null;
@@ -82,6 +93,22 @@ export class JobService {
       );
     }
 
+    let workflow =
+      structuredClone(
+        input.workflow
+      );
+
+    if (
+      input.inputs.image !==
+      undefined
+    ) {
+      workflow =
+        applyImageInput(
+          workflow,
+          input.inputs.image
+        );
+    }
+
     const id =
       `job_${crypto
         .randomUUID()
@@ -104,17 +131,20 @@ export class JobService {
           workerId:
             input.workerId,
 
-          workflow:
-            input.workflow
+          inputs:
+            input.inputs,
+
+          workflow
         }
       });
 
     try {
       const submission =
-        await this.workers.submit(
-          input.workerId,
-          input.workflow
-        );
+        await this.workers
+          .submit(
+            input.workerId,
+            workflow
+          );
 
       if (!submission) {
         throw new Error(
@@ -136,7 +166,9 @@ export class JobService {
         });
 
       const created =
-        await this.jobs.get(id);
+        await this.jobs.get(
+          id
+        );
 
       if (!created) {
         throw new Error(

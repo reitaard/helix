@@ -2,30 +2,18 @@
 
 This folder records the active ComfyUI execution workstream only.
 
-The goal of this workstream is narrow: make Helix able to submit a job to the dedicated ComfyUI worker, track it, and return generated assets reliably.
+The goal is to make Helix control the dedicated ComfyUI worker reliably from input staging through generation, durable tracking, artifact delivery, and cleanup. It does not define the rest of Helix.
 
-It does not define the rest of Helix.
-
-## Current deployed path
+## Current path
 
 ```text
-n8n / caller
+caller / n8n
     ↓
 helix-runtime :8787
     ↓
-WorkerService
-    ├── helix-db
-    │   ├── workers
-    │   ├── worker_observations
-    │   ├── media_jobs
-    │   └── media_job_events
-    │
+helix-db
     ↓
-WorkerRegistry
-    ↓
-ComfyAdapter
-    ↓
-ComfyClient
+ComfyAdapter / ComfyClient
     ↓ Tailscale
 helix-rtx4060-01
     ↓
@@ -34,7 +22,7 @@ ComfyUI :8188
 C:\AI\ComfyUI-CLI\output
 ```
 
-## Current worker
+## Stable worker
 
 ```text
 workerId: helix-rtx4060-01
@@ -48,23 +36,29 @@ capability: video.i2v
 max concurrent GPU jobs: 1
 ```
 
-LTX 2.3 and 2.5 assets are available. LTX 2.5 is the validated standalone generation path.
+LTX 2.3 and 2.5 assets are available. LTX 2.5 is the validated generation path.
 
-## What already works
+## Completed foundation
 
-- standalone ComfyUI worker on Windows;
-- pinned known-good ComfyUI/custom-node environment;
-- worker startup task and diagnostics;
-- private Tailscale connectivity from the VPS;
-- HTTP and WebSocket access to ComfyUI;
-- n8n -> helix-runtime connectivity;
-- `GET /v1/workers/:workerId/live` cheap liveness probe;
-- `GET /v1/workers/:workerId/readiness` full Comfy readiness probe;
-- worker readiness persistence in dedicated PostgreSQL `helix-db`;
+- standalone pinned ComfyUI worker on Windows;
+- private Tailscale connectivity from VPS to Comfy;
+- HTTP and WebSocket connectivity;
+- `helix-runtime` container on `127.0.0.1:8787`;
+- dedicated PostgreSQL `helix-db`;
+- worker registration and readiness persistence;
+- cheap `/live` and heavier `/readiness` probes;
 - `MediaAdapter -> ComfyAdapter -> ComfyClient` boundary;
-- successful native LTX 2.5 generations on the standalone worker.
+- durable media jobs/events;
+- Comfy `POST /prompt` submission;
+- Comfy `prompt_id` persisted as backend job ID;
+- asynchronous job API;
+- queue/history reconciliation;
+- restart recovery;
+- live `queued -> running -> succeeded` tracking;
+- artifact metadata capture from Comfy history;
+- compact job status response that does not dump the entire workflow.
 
-Observed on 2026-08-22:
+Observed readiness baseline on 2026-08-22:
 
 ```text
 /live       ~410 ms
@@ -73,180 +67,178 @@ node classes: 1219
 worker state: cold_ready
 ```
 
-`/readiness` is intentionally heavier because it checks `/system_stats`, `/queue`, `/object_info`, and `/ws`.
+## Proven generations
 
-## Immediate target
-
-The next milestone is the first generation submitted through `helix-runtime`, not manually from the ComfyUI UI.
-
-For the first implementation, keep the contract close to ComfyUI instead of inventing a large workflow abstraction prematurely.
+First runtime-controlled replay:
 
 ```text
-caller
-  ↓
-create job
-  ↓
-persist accepted job
-  ↓
-submit Comfy API workflow JSON to /prompt
-  ↓
-store Comfy prompt_id
-  ↓
-track queue/execution over WebSocket + history
-  ↓
-discover output files
-  ↓
-record artifacts
-  ↓
-return completed job + assets
+job_d305b8b3b4aa4336a455b35043e3060a
+  -> af67e3be-d307-4757-89fd-6606304c4c4d
+  -> succeeded
+  -> video/LTX-2.5_i2v_00004_.mp4
 ```
+
+C6 hybrid run:
+
+```text
+job_e2a4a9efff7a47b8b70cd41c068073ac
+  -> cc8e51f4-1799-4600-8ff0-6226c2e291e4
+  -> running observed live
+  -> succeeded
+  -> video/LTX-2.5_i2v_00005_.mp4
+```
+
+The C6 run started `2026-08-22T09:37:16.915Z` and finished `2026-08-22T09:46:04.486Z`.
+
+## Execution/recovery model
+
+Correctness currently comes from Comfy history and queue state:
+
+```text
+PostgreSQL job
+    ↓
+backend_job_id / prompt_id
+    ↓
+/history/{prompt_id}
+    +
+/queue
+    ↓
+reconcile durable state
+```
+
+This means `helix-runtime` can restart and recover unfinished/completed jobs. WebSocket event tracking can be added later for faster updates, but it is not required for correctness.
+
+## Artifact state
+
+Helix currently captures artifact metadata such as:
+
+```json
+{
+  "filename": "LTX-2.5_i2v_00005_.mp4",
+  "subfolder": "video",
+  "type": "output",
+  "nodeId": "75"
+}
+```
+
+The file itself still remains on the Windows worker. Artifact retrieval/delivery is the next milestone.
+
+## Input state
+
+Semantic `LoadImage` override code has been implemented and built.
+
+It finds the unique `LoadImage` node, preferring title `Load First Frame`, validates a relative worker input filename, clones the workflow, and changes only that clone.
+
+Functional check against the C6 API graph passed:
+
+```text
+original: Ninja.jpg
+changed:  helix-test/example.jpg
+original preserved: true
+node count preserved: true
+```
+
+This source checkpoint is committed for continuation. Confirm deployment after pulling/rebuilding the VPS runtime.
+
+Actual image upload/staging through Comfy `POST /upload/image` is not implemented yet.
+
+## LTX hybrid workflow control gap
+
+The C6 API graph proved that raw workflow submission works, but the user-facing LTX controls are not fully bound yet.
+
+The minimum semantic bindings needed are:
+
+```text
+inputs.image
+  -> LoadImage / Load First Frame
+
+inputs.prompt
+  -> PrimitiveStringMultiline / Prompt
+
+inputs.chunkPrompts
+  -> LTXV Multi Prompt Provider
+```
+
+For the hybrid workflow, changing only the outer/global prompt is insufficient when old tile/chunk prompts remain in `LTXV Multi Prompt Provider`.
+
+CGlide/Director prompt authoring is not the main active prompt path while Prompt Relay is disabled.
+
+Until `prompt` and `chunkPrompts` are exposed, use Comfy WebUI for runs that require full prompt control.
+
+## C6 workflow note
+
+The experimental executable graph currently lives on the VPS at:
+
+```text
+/opt/helix-runtime/workflows/c6.api.json
+```
+
+It is not frozen into the repository.
+
+The export had 54 nodes. A serialization mismatch was caught before generation: `temporal_overlap_cond_strength` exported as `0.5` even though the UI named value showed `0.35`. The test API copy was corrected to `0.35`, then successfully generated.
+
+Do not freeze/package this workflow until the user declares a stable baseline.
+
+## Next milestone: Telegram output delivery
+
+Resume here.
+
+Build this path before spending GPU time on another end-to-end test:
+
+```text
+Comfy artifact
+    ↓
+controlled /view retrieval
+    ↓
+VPS temporary spool
+    ↓
+TelegramDelivery
+    ↓
+durable delivery success/failure + retry
+    ↓
+remove VPS temporary file after confirmed delivery
+```
+
+Keep generation status and delivery status separate: a successful generation remains `succeeded` even if Telegram delivery fails.
+
+After Telegram delivery works, add controlled worker output retention cleanup. Initial discussion used a 24-hour safety window rather than immediate worker deletion.
+
+Then implement Comfy input upload/staging and the missing prompt/chunk-prompt bindings.
 
 ## Focused roadmap
 
-### 1. Job acceptance
-
-Implement a small durable job API in `production/media-runtime`.
-
-Initial requirements:
-
-- create a job ID;
-- persist the request in `media_jobs`;
-- create the first `media_job_events` record;
-- accept a Comfy API-format workflow graph;
-- optionally accept an idempotency key;
-- return the job immediately instead of holding the HTTP request open for the full generation.
-
-Do not add multi-provider routing or a general scheduler for this first worker.
-
-### 2. Comfy prompt submission
-
-Extend `ComfyClient` with the execution surfaces actually needed by the worker:
-
 ```text
-POST /prompt
-GET  /history/{prompt_id}
-GET  /view
-WS   /ws
+Worker install/freeze                 DONE
+Local LTX generation                  DONE
+Private VPS connectivity              DONE
+Runtime liveness/readiness            DONE
+Dedicated DB + persistence            DONE
+Durable job acceptance                DONE
+POST /prompt                           DONE
+prompt_id persistence                 DONE
+Running/completion reconciliation     DONE
+Restart recovery                      DONE
+Artifact metadata capture             DONE
+Semantic image override source        DONE (deploy confirmation pending)
+
+Artifact file retrieval               NEXT
+Telegram delivery                     NEXT
+Durable delivery retry/state          NEXT
+VPS temporary cleanup                 NEXT
+Worker retention cleanup              NEXT
+Image upload / staging                AFTER OUTPUT
+Prompt + chunkPrompt bindings         AFTER OUTPUT
+Cancellation                          LATER
+Freeze first workflow                 ONLY AFTER BASELINE IS CHOSEN
 ```
-
-`ComfyAdapter` should translate these into the runtime's job lifecycle and keep raw Comfy response/event shapes below the adapter boundary.
-
-The first successful submission should store Comfy's `prompt_id` as `backend_job_id`.
-
-### 3. Execution tracking
-
-Track one GPU job at a time and persist state changes.
-
-Target lifecycle for this worker:
-
-```text
-accepted
-  ↓
-queued
-  ↓
-running
-  ↓
-finalizing
-  ↓
-succeeded
-```
-
-Terminal failures:
-
-```text
-failed
-cancelled
-```
-
-Use WebSocket events for live execution tracking and `/history/{prompt_id}` as the authoritative completion/output reconciliation path.
-
-### 4. Output/artifact capture
-
-When Comfy finishes:
-
-- inspect the prompt history outputs;
-- capture filename, subfolder, type and node source where available;
-- keep the original file in the worker output directory initially;
-- persist artifact metadata against the Helix job;
-- expose the asset through a runtime endpoint or controlled `/view` proxy.
-
-Do not introduce object storage until the basic worker job path is proven.
-
-### 5. Input assets for I2V
-
-After raw workflow submission works, add input staging for image-to-video jobs.
-
-Expected Comfy surface:
-
-```text
-POST /upload/image
-```
-
-The runtime should upload/stage an image once, receive the worker-side filename, and inject that filename into the submitted API workflow.
-
-For the first smoke generation it is acceptable to reference an image already present in the worker input directory.
-
-### 6. Recovery and cancellation
-
-After one complete job succeeds:
-
-- reconcile jobs after runtime restart using stored `backend_job_id`;
-- distinguish queued versus running jobs;
-- add cancellation/interrupt behavior deliberately;
-- mark jobs failed when the worker becomes unavailable or Comfy reports execution errors;
-- preserve error/event details in `media_job_events`.
-
-### 7. Freeze the first workflow only when ready
-
-The currently tested LTX graphs remain experimental.
-
-Do not package node bindings until one workflow is selected as the first worker execution baseline.
-
-When that happens, move from raw API JSON submission to a versioned workflow package containing at minimum:
-
-```text
-workflow.api.json
-manifest.yaml
-bindings.yaml
-smoke-test.json
-```
-
-The existing `production/ltx-director/` notes remain research/test history until that freeze point.
-
-## Current non-goals
-
-For this workstream, do not spend time on:
-
-- other Helix subsystems;
-- multi-provider generation;
-- general-purpose scheduling;
-- Redis/RabbitMQ/Kubernetes;
-- public exposure of ComfyUI;
-- moving model directories while the worker is stable;
-- auto-updating ComfyUI/custom nodes;
-- large workflow abstractions before the first API-submitted generation succeeds.
 
 ## Operational rules
 
 - Raw ComfyUI remains private over Tailscale; do not expose port `8188` publicly.
-- Keep ComfyUI Desktop closed while the standalone CLI worker is running.
-- Avoid competing GPU workloads such as LM Studio during LTX generation.
 - Keep `maxConcurrentGpuJobs: 1` for the RTX 4060 worker.
-- Keep the known-good pinned environment until a deliberate upgrade test is performed.
-- Treat `C:\AI\ComfyUI-CLI\input` and `output` as worker-local scratch/staging until artifact retention is implemented.
-
-## Naming
-
-Keep these names for now:
-
-```text
-helix-runtime          VPS execution API/service
-helix-db               runtime PostgreSQL
-helix-rtx4060-01       physical ComfyUI worker
-ComfyAdapter           Comfy-specific runtime adapter
-ComfyClient            raw Comfy HTTP/WebSocket transport
-```
-
-`production/media-runtime` should also stay unchanged for now because it is already deployed and contains the execution service. Renaming it just to make it Comfy-specific would create churn without helping the first generation milestone.
-
-One later cleanup is worth considering: once the LTX workflow experiments are frozen, move `production/ltx-director/` under a ComfyUI workflow area such as `production/comfyui-worker/workflows/ltx-director/`. Do not move it while the experiment notes and links are still active.
+- Do not alter the pinned ComfyUI/custom-node/model stack casually.
+- Avoid competing GPU workloads during LTX generation.
+- Do not let n8n own low-level Comfy polling/tracking.
+- Do not store Telegram tokens or other secrets in Git.
+- Do not delete worker output immediately after delivery; use a controlled retention policy.
+- Do not package/freeze the current experimental LTX workflow yet.
