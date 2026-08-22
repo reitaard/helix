@@ -1,5 +1,25 @@
 import crypto from "node:crypto";
 
+import {
+  createWriteStream
+} from "node:fs";
+
+import {
+  mkdir
+} from "node:fs/promises";
+
+import {
+  dirname
+} from "node:path";
+
+import {
+  Readable
+} from "node:stream";
+
+import {
+  pipeline
+} from "node:stream/promises";
+
 import WebSocket from "ws";
 
 export interface ComfySystemStats {
@@ -154,6 +174,82 @@ export class ComfyClient {
     >(
       "/object_info",
       10000
+    );
+  }
+
+  async downloadArtifact(
+    artifact: {
+      filename: string;
+      subfolder: string;
+      type: string;
+    },
+
+    destinationPath:
+      string
+  ) {
+    const params =
+      new URLSearchParams({
+        filename:
+          artifact.filename,
+
+        subfolder:
+          artifact.subfolder,
+
+        type:
+          artifact.type
+      });
+
+    const response =
+      await fetch(
+        `${this.baseUrl}/view?${params}`,
+        {
+          signal:
+            AbortSignal.timeout(
+              5 * 60 * 1000
+            )
+        }
+      );
+
+    if (!response.ok) {
+      const body =
+        await response.text();
+
+      throw new Error(
+        `/view returned HTTP ` +
+        `${response.status}: ` +
+        body.slice(0, 1000)
+      );
+    }
+
+    if (!response.body) {
+      throw new Error(
+        "/view returned no body"
+      );
+    }
+
+    await mkdir(
+      dirname(
+        destinationPath
+      ),
+      {
+        recursive: true,
+        mode: 0o700
+      }
+    );
+
+    await pipeline(
+      Readable.fromWeb(
+        response.body as unknown as
+          import("node:stream/web")
+            .ReadableStream<Uint8Array>
+      ),
+
+      createWriteStream(
+        destinationPath,
+        {
+          mode: 0o600
+        }
+      )
     );
   }
 

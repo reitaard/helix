@@ -131,6 +131,23 @@ export class ComfyAdapter
     );
   }
 
+  downloadArtifact(
+    artifact: {
+      filename: string;
+      subfolder: string;
+      type: string;
+    },
+
+    destinationPath:
+      string
+  ) {
+    return this.client
+      .downloadArtifact(
+        artifact,
+        destinationPath
+      );
+  }
+
   async readiness():
     Promise<AdapterReadiness> {
 

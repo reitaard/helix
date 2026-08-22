@@ -532,7 +532,9 @@ export class JobRepository {
 
   async markSucceeded(
     id: string,
-    result: unknown
+    result: unknown,
+    artifacts: unknown[],
+    deliveryProviders: string[]
   ) {
     const client =
       await this.db.connect();
@@ -598,12 +600,57 @@ export class JobRepository {
         ]
       );
 
+      for (
+        const provider of
+        deliveryProviders
+      ) {
+        for (
+          const [
+            artifactIndex,
+            artifact
+          ] of artifacts.entries()
+        ) {
+          await client.query(
+            `
+            INSERT INTO
+              media_deliveries (
+                job_id,
+                artifact_index,
+                artifact,
+                provider
+              )
+            VALUES (
+              $1,
+              $2,
+              $3::jsonb,
+              $4
+            )
+            ON CONFLICT (
+              job_id,
+              artifact_index,
+              provider
+            )
+            DO NOTHING
+            `,
+            [
+              id,
+              artifactIndex,
+              JSON.stringify(
+                artifact
+              ),
+              provider
+            ]
+          );
+        }
+      }
+
       await client.query("COMMIT");
     }
     catch (error) {
       await client.query(
         "ROLLBACK"
       );
+
       throw error;
     }
     finally {

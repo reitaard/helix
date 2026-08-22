@@ -90,4 +90,9 @@ export interface MediaAdapter {
   status(
     backendJobId: string
   ): Promise<AdapterExecutionStatus>;
+
+  downloadArtifact(
+    artifact: AdapterArtifact,
+    destinationPath: string
+  ): Promise<void>;
 }

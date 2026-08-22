@@ -170,6 +170,34 @@ export class WorkerRegistry {
     );
   }
 
+  async downloadArtifact(
+    id: string,
+
+    artifact: {
+      filename: string;
+      subfolder: string;
+      type: string;
+    },
+
+    destinationPath:
+      string
+  ) {
+    const adapter =
+      this.adapters.get(id);
+
+    if (!adapter) {
+      return false;
+    }
+
+    await adapter
+      .downloadArtifact(
+        artifact,
+        destinationPath
+      );
+
+    return true;
+  }
+
   async status(
     id: string,
     backendJobId: string

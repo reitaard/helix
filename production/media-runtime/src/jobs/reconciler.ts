@@ -21,7 +21,10 @@ export class JobReconciler {
       WorkerRegistry,
 
     private readonly intervalMs =
-      3000
+      3000,
+
+    private readonly deliveryProviders:
+      string[] = []
   ) {}
 
   start() {
@@ -115,7 +118,11 @@ export class JobReconciler {
 
                   artifacts:
                     backend.artifacts
-                }
+                },
+
+                backend.artifacts,
+
+                this.deliveryProviders
               );
 
             console.log(

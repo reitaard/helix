@@ -27,6 +27,19 @@ import {
 } from "./jobs/service.js";
 
 import {
+  DeliveryRepository
+} from "./repositories/delivery-repository.js";
+
+import {
+  DeliveryWorker
+} from "./delivery/worker.js";
+
+import {
+  TelegramDelivery
+} from "./delivery/telegram.js";
+
+
+import {
   WorkerRegistry
 } from "./workers/registry.js";
 
@@ -81,8 +94,28 @@ const jobs =
 const reconciler =
   new JobReconciler(
     jobRepository,
-    registry
+    registry,
+    3000,
+    config.telegram
+      ? ["telegram"]
+      : []
   );
+
+const deliveryRepository =
+  new DeliveryRepository(db);
+
+const deliveryWorker =
+  config.telegram
+    ? new DeliveryWorker(
+        deliveryRepository,
+        registry,
+        new TelegramDelivery(
+          config.telegram.botToken,
+          config.telegram.chatId
+        ),
+        config.spoolDir
+      )
+    : null;
 
 const app =
   createApp(
@@ -99,6 +132,7 @@ async function shutdown(
   );
 
   reconciler.stop();
+  deliveryWorker?.stop();
 
   await app.close();
   await db.end();
@@ -131,11 +165,13 @@ try {
   });
 
   reconciler.start();
+  deliveryWorker?.start();
 }
 catch (error) {
   app.log.error(error);
 
   reconciler.stop();
+  deliveryWorker?.stop();
 
   await db.end();
 
