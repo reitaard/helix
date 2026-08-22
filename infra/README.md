@@ -11,7 +11,9 @@ Purpose:
 ```text
 Helix / n8n
     ↓
-future ComfyAdapter
+future Helix Runtime
+    ↓
+ComfyAdapter
     ↓
 ComfyUI HTTP/WebSocket API
     ↓
@@ -52,6 +54,13 @@ C:\AI\ComfyUI-CLI\
 C:\AI\ComfyWorker\.venv\  # comfy-cli management environment
 C:\AI\start-comfy.ps1      # permanent worker launcher
 
+C:\AI\HelixWorker\
+├── config\worker.yaml      # Helix-facing worker identity/profile
+├── scripts\               # endpoint/WebSocket diagnostics
+├── inventory\             # frozen environment/node/task snapshots
+├── logs\
+└── state\
+
 C:\ComfyMigrationBackup\   # migration/recovery backup
 ```
 
@@ -66,6 +75,37 @@ C:\ComfyMigrationBackup\config\desktop-model-paths.yaml
 ```
 
 Do not delete this backup until the standalone worker has been stable for a sustained period and rollback is no longer needed.
+
+### Worker identity/profile
+
+The worker is identified to Helix as:
+
+```text
+workerId: helix-rtx4060-01
+profile: comfy-video-ltx-stable
+runtime: comfy
+capability: video.i2v
+max concurrent GPU jobs: 1
+```
+
+Model availability and validation are kept distinct. The worker currently records LTX `2.3` and `2.5` as available model-family versions, while LTX `2.5` is the validated standalone execution path. Availability must not be interpreted as production validation.
+
+Stable tool names should describe intent (`video.i2v`, later `image.generate`, `image.edit`, etc.). Model family/version and workflow implementation are separate routing concerns beneath the tool contract.
+
+### Frozen worker inventory
+
+The known-good worker snapshot is stored locally under `C:\AI\HelixWorker\inventory` and currently includes:
+
+```text
+comfy-commit.txt
+custom-nodes.txt
+gpu.txt
+pip-freeze.txt
+scheduled-task.xml
+node-classes.txt
+```
+
+The captured node inventory currently contains 1219 registered ComfyUI node classes. This gives Helix a baseline for later compatibility/readiness checks.
 
 ### Model storage
 
@@ -142,6 +182,10 @@ GET http://127.0.0.1:8188/system_stats
 Expected ComfyUI API surfaces for the later adapter include:
 
 ```text
+GET  /system_stats
+GET  /queue
+GET  /history
+GET  /object_info
 POST /prompt
 GET  /history/{prompt_id}
 GET  /view
@@ -162,9 +206,70 @@ The standalone CLI migration is considered operationally successful:
 - native LTX 2.5 generation has completed successfully multiple times after migration;
 - output is written under `C:\AI\ComfyUI-CLI\output`.
 
+Read-only execution-interface validation has also passed:
+
+- local worker `GET /system_stats`;
+- local worker `GET /queue`;
+- local worker `GET /history`;
+- local worker `GET /object_info` with 1219 registered classes;
+- local worker WebSocket `/ws` connection and initial status event;
+- remote Windows main-PC HTTP access over Tailscale;
+- remote Windows main-PC WebSocket access over Tailscale;
+- VPS-host HTTP access over Tailscale;
+- VPS-host WebSocket access over Tailscale;
+- an existing n8n Docker container on the VPS can reach the worker through the same private path.
+
+No generation was required for these connectivity tests.
+
 One early CLI generation stalled at `Requested to load CausalDiffusionVAE`. The old Desktop log showed that the same VAE normally loads in roughly one second and the full comparable generation completed in about 182 seconds. The stalled process was interrupted, ComfyUI was fully restarted, and an LM Studio `llama-server.exe` process sharing the RTX 4060 was stopped. Subsequent generations completed successfully. Treat this as a transient runtime/GPU-state incident unless it becomes reproducible.
 
-### Operational rules
+## VPS control-plane checkpoint
+
+The live VPS has been validated as the future Helix control-plane host. Current relevant host capabilities include Ubuntu 24.04 LTS, Docker/Compose, Tailscale, Caddy, n8n, and existing unrelated PostgreSQL/Redis services.
+
+A temporary container named `helix-probe` is running on localhost port `8787`. Its only purpose is to prove the future control-plane path:
+
+```text
+n8n
+  ↓
+helix-probe
+  ↓
+VPS private/Tailscale route
+  ↓
+helix-rtx4060-01
+  ↓
+ComfyUI HTTP + WebSocket
+```
+
+The probe successfully performs HTTP health/queue requests and establishes a ComfyUI WebSocket from inside its Node container. n8n can call the probe across the existing private Docker network. The probe is temporary and should be replaced by the real `helix-runtime`; it must not accumulate production responsibilities.
+
+The probe remains bound to `127.0.0.1:8787` and is not exposed through Caddy. Raw ComfyUI is also not intended to become a public Internet endpoint.
+
+## Runtime / adapter boundary
+
+The current Production execution direction is:
+
+```text
+Project / Agent
+      ↓
+Tool or capability
+      ↓
+Helix Runtime
+      ├── worker registry
+      ├── scheduler
+      ├── durable jobs/events
+      ├── artifact/lineage services
+      └── adapters
+            └── ComfyAdapter
+                  ↓
+               ComfyUI
+```
+
+The adapter is a layer, not the whole runtime. `ComfyAdapter` should remain deliberately small and normalize backend transport such as HTTP, WebSocket events, queue/history reconciliation, cancellation, and artifact retrieval. Helix owns worker identity, job IDs, scheduling, workflow/tool routing, durable state, and project/asset lineage.
+
+The next runtime checkpoint should be a read-only `helix-runtime` shell with a generic Comfy transport and worker registry. Workflow graph design, semantic node bindings, and `/prompt` generation submission can wait until the currently tested LTX workflow is ready to be frozen.
+
+## Operational rules
 
 1. Keep ComfyUI Desktop installed but normally closed for now. Desktop used port `8000`; the production CLI worker uses `8188`.
 2. Avoid running Desktop ComfyUI and the CLI worker simultaneously because they compete for the same 8 GB RTX 4060 and system RAM.
@@ -172,10 +277,11 @@ One early CLI generation stalled at `Requested to load CausalDiffusionVAE`. The 
 4. Do not auto-update the worker. This stack has known compatibility-sensitive pins.
 5. Before any update, record the current git commit and `pip freeze`, update deliberately, run `pip check`, and execute a known LTX smoke generation.
 6. Keep generation workflows as ComfyUI/API JSON execution assets. Helix code should modify inputs and submit graphs rather than rewrite Comfy graphs as Python.
-7. The future `ComfyAdapter` should normalize ComfyUI into a provider-neutral asynchronous contract similar to `submit -> job id -> progress/status -> artifact + metadata`.
+7. The `ComfyAdapter` should normalize ComfyUI into a provider-neutral asynchronous contract rather than exposing node IDs or Comfy-specific event formats to agents/n8n.
+8. Keep n8n at the high-level orchestration boundary. It should call Helix tools/runtime APIs rather than poll Comfy every second or parse node execution events.
 
 ## Remaining infrastructure concerns
 
 Future concerns still include durable state, evidence/experiment databases, object storage, queues, retries, observability, cost accounting, media retention, and secure remote worker access.
 
-The current priority remains system boundaries and Intelligence/Director/Experiment design. The GPU worker is a validated Production execution primitive, not a reason to expand infrastructure speculatively.
+The current priority remains system boundaries and Intelligence/Director/Experiment design. The GPU worker and runtime workstream are validated Production execution primitives, not a reason to let generation infrastructure reshape the upstream Helix brain.
