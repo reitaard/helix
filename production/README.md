@@ -1,74 +1,80 @@
 # Production
 
-Production is the execution layer. It is intentionally separate from Intelligence, Director, and Experiment Engine.
+Production is the execution layer. This area contains the currently active ComfyUI worker/runtime work as well as model/workflow experiments.
 
-## Purpose
+## Current active execution workstream
 
-Turn an approved `ContentSpec` / `VariantPlan` into media while preserving production metadata and lineage.
-
-## Internal control boundary
-
-Production will likely need its own machine-readable execution plan before any provider/model adapter is called:
+The immediate implementation focus is the dedicated ComfyUI GPU worker:
 
 ```text
-ContentSpec + VariantPlan
-        ↓
-Production planning
-        ↓
-ProductionPlan (provisional internal name)
-        ↓
-Backend adapter
-        ↓
-MediaAsset
+n8n / caller
+    ↓
+helix-runtime
+    ↓
+helix-db + worker/job state
+    ↓
+ComfyAdapter
+    ↓
+ComfyUI over Tailscale
+    ↓
+helix-rtx4060-01
+    ↓
+generated asset
 ```
 
-A ProductionPlan may eventually contain shot timing, keyframes, references, motion/audio guidance, quality targets, retry/QC policy, and backend requirements. It is not a shared schema yet and must not expose one provider's workflow format upstream.
+The worker and runtime are already connected and healthy. Readiness is persisted in PostgreSQL. The next milestone is to accept a durable job through `helix-runtime`, submit a Comfy API workflow through `/prompt`, track the resulting `prompt_id`, and return generated asset metadata.
 
-## Current LTX / ComfyUI research
+See [`production/comfyui-worker/`](comfyui-worker/) for the focused worker state and roadmap.
 
-LTX 2.5 and WhatDreamsCost LTX Director are current Production research inputs, not permanent Helix dependencies.
+See [`production/media-runtime/`](media-runtime/) for the deployed TypeScript runtime implementation.
 
-Useful findings:
+## Current ComfyUI/LTX validation
 
-- native LTX I2V and timeline-directed generation can remain separate production routes;
-- LTX Director exposes timed prompt segments, image/keyframe guidance, IC-LoRA motion/reference guidance, audio tracks, video input/extension concepts, and retake regions;
-- much of the Director state is machine-readable (`timeline_data`, local prompts, segment lengths, guide strengths, motion/audio segments), so agents should compile structured state rather than automate the visual canvas;
-- ComfyUI can remain the execution worker behind a backend adapter while Helix owns the higher-level plan and lineage;
-- human timeline edits should be treated as review/override input, not as a requirement for every generation.
+The standalone RTX 4060 worker has validated native LTX 2.5 generation and currently exposes the known-good ComfyUI/custom-node stack through the private API on port `8188`.
 
-### Current local vertical slice
+LTX/Director workflow experiments remain execution research, not a frozen runtime contract. Existing findings include:
 
-The workstation now loads WhatDreamsCost `LTX Director` and `LTX Director Guide` successfully. A D0 integration has been built around the existing native LTX 2.5 two-stage backend using the upstream Director topology:
+- native LTX 2.5 I2V;
+- native full-resolution LTX 2.5 I2V;
+- CGlide Director-style controls;
+- Prompt Relay temporal regions;
+- CGlide chunk continuation;
+- Lightricks LoopingSampler temporal extension.
+
+See [`production/ltx-director/`](ltx-director/) for those experiment notes.
+
+## Current rule for workflow integration
+
+Do not make the runtime wait for a final workflow abstraction before proving API execution.
+
+The first runtime-controlled generation may accept a raw Comfy API-format workflow graph and an already-staged worker input. Once a graph is selected as a stable baseline, it can be frozen into a versioned workflow package with semantic bindings.
 
 ```text
-Director
-  -> Guide 0.5 / Stage 1
-  -> Crop Guides
-  -> x2 latent upscale
-  -> Guide 1.0 / Stage 2
-  -> decode
+raw API workflow first
+        ↓
+prove /prompt + tracking + outputs
+        ↓
+freeze known-good workflow
+        ↓
+add bindings/versioning
 ```
 
-The Director nodes are placed inside the existing `Image to Video (LTX-2.5)` subgraph because that template hides the actual model/sampler execution graph there. This is a ComfyUI adapter implementation detail, not a Helix-wide architectural rule.
+## Worker/runtime ownership
 
-Runtime generation is still pending. The known-good native LTX 2.5 workflow remains preserved as the control.
+The runtime owns:
 
-See [`production/ltx-director/`](ltx-director/) for install/test notes and [`research/LTX_DIRECTOR_AUTOMATION.md`](../research/LTX_DIRECTOR_AUTOMATION.md) for evidence and validation gaps.
+- worker identity and health;
+- durable job IDs/state/events;
+- submission to ComfyUI;
+- execution tracking/reconciliation;
+- generated output metadata;
+- later cancellation/recovery and asset retention.
 
-## Candidate areas
+ComfyUI owns:
 
-- image/keyframe creation;
-- video generation;
-- voice/audio/music;
-- captions;
-- deterministic editing/rendering;
-- compositing;
-- QC;
-- upscale/detail/interpolation;
-- provider/model routing;
-- async jobs/retries;
-- cost and latency accounting.
+- workflow graph execution;
+- model/custom-node execution;
+- worker-local input/output files;
+- native queue/history/WebSocket execution state.
 
-The existing Runway/n8n asynchronous task pattern belongs conceptually here.
-
-No permanent provider/model is selected.
+For the current milestone, keep this workstream limited to getting the ComfyUI worker to accept jobs and produce retrievable assets reliably.
