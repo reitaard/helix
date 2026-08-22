@@ -2,43 +2,44 @@
 
 ## Status
 
-**Paused after v1.3 failure.**
+**Previous direct integration paused after v1.3 failure. Safe re-entry is now defined.**
 
-Do not treat the current Prompt Relay + LoopingSampler wiring as a valid Production recipe. The latest run showed a catastrophic subject-identity failure: the original motorcycle left the frame and a completely different motorcycle model was generated later in the same shot.
+Do not treat the old Prompt Relay + LoopingSampler wiring as a valid Production recipe. That run showed catastrophic subject-identity failure: the original motorcycle left frame and a completely different motorcycle model appeared later.
 
-The immediate goal is now to isolate Lightricks from Director before another hybrid attempt.
+A new bare full-resolution native LTX baseline has since passed at 4 and 8 seconds, proving that the replacement-bike failure is not an unavoidable base-model behavior.
 
-## What Hybrid B was trying to combine
+## Component roles
 
-- CGlide LTX Director 2.5 for timed Prompt Relay / shot direction
-- Lightricks `LTXVLoopingSampler` for temporal extension
-- native LTX 2.5 two-stage I2V for opening-image fidelity
+Hybrid B should only continue if each component has one clear responsibility:
 
-This remains a plausible architecture, but only if the temporal control systems compose correctly.
+```text
+native LTX 2.5
+= visual generation quality
+
+Lightricks LoopingSampler
+= temporal extension when duration requires it
+
+CGlide / Director
+= shot/timeline intent
+```
+
+CGlide is **not** the current identity-reference mechanism. Its old LTX 2.3 `@ref` / reference-sheet behavior is disabled for LTX 2.5.
 
 ## Confirmed upstream constraints
 
 ### CGlide reference-sheet controls
 
-CGlide's old LTX 2.3 reference-sheet / `@ref` behavior is disabled in the LTX 2.5 Director path because it can corrupt 2.5 renders. Do not depend on that feature for identity.
+Do not depend on the disabled 2.3 reference behavior for subject identity on 2.5.
 
 ### CGlide negative output
 
-`LTXDirectorCS25` intentionally emits neutral / empty negative conditioning. If the workflow needs the native LTX negative prompt, wire it separately.
-
-The local native-quality guard remains:
-
-```text
-pc game, console game, video game, cartoon, childish, ugly
-```
-
-plus only targeted failure terms when justified.
+`LTXDirectorCS25` can emit neutral/empty negative conditioning. If the workflow needs a native LTX negative prompt, wire it separately.
 
 ### Lightricks image conditioning
 
-`LTXVLoopingSampler.optional_cond_images` are actual visual I2V/keyframe constraints. They are not a motion-only reference channel. Never use a visually different motorcycle as a supposed identity/motion reference and expect identity to remain unchanged.
+`LTXVLoopingSampler.optional_cond_images` are actual visual/keyframe constraints, not a generic motion-only reference channel. A visually different motorcycle must never be used as a supposed same-subject identity reference.
 
-## Local test history
+## Local failure history
 
 ### v1 / v1.1 — FAIL
 
@@ -46,40 +47,35 @@ Observed:
 
 - Prompt Relay executed;
 - Lightricks temporal continuation executed;
-- a different green side-bike image was used as a later visual keyframe;
-- duplicate subject behavior appeared in one configuration;
-- later sections progressively morphed toward conflicting visual information;
-- padded reference composition also encouraged the motorcycle to shrink/recede.
+- a different side-bike image was used as a later keyframe;
+- duplicate subject behavior appeared;
+- later frames morphed toward conflicting visual information;
+- padded reference composition encouraged the motorcycle to shrink/recede.
 
 Avoid:
 
 - ambiguous image-conditioning ownership;
 - second keyframes from a different subject identity;
-- padded/blur-band reference canvases that materially change composition.
+- padded/blur-band reference canvases that materially alter composition.
 
 ### v1.2A — FAIL / useful isolation
 
 Observed:
 
 - duplicate-bike failure improved;
-- front-to-side camera evolution became clearer;
+- camera evolution became clearer;
 - world/daylight continuity improved;
-- realism dropped below the known native LTX 2.5 baseline;
+- realism dropped below native LTX quality;
 - motorcycle geometry still simplified/drifted.
 
-Causes found:
+Separate causes found:
 
-1. a generatively normalized first-frame asset had replaced the original photograph;
-2. Director's neutral negative output had replaced the normal native negative-conditioning path.
+1. a generatively normalized first frame replaced the original photo;
+2. Director's neutral negative output replaced the normal native negative-conditioning path.
 
-Avoid:
-
-- generative redraw/outpaint when benchmarking source-image fidelity;
-- silently dropping native negative conditioning.
+Avoid generative redraws when benchmarking source-image fidelity and do not silently drop the native negative path.
 
 ### v1.3 — FAIL
-
-Run:
 
 ```text
 704 × 1280 portrait
@@ -92,53 +88,43 @@ Prompt Relay epsilon 0.50
 549.18 s runtime
 ```
 
-Positive findings were not sufficient to pass the run. The opening had strong source fidelity and photographic detail, but the main success criterion failed.
-
-Observed failure sequence:
+Failure sequence:
 
 ```text
-opening: original motorcycle retained
+original motorcycle retained
         ↓
-front→side camera motion becomes aggressive
+front→side move becomes aggressive
         ↓
-original motorcycle partly/fully exits the frame
+motorcycle leaves frame
         ↓
-road/background continues without a strong subject anchor
+recent temporal context becomes mostly road/background
         ↓
-a completely different motorcycle model is synthesized later
+a different motorcycle is synthesized later
 ```
 
-**Overall verdict: FAIL.** A photorealistic replacement motorcycle does not count as continuity.
+**Overall verdict: FAIL.** Photorealistic replacement is still identity failure.
 
-## Critical integration hypothesis from source inspection
+## Why the old direct hybrid is unsafe
 
-This is a strong hypothesis that must be validated experimentally before being called a confirmed root cause.
+### 1. Prompt Relay / LoopingSampler global-time mismatch hypothesis
 
-CGlide Prompt Relay builds masks against the full Director timeline. When its cross-attention query does not represent the full video, it uses a scaled local-query mapping. The current mask calculation does not receive the Lightricks temporal tile's global start offset.
+CGlide Prompt Relay builds a full-timeline temporal mask. Lightricks generates shorter overlapping temporal windows.
 
-Lightricks, meanwhile, generates the long video as overlapping temporal chunks, for example:
+When Prompt Relay sees a shorter attention query, its scaled mapping currently does not receive the Lightricks tile's true global start offset.
+
+Therefore a full-video intent such as:
 
 ```text
-chunk 0:  0 → 14 latent frames
-chunk 1: 10 → 24
-chunk 2: 20 → 34
-chunk 3: 30 → 44
-chunk 4: 40 → 45
+0–5   front
+5–10  camera arc
+10–15 side
 ```
 
-Therefore the current hybrid can make each Lightricks tile see a locally scaled version of the entire Director prompt arc instead of the correct global portion of that arc.
+can be locally rescaled/replayed inside multiple temporal windows instead of each tile receiving only its correct global portion.
 
-In plain English, a full-video timeline such as:
+This is a strong source-based hypothesis, not yet a locally patched/validated fact.
 
-```text
-front → camera arc → side
-```
-
-may be replayed inside multiple temporal extensions.
-
-That can conflict with Lightricks' overlapping continuation state.
-
-### Prompt Relay epsilon was also over-softened
+### 2. Prompt Relay was over-softened
 
 v1.3 used:
 
@@ -146,15 +132,9 @@ v1.3 used:
 epsilon = 0.50
 ```
 
-CGlide computes Prompt Relay sigma as:
+That greatly broadens prompt-zone leakage compared with earlier strict settings. Do not use `0.50` as a default smoothing value.
 
-```text
-sigma = 1 / ln(1 / epsilon)
-```
-
-This makes `0.50` dramatically broader than `0.001`, so local prompt zones leak into each other much more strongly. Do not assume a larger epsilon is automatically a smoother/better transition.
-
-### Lightricks overlap conditioning was also pushed aggressively
+### 3. Lightricks overlap conditioning was pushed aggressively
 
 v1.3 used:
 
@@ -162,63 +142,139 @@ v1.3 used:
 temporal_overlap_cond_strength = 0.80
 ```
 
-The Lightricks node default is `0.50`. The value is passed directly as the strength of the previous overlap latents used to condition a new temporal extension.
+Lightricks defaults to `0.50`. The value directly controls how strongly the previous overlap latents guide a new extension. Strong conditioning can propagate a bad end-state just as effectively as a good one.
 
-`0.80` may therefore propagate a bad framing state very strongly. If a tile ends with the motorcycle leaving frame, the next tile is strongly encouraged to continue that failure.
+### 4. Too many variables changed simultaneously
 
-Important distinction: this is not a simple temporal cross-fade. The previous overlap latents become conditioning for the next extension.
+Do not change tile size, overlap amount, overlap strength, prompt segmentation, reference images and generation architecture in one experiment and then infer a single cause.
 
-## What to avoid now
+## New native baseline that Hybrid B must protect
 
-Until a clean calibration is complete:
-
-- do not run CGlide Prompt Relay inside Lightricks LoopingSampler as if both share the same global time coordinates;
-- do not use `epsilon=0.50` as a default Prompt Relay smoothing value;
-- do not assume `0.80` overlap conditioning is better than the Lightricks default;
-- do not tune tile size, overlap amount, overlap strength, Prompt Relay and image references simultaneously;
-- do not add identity LoRAs, long-memory latents or extra keyframes before the base continuation behavior is measured;
-- do not use a second image of a different motorcycle;
-- do not increase to 30+ seconds.
-
-## Next experiment — Lightricks calibration before Hybrid B resumes
-
-Remove CGlide Prompt Relay entirely and establish what Lightricks is good at by itself.
-
-Keep:
+Bare native full-resolution LTX 2.5 now passes the same general motorcycle quality class:
 
 ```text
-original first-frame photograph
-native LTX 2.5 I2V: 0.70 Stage 1 / 1.00 Stage 2
-704 × 1280
-15 s / 24 fps
-temporal tile 120
-temporal overlap 40
-overlap conditioning 0.50
-AdaIN 0.10
-one spatial tile
-one continuous positive prompt
-native negative-conditioning path
+4 s  → 97 frames
+8 s  → 193 frames
+24 fps
+736 × 1280 decoded
 ```
 
-Do **not** ask for a large front-to-side orbit in this calibration. Keep the camera relationship comparatively stable so the test measures continuation rather than choreography.
+Observed in both:
 
-Questions:
+- same motorcycle retained;
+- same rider retained;
+- no duplicate motorcycle;
+- no disappearance/replacement;
+- strong gross fairing/headlight/windscreen consistency;
+- realistic materials and motion;
+- remaining drift concentrated in logos/decals and tiny details.
 
-1. Does the exact motorcycle remain present for the full 15 seconds?
-2. Does identity survive all temporal extensions?
-3. Are window boundaries visually smooth at the default `0.50` overlap-conditioning strength?
-4. Is realism close to the native LTX 2.5 benchmark?
-5. Does world/weather state drift when Director is absent?
+See `FULL_RES_NATIVE_I2V.md`.
 
-Only after those answers are known should Hybrid B resume.
+This becomes the quality floor. A hybrid that adds control but materially worsens identity or realism is rejected.
 
-## Future Hybrid B options
+## C4 — safe hybrid re-entry
 
-If Lightricks-only passes, there are two sane ways to restore timed direction:
+### Goal
 
-1. compile Director intent into Lightricks' tile-aware `MultiPromptProvider` / per-tile conditioning;
-2. modify Prompt Relay integration so every temporal tile receives its true global time offset.
+Test whether Director intent can coexist with Lightricks temporal extension **without** reintroducing the old time-coordinate conflict.
 
-Option 1 is simpler and should be tested before maintaining a custom Prompt Relay patch.
+C4 is not a multi-reference experiment and not an identity-LoRA experiment.
 
-Multi-frame identity tests remain postponed until the temporal architecture is stable. When resumed, every identity keyframe must depict the same subject.
+### Preferred integration
+
+Do not directly connect a full-duration Prompt Relay schedule into LoopingSampler again.
+
+Instead:
+
+```text
+CGlide / Director timeline intent
+        ↓
+compile intent into one prompt per temporal tile
+        ↓
+LTXVMultiPromptProvider / tile-aware positive conditioning
+        ↓
+Lightricks LoopingSampler
+        ↓
+LTX generation
+```
+
+This keeps CGlide/Director as the authoring source and uses the Lightricks conditioning interface designed for temporal tiles.
+
+### First C4 shot
+
+Keep the successful green motorcycle source and the motion deliberately modest.
+
+Candidate timeline:
+
+```text
+phase 1
+stable front-three-quarter tracking, constant distance
+
+phase 2
+same camera relationship, slightly stronger forward acceleration
+
+phase 3
+hold composition, maintain same bike/rider, no orbit or side reveal
+```
+
+The first C4 test should prove control/timing composition, not cinematographic ambition.
+
+### Lightricks controls
+
+Start from conservative/default-ish continuation behavior rather than the old aggressive values:
+
+```text
+temporal overlap geometry   moderate / approximately one third
+previous-tile strength      0.50 first
+AdaIN                       small, around the already-tested low range
+spatial tiles               1 × 1
+```
+
+Do not jump directly to `0.80` overlap conditioning.
+
+### Identity/reference controls
+
+For C4 first pass:
+
+- one source motorcycle image only;
+- no second visual keyframe;
+- no IC-LoRA;
+- no negative-index long-memory latent;
+- no CGlide `@ref` assumption;
+- no generatively redrawn benchmark source.
+
+Only after temporal integration passes should identity memory be added to solve a measured remaining weakness.
+
+## C4 success criteria
+
+The hybrid must meet or beat the native quality floor:
+
+1. exact same motorcycle for the entire shot;
+2. same rider/helmet/gear;
+3. bike remains continuously in frame;
+4. no duplicate/replacement object;
+5. no visible temporal seam or reset;
+6. Director/tile prompt change occurs at the intended time;
+7. realism is not materially worse than the native full-resolution baseline;
+8. micro-detail drift remains local rather than becoming geometry drift.
+
+## What to avoid
+
+- full-duration Prompt Relay inside LoopingSampler before global offsets are solved;
+- `epsilon=0.50` as a default;
+- `0.80` overlap strength as a default;
+- different-subject visual keyframes;
+- multi-reference + long-memory + prompt-relay + tile changes all in one run;
+- forcing Lightricks into a 4–8 second shot that already works natively merely to increase node count;
+- treating CGlide as an identity reference rather than a Director/control surface.
+
+## Longer-term options
+
+If C4 passes:
+
+1. test a slightly more meaningful camera change using tile-aware prompts;
+2. test duration extension beyond the native comfortable range;
+3. separately test `optional_negative_index_latents` for long-term subject memory if identity begins to drift;
+4. separately evaluate same-subject multi-view/Ingredients IC-LoRA only if exact geometry needs more support;
+5. only consider a custom Prompt Relay + LoopingSampler patch if tile-aware prompt compilation proves insufficient.
