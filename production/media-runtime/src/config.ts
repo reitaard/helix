@@ -13,13 +13,22 @@ const envSchema = z.object({
     .default(8787),
 
   HELIX_WORKER_RTX4060_URL:
-    z.string().url()
+    z.string().url(),
+
+  HELIX_DATABASE_URL:
+    z.string().min(1)
 });
 
-const env = envSchema.parse(process.env);
+const env =
+  envSchema.parse(process.env);
 
 export const config = {
   port: env.HELIX_PORT,
+
+  database: {
+    connectionString:
+      env.HELIX_DATABASE_URL
+  },
 
   workers: [
     {

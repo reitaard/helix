@@ -1,11 +1,11 @@
 import Fastify from "fastify";
 
 import type {
-  WorkerRegistry
-} from "./workers/registry.js";
+  WorkerService
+} from "./workers/service.js";
 
 export function createApp(
-  registry: WorkerRegistry
+  registry: WorkerService
 ) {
   const app = Fastify({
     logger: true,
@@ -57,6 +57,62 @@ export function createApp(
       }
 
       return worker;
+    }
+  );
+
+  app.get<{
+    Params: {
+      workerId: string;
+    };
+  }>(
+    "/v1/workers/:workerId/live",
+    async (
+      request,
+      reply
+    ) => {
+      const result =
+        await registry.liveness(
+          request.params.workerId
+        );
+
+      if (!result) {
+        return reply
+          .code(404)
+          .send({
+            error:
+              "worker_not_found"
+          });
+      }
+
+      return result;
+    }
+  );
+
+  app.get<{
+    Params: {
+      workerId: string;
+    };
+  }>(
+    "/v1/workers/:workerId/readiness",
+    async (
+      request,
+      reply
+    ) => {
+      const result =
+        await registry.readiness(
+          request.params.workerId
+        );
+
+      if (!result) {
+        return reply
+          .code(404)
+          .send({
+            error:
+              "worker_not_found"
+          });
+      }
+
+      return result;
     }
   );
 
