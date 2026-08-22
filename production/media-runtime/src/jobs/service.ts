@@ -90,7 +90,8 @@ export class JobService {
       [
         "succeeded",
         "failed",
-        "cancelled"
+        "cancelled",
+        "timed_out"
       ].includes(job.status)
     ) {
       return {

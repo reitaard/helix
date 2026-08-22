@@ -28,7 +28,14 @@ const envSchema = z.object({
   HELIX_SPOOL_DIR:
     z.string()
       .min(1)
-      .default("/tmp/helix-spool")
+      .default("/tmp/helix-spool"),
+
+  HELIX_JOB_TIMEOUT_SECONDS:
+    z.coerce
+      .number()
+      .int()
+      .min(60)
+      .default(3600)
 });
 
 const env =
@@ -70,6 +77,10 @@ export const config = {
 
   spoolDir:
     env.HELIX_SPOOL_DIR,
+
+  jobTimeoutMs:
+    env.HELIX_JOB_TIMEOUT_SECONDS *
+    1000,
 
   workers: [
     {

@@ -98,7 +98,9 @@ const reconciler =
     3000,
     config.telegram
       ? ["telegram"]
-      : []
+      : [],
+
+    config.jobTimeoutMs
   );
 
 const deliveryRepository =

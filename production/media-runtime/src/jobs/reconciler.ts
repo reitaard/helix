@@ -24,7 +24,10 @@ export class JobReconciler {
       3000,
 
     private readonly deliveryProviders:
-      string[] = []
+      string[] = [],
+
+    private readonly runningTimeoutMs =
+      60 * 60 * 1000
   ) {}
 
   start() {
@@ -76,6 +79,47 @@ export class JobReconciler {
         }
 
         try {
+          if (
+            job.status === "running" &&
+            job.startedAt
+          ) {
+            const elapsedMs =
+              Date.now() -
+              new Date(
+                job.startedAt
+              ).getTime();
+
+            if (
+              elapsedMs >=
+              this.runningTimeoutMs
+            ) {
+              const cancelled =
+                await this.workers
+                  .cancel(
+                    job.workerId,
+                    job.backendJobId
+                  );
+
+              if (cancelled === true) {
+                const marked =
+                  await this.jobs
+                    .markTimedOut(
+                      job.id,
+                      job.backendJobId,
+                      this.runningTimeoutMs
+                    );
+
+                if (marked) {
+                  console.log(
+                    `[jobs] ${job.id} -> timed_out`
+                  );
+
+                  continue;
+                }
+              }
+            }
+          }
+
           const backend =
             await this.workers
               .status(

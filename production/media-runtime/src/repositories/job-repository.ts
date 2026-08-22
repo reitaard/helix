@@ -867,4 +867,100 @@ export class JobRepository {
     }
   }
 
+  async markTimedOut(
+    id: string,
+    backendJobId: string,
+    timeoutMs: number
+  ): Promise<boolean> {
+    const client =
+      await this.db.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      await client.query(
+        `
+        SELECT id
+        FROM media_jobs
+        WHERE id = $1
+        FOR UPDATE
+        `,
+        [id]
+      );
+
+      const payload =
+        JSON.stringify({
+          message:
+            "Generation exceeded timeout",
+
+          backendJobId,
+          timeoutMs
+        });
+
+      const updated =
+        await client.query(
+          `
+          UPDATE media_jobs
+          SET
+            status = 'timed_out',
+            error = $2::jsonb,
+            finished_at = NOW(),
+            updated_at = NOW()
+          WHERE id = $1
+            AND status = 'running'
+          RETURNING id
+          `,
+          [
+            id,
+            payload
+          ]
+        );
+
+      if (
+        (updated.rowCount ?? 0) === 0
+      ) {
+        await client.query("COMMIT");
+        return false;
+      }
+
+      await client.query(
+        `
+        INSERT INTO media_job_events (
+          job_id,
+          sequence,
+          event_type,
+          stage,
+          payload
+        )
+        SELECT
+          $1,
+          COALESCE(
+            MAX(sequence),
+            0
+          ) + 1,
+          'job.timed_out',
+          'timed_out',
+          $2::jsonb
+        FROM media_job_events
+        WHERE job_id = $1
+        `,
+        [
+          id,
+          payload
+        ]
+      );
+
+      await client.query("COMMIT");
+      return true;
+    }
+    catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+    finally {
+      client.release();
+    }
+  }
+
+
 }
