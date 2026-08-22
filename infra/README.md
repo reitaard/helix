@@ -285,3 +285,57 @@ The next runtime checkpoint should be a read-only `helix-runtime` shell with a g
 Future concerns still include durable state, evidence/experiment databases, object storage, queues, retries, observability, cost accounting, media retention, and secure remote worker access.
 
 The current priority remains system boundaries and Intelligence/Director/Experiment design. The GPU worker and runtime workstream are validated Production execution primitives, not a reason to let generation infrastructure reshape the upstream Helix brain.
+
+## Helix Media Runtime — Checkpoint 1
+
+Validated on 2026-08-22.
+
+The temporary connectivity probe has been replaced by the real read-only Helix Media Runtime.
+
+Current control path:
+
+    n8n
+      ↓
+    helix-runtime
+      ↓
+    Worker Registry
+      ↓
+    adapter layer
+      ↓
+    Comfy transport
+      ↓
+    Tailscale
+      ↓
+    helix-rtx4060-01
+      ↓
+    ComfyUI
+
+Validated runtime behavior:
+
+- `helix-runtime` runs in a Node 24 production container;
+- TypeScript strict typecheck passes;
+- production TypeScript build passes;
+- Worker Registry exposes the RTX 4060 worker;
+- Comfy transport validates `/system_stats`, `/queue`, `/object_info`, and `/ws`;
+- the worker exposes 1219 registered node classes;
+- HTTP and WebSocket communication work from the VPS to the Windows worker over Tailscale;
+- n8n communicates with the worker through `helix-runtime`;
+- canonical runtime port is `127.0.0.1:8787`;
+- the temporary `helix-probe` container has been removed.
+
+The current worker state is intentionally `cold_ready`.
+
+`ready` is reserved for a later versioned workflow canary.
+
+The runtime is currently read-only against ComfyUI. Prompt submission, cancellation, workflow bindings, generation jobs, artifacts, and scheduling remain deferred while production workflows are still being tested.
+
+The Comfy transport is intentionally kept below a future provider-neutral adapter boundary:
+
+    MediaAdapter
+        ↑
+    ComfyAdapter
+        ↑
+    ComfyClient
+
+Frequent liveness checks should later be separated from expensive readiness/capability checks because `/object_info` is substantially heavier than basic worker health endpoints.
+
