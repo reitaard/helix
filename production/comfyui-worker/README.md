@@ -2,7 +2,7 @@
 
 This folder records the active ComfyUI execution workstream only.
 
-The goal is to make Helix control the dedicated ComfyUI worker reliably from job submission through generation, durable tracking, artifact delivery, retention, and recovery. It does not define the rest of Helix.
+The goal is to keep the dedicated ComfyUI GPU worker reliable while workflow experiments continue changing. It does not define the rest of Helix.
 
 ## Current path
 
@@ -21,7 +21,7 @@ ComfyUI :8188
     ↓
 C:\AI\ComfyUI-CLI\output
     ↓
-VPS spool
+VPS temporary spool
     ↓
 Telegram
 ```
@@ -66,7 +66,13 @@ LTX 2.3 and 2.5 assets are available. LTX 2.5 is the validated generation path.
 - Telegram metadata message + original MP4 document delivery;
 - ffprobe metadata inspection for resolution/duration/size/audio state;
 - delivery retries with durable claim state;
-- immediate VPS spool cleanup after each attempt.
+- immediate VPS spool cleanup after every attempt;
+- prompt-specific cancellation through the pinned Comfy job API;
+- race-safe cancelled terminal state;
+- configurable running-job timeout;
+- delivery state exposed through the media-job API;
+- maximum five Telegram delivery attempts;
+- permanent malformed-artifact failures stop without retrying forever.
 
 ## Proven generations
 
@@ -93,7 +99,7 @@ The C6 run started `2026-08-22T09:37:16.915Z` and finished `2026-08-22T09:46:04.
 
 ## Execution/recovery model
 
-Correctness currently comes from Comfy history and queue state:
+Correctness comes from Comfy history and queue state:
 
 ```text
 PostgreSQL job
@@ -107,11 +113,15 @@ backend_job_id / prompt_id
 reconcile durable state
 ```
 
-This means `helix-runtime` can restart and recover unfinished/completed jobs. WebSocket event tracking can be added later for lower latency, but is not required for correctness.
+This means `helix-runtime` can restart and recover unfinished/completed jobs. Persistent WebSocket tracking can be added later for lower latency, but is not required for correctness.
+
+Running jobs can also be cancelled through the prompt-specific Comfy cancellation endpoint. Helix persists `cancelled` as a terminal state and protects it from late reconciler transitions.
+
+A configurable running timeout reuses the same cancellation path. The deployed value is currently 3600 seconds; queued jobs do not consume this timeout.
 
 ## Output delivery state
 
-Checkpoint `301be69` added and validated the complete current output path:
+The complete output path is validated:
 
 ```text
 Comfy artifact
@@ -131,19 +141,33 @@ durable message IDs
 spool removed
 ```
 
-The final delivery test used the already-generated C6 artifact, completed in one attempt, persisted both Telegram message IDs, and left the spool empty.
+Generation success and delivery success remain separate states.
 
-Generation success and delivery success are intentionally separate states.
+`GET /v1/media/jobs/:jobId` now returns the durable delivery rows alongside the generation state, including provider, status, attempt count, Telegram message IDs, errors, retry time, and delivery timestamps.
+
+Delivery retries are bounded:
+
+```text
+attempt 1 failure -> retry after 30s
+attempt 2 failure -> retry after 60s
+attempt 3 failure -> retry after 120s
+attempt 4 failure -> retry after 240s
+attempt 5 failure -> terminal failed
+```
+
+Malformed artifact metadata is treated as a permanent delivery error immediately. A terminal delivery failure remains visible as `status = failed` with `nextAttemptAt = null` and is not claimed again.
+
+The proven C6 delivery completed in one attempt, persisted Telegram metadata/document message IDs `12` and `13`, and left the VPS spool empty.
 
 ## Input state: defer semantic expansion
 
-The current semantic image override is useful, but actual `/upload/image` staging and broader workflow bindings are postponed while LTX workflows are still being optimized.
+The existing semantic image override remains useful, but actual `/upload/image` staging and broader workflow bindings are postponed while the LTX graphs are still being optimized.
 
-This is deliberate. Future I2V graphs may expose more prompt/sampler/relay controls, and a T2V workflow will have a different input surface.
+This is deliberate. Future I2V graphs may expose more prompt, Prompt Relay, sampler, Director, or temporal controls, and a T2V workflow will have a different input surface.
 
 Keep raw Comfy API workflow submission available and avoid hard-coding an unstable large input schema.
 
-When workflow families stabilize, add semantic bindings around the chosen graphs rather than around temporary node layouts.
+When workflow families stabilize, add semantic bindings around the chosen graphs rather than temporary node layouts.
 
 ## C6 workflow note
 
@@ -178,10 +202,13 @@ Artifact file retrieval               DONE
 Telegram delivery                     DONE
 Durable delivery retry/state          DONE
 VPS temporary cleanup                 DONE
+Media job cancellation                DONE
+Running-job timeout                   DONE
+Delivery status observability         DONE
+Delivery retry cap                    DONE
+Permanent delivery failure handling   DONE
 
-Worker retention cleanup              NEXT
-Generation timeout/cancellation       AFTER RETENTION
-Delivery observability hardening      AFTER RETENTION
+Worker retention cleanup              DEFERRED
 Image upload / staging                DEFERRED
 Prompt / relay / sampler bindings     DEFERRED
 T2V semantic bindings                 DEFERRED
@@ -189,11 +216,13 @@ Persistent WS tracking                OPTIONAL LATER
 Freeze workflow package               ONLY AFTER BASELINE IS CHOSEN
 ```
 
-## Immediate next milestone: worker retention cleanup
+## Current pause point
 
-VPS temporary copies are already removed. Worker originals are not.
+The workflow-independent runtime work is complete enough to pause.
 
-Implement controlled cleanup with an initial 24-hour safety window and delete only artifacts known to Helix. Do not blindly sweep the entire Comfy output tree because the worker can also contain manual/experimental outputs.
+Worker-output retention is intentionally deferred rather than adding a worker-side deletion service just for cleanup. VPS temporary copies are already removed after every delivery attempt.
+
+Return to Comfy/LTX workflow work next: continue I2V optimization, add the simple T2V graph, and discover the final useful input controls before defining a semantic Helix contract.
 
 ## Operational rules
 
@@ -203,5 +232,5 @@ Implement controlled cleanup with an initial 24-hour safety window and delete on
 - Avoid competing GPU workloads during LTX generation.
 - Do not let n8n own low-level Comfy polling/tracking.
 - Do not store Telegram tokens or other secrets in Git.
-- Do not package/freeze the current experimental LTX workflow yet.
+- Do not package/freeze experimental LTX workflows yet.
 - Do not force semantic input work while the workflow control surface is still changing.
