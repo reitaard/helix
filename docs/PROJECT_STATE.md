@@ -2,21 +2,19 @@
 
 ## Current phase
 
-**Preparation / foundation, with a validated Production execution slice and a read-only operator surface.**
+**Preparation / foundation, with a validated Production execution slice and a narrow Telegram operator surface.**
 
-The high-level Helix system division is established. The project is still avoiding a premature full-system implementation, but the Production-side ComfyUI execution path has now been hardened enough to serve as a stable checkpoint while workflow research and system polish continue independently.
+The high-level Helix system division is established. Production execution is now hardened enough to pause as a stable checkpoint while the project returns to the main Helix brain path.
 
 ## Primary system direction
-
-The main post-preparation Helix brain remains:
 
 ```text
 Niche Intelligence -> Director -> Experiment Engine
 ```
 
-Production/generation remains a separate workstream connected through stable creative/variant briefs rather than being allowed to shape Intelligence or Helix Director architecture.
+Production/generation remains a separate workstream connected later through stable creative/variant briefs. Generation technology must not shape the Intelligence or Helix Director contracts.
 
-## Current project divisions
+## Project divisions
 
 - Foundation / Preparation
 - Intelligence
@@ -26,20 +24,7 @@ Production/generation remains a separate workstream connected through stable cre
 - Distribution
 - Analytics / Feedback
 
-## Existing implementation knowledge to preserve
-
-- n8n orchestration experience;
-- asynchronous generation pattern: create task -> task id -> status/result -> output;
-- Runway workflow concepts and task-monitor behavior;
-- Reitaard as a future application shell/interface;
-- provider/model/workflow research as provisional Production input;
-- local LTX 2.5 / ComfyUI production research, including reproducible generation manifests and controlled prompt/seed/workflow testing;
-- LTX Director research: timed prompts, keyframes, Prompt Relay, CGlide continuation, Lightricks temporal tiling, audio, retake and long-video controls as candidate Production control surfaces, not Helix Director dependencies;
-- a pattern where Helix-owned execution intent is compiled into backend-specific workflows instead of agents manipulating provider UIs directly;
-- a durable self-hosted Production runtime boundary: caller/n8n -> `helix-runtime` -> PostgreSQL -> ComfyUI worker -> artifact delivery;
-- a read-only Telegram operator surface inside the runtime for diagnostics, queue state, durable job inspection, and post-generation outbox visibility without giving Telegram unrestricted write control over the worker.
-
-## Active Production-side checkpoint
+## Active Production checkpoint
 
 Current status as of 2026-08-23:
 
@@ -49,6 +34,8 @@ caller / n8n
 helix-runtime :8787
     ├── helix-db
     ├── TelegramCommandService
+    ├── TelegramAlertService
+    ├── TelegramCancelService
     ├── OutboxRepository
     ↓
 ComfyAdapter / ComfyClient
@@ -64,9 +51,7 @@ VPS temporary spool
 Telegram original document + caption
 ```
 
-The dedicated RTX 4060 ComfyUI worker is pinned and operational.
-
-Current identity/runtime facts:
+Current worker identity/runtime facts:
 
 ```text
 durable worker ID: helix-rtx4060-01
@@ -75,42 +60,128 @@ ComfyUI: 0.33.0
 Comfy revision: 7dde56176efa71fd74ef7b3930ab5882d1926288
 Python: 3.12.11
 PyTorch: 2.10.0+cu130
+GPU: RTX 4060
+max GPU jobs: 1
 ```
 
-The VPS-side runtime now supports:
+The VPS-side runtime supports:
 
-- durable media job acceptance and PostgreSQL state;
-- raw Comfy API-workflow submission through `POST /prompt`;
-- Comfy `prompt_id` persistence as the backend job ID;
+- durable media-job acceptance and PostgreSQL state;
+- raw Comfy API-workflow submission;
+- Comfy `prompt_id` persistence as backend job ID;
 - queue/history reconciliation and restart recovery;
-- live `queued -> running -> succeeded` tracking;
-- artifact discovery and retrieval through Comfy `/view`;
-- ffprobe media metadata inspection;
-- durable Telegram original-file delivery with metadata in the same document caption;
+- race-safe terminal transitions;
+- prompt-specific cancellation and running-job timeout;
+- artifact discovery/retrieval and ffprobe metadata;
+- durable Telegram original-file delivery;
 - delivery retry/backoff, stale-claim recovery and terminal retry limits;
-- delivery state exposed through `GET /v1/media/jobs/:jobId`;
-- prompt-specific media-job cancellation;
-- race-safe terminal job transitions;
-- configurable running-job timeout;
-- immediate VPS spool cleanup after each delivery attempt;
+- immediate VPS spool cleanup after delivery attempts;
 - human-friendly worker naming without changing durable IDs;
 - live Comfy/Python/Torch/GPU/VRAM/RAM diagnostics;
-- direct lightweight Comfy queue summaries;
-- read-only Telegram `/status`, `/queue`, `/jobs`, `/job`, `/outbox`, `/help` commands;
-- full durable IDs in `/jobs` for direct copying;
-- unique-prefix `/job` lookup with copied trailing-dot cleanup;
-- read-only outbox summary for pending/sending/retrying/terminal-failed deliveries;
-- hidden `/st`, `/stat`, `/qu`, `/que`, `/jbs`, `/jb`, `/ob`, `/h` aliases without advertising them;
-- read-only pinned-Comfy-revision comparison against upstream `master` with a 15-minute cache;
-- Telegram command registration cleared on startup so the bot does not force a Menu button.
+- read-only pinned-Comfy revision comparison against upstream `master`;
+- durable operator alerts and debug views;
+- one deliberately narrow write-capable Telegram action: confirmed job cancellation.
 
-The Telegram command service accepts messages only from the configured chat ID and remains deliberately read-only. It does not expose restart, shell, package update, or arbitrary worker mutation actions.
+## Telegram operator checkpoint
 
-The Outbox view is presentation-only. `OutboxRepository` reads durable `media_deliveries` state but does not claim, retry, reset, or mutate deliveries. `DeliveryWorker` remains responsible for delivery execution.
+Current advertised commands:
 
-The update indicator is informational only. It reports whether official ComfyUI `master` has commits beyond the configured production pin; it does not automatically update the worker and should not be interpreted as a stable-release guarantee.
+```text
+/status      diagnostics
+/queue       current Comfy + Helix queue state
+/jobs        five most recent jobs with full durable IDs
+/job <id>    one job plus its Outbox/send state
+/outbox      send work still needing attention
+/errors      recent generation/terminal-delivery failures
+/events <id> complete durable event timeline
+/cancel <id> confirmed job cancellation
+/help        command list
+```
 
-Two runtime-controlled LTX 2.5 I2V generations have been proven, including the C6 hybrid run:
+Hidden aliases:
+
+```text
+/st, /stat   -> /status
+/qu, /que    -> /queue
+/jbs         -> /jobs
+/jb          -> /job
+/ob          -> /outbox
+/err         -> /errors
+/ev          -> /events
+/cc          -> /cancel
+/h           -> /help
+```
+
+The service accepts messages only from the configured Telegram chat ID. It does not expose restart, shell, package update, or arbitrary worker mutation actions.
+
+### Read-only inspection
+
+`/jobs` shows full durable job IDs. `/job` and `/events` accept full IDs or unique short prefixes and reject ambiguous prefixes.
+
+`/outbox` is presentation-only. It reads `media_deliveries` without claiming, retrying, resetting, or mutating delivery state. `DeliveryWorker` remains responsible for delivery execution.
+
+`/errors` shows the five most recent failed/timed-out generation jobs and terminal Outbox failures. Cancelled jobs are excluded.
+
+`/events <id>` shows the complete durable `media_job_events` timeline, newest first, with sequence numbers, Helix-local timestamps, and the actual technical event names.
+
+### Operational alerts
+
+`TelegramAlertService` proactively sends alerts for:
+
+```text
+job.failed
+job.timed_out
+terminal delivery.failed
+worker offline
+worker recovered
+```
+
+Event-derived alerts are persisted in `operator_alerts`, deduplicated by durable keys, and delivered with bounded retry. `operator_alert_cursors` starts at the latest existing event during migration so historical failures are not replayed on deployment.
+
+Worker liveness alerts require consecutive observations. `Christopher Nolan` is not declared offline on a single failed check, and a recovery alert is only emitted after a real offline transition. A transition cooldown reduces flapping.
+
+### Safe cancellation
+
+`/cancel <id>` and hidden alias `/cc` are the only write-capable Telegram actions.
+
+The flow is deliberately terminal-style:
+
+```text
+/cancel <id>
+      ↓
+durable pending action
+      ↓
+60-second confirmation window
+      ↓
+yes / no
+```
+
+Rules:
+
+- one pending cancellation per configured Telegram operator chat;
+- `yes` / `no` are case-insensitive;
+- three invalid responses abort the request;
+- a new slash command silently abandons the pending confirmation;
+- expiry is quiet;
+- pending state survives runtime restart until expiry;
+- no inline destructive buttons, message edits, or message deletion.
+
+Operator intent is recorded separately from state transition:
+
+```text
+operator.telegram.cancel_requested
+operator.telegram.cancel_confirmed
+operator.telegram.cancel_aborted
+operator.telegram.cancel_expired
+```
+
+Confirmed cancellation delegates to the existing `JobService.cancel()` path. Telegram does not call ComfyUI directly.
+
+The safe confirmation state machine was validated with a synthetic running job that had no backend job ID, so the tests could not interrupt a real generation. Terminal-job protection, `no`, invalid-response limits, command abandonment, expiry, confirmed intent, and durable audit events were exercised. The next naturally running real generation can provide the final end-to-end proof of an actual backend interruption.
+
+## Proven Production runs
+
+Two runtime-controlled LTX 2.5 I2V generations have been proven, including:
 
 ```text
 Helix job:    job_e2a4a9efff7a47b8b70cd41c068073ac
@@ -119,39 +190,11 @@ Result:       succeeded
 Artifact:     video/LTX-2.5_i2v_00005_.mp4
 ```
 
-The C6 artifact was also delivered through the durable Telegram path in one attempt, with delivery state persisted separately from generation state.
-
-## Telegram operator checkpoint
-
-The current read-only command surface is:
-
-```text
-/status      diagnostics
-/queue       current Comfy + Helix queue state
-/jobs        five most recent jobs with full durable IDs
-/job <id>    one job plus its Outbox/send state
-/outbox      only send work still needing attention
-/help        command list
-```
-
-`/outbox` excludes already-delivered rows. Its presentation maps internal delivery states as follows:
-
-```text
-pending                         -> pending
-delivering                      -> sending
-failed + next_attempt_at set    -> retrying
-failed + next_attempt_at null   -> failed
-```
-
-The command shows at most five attention items, prioritizes terminal failures, and reports retry timing or compact terminal error text where useful. This keeps the operator surface actionable rather than turning it into another history list.
-
-Write-capable Telegram actions remain deferred. A future `/cancel <id>` can be considered separately after the read-only job/outbox layer is proven in normal use.
+The C6 artifact was delivered through the durable Telegram path with generation state and delivery state persisted separately.
 
 ## Production workflow policy
 
-The runtime is intentionally not being expanded into a large semantic workflow API yet.
-
-Current policy:
+The runtime is intentionally not being expanded into a large semantic workflow API while the generation graphs are still changing.
 
 ```text
 raw Comfy API workflow
@@ -167,32 +210,15 @@ freeze/version those graphs
 add semantic Helix bindings around proven controls
 ```
 
-Deferred while workflow controls are still moving:
+Still deferred:
 
 - actual image upload/staging through `/upload/image`;
 - broad prompt/chunk-prompt bindings;
-- Prompt Relay semantic bindings;
-- sampler/Director semantic bindings;
+- Prompt Relay/sampler/Director semantic bindings;
 - T2V semantic bindings;
 - persistent WebSocket execution tracking;
 - worker output-retention deletion infrastructure;
-- write-capable Telegram operator actions.
-
-Worker retention is deferred because the traditional Comfy output path does not currently provide the runtime with a clean per-artifact delete primitive. Adding a separate worker-side deletion service only for cleanup is not justified at this checkpoint.
-
-## Current Production direction
-
-The immediate session-level focus may remain lightweight runtime/operator polish rather than generation workflow work. This does not change the longer Production sequence:
-
-1. keep the runtime and operator surface small and reliable;
-2. continue I2V quality/continuity optimization when returning to workflow work;
-3. establish a simple native LTX 2.5 T2V baseline;
-4. test only controls that materially improve output or continuity;
-5. discover which prompt, temporal, sampler and Director controls actually deserve a stable interface;
-6. keep raw API-format graphs usable through Helix during experimentation;
-7. freeze/version I2V and T2V workflow families only after they stabilize.
-
-The existing LTX Director/CGlide/Lightricks findings remain valuable Production research, but they are not a reason to destabilize the current runtime checkpoint. See `production/ltx-director/` for detailed experiment history.
+- broader Telegram mutation commands beyond confirmed job cancellation.
 
 One operational validation remains pending: the Windows scheduled task has been started successfully by hand, but a real reboot -> automatic ComfyUI worker startup has not yet been proven.
 
@@ -203,19 +229,13 @@ One operational validation remains pending: the Windows scheduled task has been 
 - [ ] Define draft contracts for `Niche`, `ResearchFinding`, `NicheModel`, `ContentIdea`, `ContentSpec`, `Experiment`, `Variant`, `MediaAsset`, `PublishedPost`, and `PerformanceSnapshot`.
 - [ ] Define evidence/provenance requirements for Intelligence research.
 - [x] Establish durable Production state outside n8n for the active ComfyUI execution path.
-- [ ] Keep real credentials outside git and document configuration names only when introduced.
-- [ ] Document Reitaard <-> Helix boundaries when backend contracts become clearer.
-- [x] Preserve provider-neutral generation job knowledge inside Production without making it a blocker for Intelligence work.
-- [ ] When Production workflow families stabilize, validate whether an internal `ProductionPlan` boundary is useful before promoting it to a shared schema.
 - [x] Validate native LTX 2.5 I2V generation on the standalone worker.
-- [x] Validate Prompt Relay as a Production temporal-control mechanism.
-- [x] Validate CGlide chunk continuation and handoff behavior.
-- [x] Validate Lightricks LoopingSampler temporal extension.
 - [x] Pin the standalone ComfyUI/custom-node execution stack.
 - [x] Submit, track, recover and deliver a real generation through `helix-runtime`.
-- [x] Add read-only Telegram system status and queue visibility.
-- [x] Add Telegram recent-job and unique-prefix job inspection.
-- [x] Add read-only Telegram Outbox/send-state visibility.
+- [x] Add Telegram system status, queue, job, and Outbox visibility.
+- [x] Add durable Telegram operational alerts and deduplication.
+- [x] Add `/errors` and complete timestamped `/events` debug views.
+- [x] Add safe durable `/cancel` + `/cc` confirmation flow.
 - [x] Add live worker RAM/VRAM diagnostics and read-only Comfy upstream-drift awareness.
 - [ ] Validate a simple T2V workflow before defining T2V semantic bindings.
 - [ ] Validate real Windows reboot/AtStartup behavior for the ComfyUI worker.
@@ -224,15 +244,18 @@ One operational validation remains pending: the Windows scheduled task has been 
 
 **Niche Intelligence design.**
 
-The next brain-design work should answer:
+The next phase should define:
 
-1. What exactly is a niche in Helix?
-2. What sources and observations enter the Intelligence system?
-3. What features should be extracted from content/examples?
-4. How do we represent hooks, formats, topics, pacing, visuals, narrative structure, audience, saturation, novelty and temporal trends?
-5. How do we distinguish observed facts from inferred patterns?
-6. What does a `NicheModel` contain?
-7. How does the Director query and consume it?
+1. what exactly a `Niche` means in Helix;
+2. which platform observations enter the Intelligence system;
+3. what raw evidence is persisted from posts/reels/shorts/accounts/tags;
+4. which structured features are extracted from each content example;
+5. how hooks, formats, topics, pacing, visuals, narrative structure, audience signals, saturation, novelty and temporal trends are represented;
+6. how observed facts are separated from inferred patterns;
+7. what a `NicheModel` contains;
+8. how the Director queries and consumes that model.
+
+The intended research direction is platform-first rather than web-search-first: YouTube/Facebook/Reels-style data should provide primary behavioral evidence, scoped by niche/tags/accounts/content clusters, while broader web research supplements rather than replaces platform observations.
 
 ## Later
 
