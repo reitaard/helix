@@ -36,6 +36,11 @@ export interface AdapterReadiness {
 
   device?: unknown;
 
+  memory?: {
+    total: number;
+    free: number;
+  };
+
   queue?: {
     running: number;
     pending: number;

@@ -157,6 +157,21 @@ export class ComfyAdapter
       );
   }
 
+  async queueSummary() {
+    const queue =
+      await this.client.queue();
+
+    return {
+      running:
+        queue.queue_running
+          ?.length ?? 0,
+
+      pending:
+        queue.queue_pending
+          ?.length ?? 0
+    };
+  }
+
   async readiness():
     Promise<AdapterReadiness> {
 
@@ -288,6 +303,23 @@ export class ComfyAdapter
       result.device =
         stats.value
           .devices?.[0];
+
+      if (
+        typeof system
+          ?.ram_total ===
+          "number" &&
+        typeof system
+          ?.ram_free ===
+          "number"
+      ) {
+        result.memory = {
+          total:
+            system.ram_total,
+
+          free:
+            system.ram_free
+        };
+      }
     }
 
     if (

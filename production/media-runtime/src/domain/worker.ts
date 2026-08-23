@@ -10,7 +10,9 @@ export type WorkerState =
 
 export interface WorkerDefinition {
   id: string;
+  name: string;
   profile: string;
+  revision: string;
 
   adapter: WorkerAdapter;
   endpoint: string;

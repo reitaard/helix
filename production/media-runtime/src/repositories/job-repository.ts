@@ -101,6 +101,34 @@ function mapJob(
   };
 }
 
+interface ActiveMediaJobRow {
+  id: string;
+  status: string;
+
+  worker_id:
+    string | null;
+
+  created_at:
+    Date;
+
+  started_at:
+    Date | null;
+}
+
+export interface ActiveMediaJobSummary {
+  id: string;
+  status: string;
+
+  workerId:
+    string | null;
+
+  createdAt:
+    string;
+
+  startedAt:
+    string | null;
+}
+
 export class JobRepository {
   constructor(
     private readonly db: Pool

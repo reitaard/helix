@@ -38,6 +38,14 @@ import {
   TelegramDelivery
 } from "./delivery/telegram.js";
 
+import {
+  TelegramCommandService
+} from "./telegram/command-service.js";
+
+import {
+  ComfyUpdateChecker
+} from "./workers/comfy-update-checker.js";
+
 
 import {
   WorkerRegistry
@@ -120,6 +128,29 @@ const deliveryWorker =
       )
     : null;
 
+const comfyUpdateChecker =
+  config.workers[0]
+    ? new ComfyUpdateChecker(
+        config.workers[0]
+          .revision
+      )
+    : null;
+
+const telegramCommandService =
+  config.telegram &&
+  config.workers[0] &&
+  comfyUpdateChecker
+    ? new TelegramCommandService(
+        config.telegram.botToken,
+        config.telegram.chatId,
+        config.workers[0].id,
+        comfyUpdateChecker,
+        db,
+        registry,
+        jobRepository
+      )
+    : null;
+
 const app =
   createApp(
     workers,
@@ -136,6 +167,7 @@ async function shutdown(
 
   reconciler.stop();
   deliveryWorker?.stop();
+  telegramCommandService?.stop();
 
   await app.close();
   await db.end();
@@ -169,12 +201,14 @@ try {
 
   reconciler.start();
   deliveryWorker?.start();
+  telegramCommandService?.start();
 }
 catch (error) {
   app.log.error(error);
 
   reconciler.stop();
   deliveryWorker?.stop();
+  telegramCommandService?.stop();
 
   await db.end();
 

@@ -16,6 +16,20 @@ const envSchema = z.object({
   HELIX_WORKER_RTX4060_URL:
     z.string().url(),
 
+  HELIX_WORKER_RTX4060_NAME:
+    z.string()
+      .min(1)
+      .default(
+        "Christopher Nolan"
+      ),
+
+  HELIX_WORKER_RTX4060_REVISION:
+    z.string()
+      .min(7)
+      .default(
+        "7dde56176efa71fd74ef7b3930ab5882d1926288"
+      ),
+
   HELIX_DATABASE_URL:
     z.string().min(1),
 
@@ -86,6 +100,12 @@ export const config = {
     {
       id:
         "helix-rtx4060-01",
+
+      name:
+        env.HELIX_WORKER_RTX4060_NAME,
+
+      revision:
+        env.HELIX_WORKER_RTX4060_REVISION,
 
       profile:
         "comfy-video-ltx-stable",

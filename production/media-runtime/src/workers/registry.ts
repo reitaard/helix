@@ -47,7 +47,9 @@ export class WorkerRegistry {
       ...this.definitions.values()
     ].map(worker => ({
       id: worker.id,
+      name: worker.name,
       profile: worker.profile,
+      revision: worker.revision,
 
       runtime:
         worker.adapter,
@@ -73,7 +75,9 @@ export class WorkerRegistry {
 
     return {
       id: worker.id,
+      name: worker.name,
       profile: worker.profile,
+      revision: worker.revision,
 
       runtime:
         worker.adapter,
@@ -107,7 +111,9 @@ export class WorkerRegistry {
 
     return {
       workerId: worker.id,
+      name: worker.name,
       profile: worker.profile,
+      revision: worker.revision,
 
       ...result
     };
@@ -146,11 +152,26 @@ export class WorkerRegistry {
 
     return {
       workerId: worker.id,
+      name: worker.name,
       profile: worker.profile,
+      revision: worker.revision,
       state,
 
       ...result
     };
+  }
+
+  async queue(
+    id: string
+  ) {
+    const adapter =
+      this.adapters.get(id);
+
+    if (!adapter) {
+      return null;
+    }
+
+    return adapter.queueSummary();
   }
 
   async submit(

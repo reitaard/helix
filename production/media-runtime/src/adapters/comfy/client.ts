@@ -27,6 +27,9 @@ export interface ComfySystemStats {
     comfyui_version?: string;
     python_version?: string;
     pytorch_version?: string;
+
+    ram_total?: number;
+    ram_free?: number;
   };
 
   devices?: unknown[];
