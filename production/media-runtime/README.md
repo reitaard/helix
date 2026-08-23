@@ -2,7 +2,7 @@
 
 Execution service used to control the dedicated ComfyUI GPU worker.
 
-The active scope is intentionally narrow: accept durable media jobs, submit raw Comfy API workflows, reconcile execution, support cancellation/timeouts, capture artifacts, deliver generated media, expose a read-only Telegram operator surface, and keep the worker/runtime boundary reliable while workflow experiments continue changing.
+The active scope is intentionally narrow: accept durable media jobs, submit raw Comfy API workflows, reconcile execution, support cancellation/timeouts, capture artifacts, deliver generated media, expose a narrow Telegram operator surface, and keep the worker/runtime boundary reliable while workflow experiments continue changing.
 
 See [`../comfyui-worker/README.md`](../comfyui-worker/README.md) for the focused worker checkpoint and roadmap.
 
@@ -19,7 +19,11 @@ helix-runtime :8787
     │     ├── worker_observations
     │     ├── media_jobs
     │     ├── media_job_events
-    │     └── media_deliveries
+    │     ├── media_deliveries
+    │     ├── operator_alerts
+    │     ├── operator_alert_cursors
+    │     ├── operator_worker_alert_state
+    │     └── operator_pending_actions
     │
     ├── WorkerRegistry
     │     ↓
@@ -37,9 +41,17 @@ helix-runtime :8787
     │     ↓
     │   read-only delivery attention view
     │
+    ├── TelegramAlertService
+    │     ↓
+    │   durable operational alerts
+    │
+    ├── TelegramCancelService
+    │     ↓
+    │   confirmed job cancellation
+    │
     └── TelegramCommandService
           ↓
-        read-only operator commands
+        operator + debug commands
 ```
 
 ## Current worker
@@ -110,7 +122,9 @@ Terminal job transitions are race-safe: once Helix records `cancelled` or anothe
 
 ## Telegram operator commands
 
-`TelegramCommandService` is a read-only operator surface inside `helix-runtime`. It uses Telegram `getUpdates` long polling and accepts commands only from the configured `HELIX_TELEGRAM_CHAT_ID`; other chats are ignored.
+`TelegramCommandService` is a narrow operator surface inside `helix-runtime`. It uses Telegram `getUpdates` long polling and accepts messages only from the configured `HELIX_TELEGRAM_CHAT_ID`; other chats are ignored.
+
+Diagnostics and debugging remain read-only. Confirmed job cancellation is the only write-capable Telegram action in this checkpoint.
 
 Current advertised commands:
 
@@ -120,6 +134,9 @@ Current advertised commands:
 /jobs        - Recent jobs
 /job <id>    - Job details
 /outbox      - Send queue
+/errors      - Recent failures
+/events <id> - Job events
+/cancel <id> - Cancel job
 ```
 
 `/help` remains available. Hidden aliases are intentionally not advertised:
@@ -130,6 +147,9 @@ Current advertised commands:
 /jbs         -> /jobs
 /jb          -> /job
 /ob          -> /outbox
+/err         -> /errors
+/ev          -> /events
+/cc          -> /cancel
 /h           -> /help
 ```
 
@@ -139,52 +159,27 @@ All operator titles use the same Telegram HTML treatment: bold + italic outer ti
 
 ### `/status`
 
-Combines:
+Combines runtime uptime, independently timed PostgreSQL health, human-friendly worker state, direct Comfy queue counts, backend versions, GPU/VRAM/RAM from `/system_stats`, and read-only Comfy upstream drift awareness.
 
-- runtime uptime;
-- independently timed PostgreSQL `SELECT 1` health;
-- human-friendly worker name and friendly state (`cold_ready` is displayed as `Idle`);
-- direct Comfy queue counts;
-- ComfyUI/Python/PyTorch versions;
-- GPU name, VRAM and host RAM from live Comfy `/system_stats`;
-- read-only Comfy upstream drift awareness.
-
-Windows shared-GPU-memory usage is not shown because Comfy `/system_stats` does not expose the Task Manager shared-memory value. It is not estimated or mislabeled.
+Windows shared-GPU-memory usage is not shown because Comfy `/system_stats` does not expose the Task Manager shared-memory value.
 
 ### `/queue`
 
-Stays lightweight: it reads Comfy `/queue` directly and combines that with active Helix database jobs. It does not run the heavier readiness checks.
+Reads Comfy `/queue` directly and combines it with active Helix database jobs. It does not run the heavier readiness checks.
 
 ### `/jobs`
 
-Shows the five most recent media jobs. This command deliberately shows the full durable `job_...` identifier in monospace so the real ID can be copied directly.
+Shows the five most recent media jobs with full durable `job_...` identifiers in monospace. Status is presented in bold square brackets and runtime units remain italic.
 
 ### `/job <id>`
 
-Accepts:
+Accepts a full durable ID, a unique short prefix, or a copied short display value with trailing dots such as `e2a4a9...`. Ambiguous prefixes are rejected rather than guessed.
 
-- a full durable `job_...` ID;
-- a unique short prefix such as `e2a4a9`;
-- a copied short display value with trailing dots such as `e2a4a9...`.
-
-Trailing dots are removed before lookup. A short prefix must resolve uniquely; ambiguous prefixes are rejected rather than guessed.
-
-The detail view includes job state, worker presentation name, tool, runtime, timestamps, and the associated send state. Telegram presents the send section as `[Outbox]` even though the internal persistence model remains `media_deliveries`.
+The detail view includes job state, worker presentation name, tool, runtime, timestamps, and associated Outbox/send state.
 
 ### `/outbox`
 
-`Outbox` is the operator-facing name for delivery work that still needs attention after generation succeeds.
-
-Already-delivered rows are intentionally excluded. The summary exposes:
-
-```text
-Pending
-Sending
-Retrying
-Failed
-```
-
-Internal delivery states are translated only for presentation:
+Already-delivered rows are excluded. Presentation states are:
 
 ```text
 pending                         -> pending
@@ -193,33 +188,88 @@ failed + next_attempt_at set    -> retrying
 failed + next_attempt_at null   -> failed
 ```
 
-The view shows at most five actionable items, prioritizing terminal failures first, then retries, in-flight sends, and pending sends. If more exist, a compact `+N more` line is shown.
+The view shows at most five actionable items and prioritizes terminal failures. `OutboxRepository` is read-only; `DeliveryWorker` remains the only component responsible for delivery execution/retry progression.
 
-Retrying rows show the next retry as a relative time (`now`, seconds, or minutes). Terminal failures show a compact error message capped to avoid Telegram noise. The current implementation queries the Telegram provider because Telegram is the active durable output provider.
+### `/errors`
 
-`OutboxRepository` is read-only. It does not claim, retry, reset, or mutate deliveries; `DeliveryWorker` remains the only component responsible for delivery execution/retry progression.
+Shows the five most recent generation failures/timeouts and terminal Outbox failures. Cancelled jobs are excluded.
+
+Full durable job IDs are shown. Each error is rendered in a compact Telegram quote.
+
+### `/events <id>`
+
+Uses the same safe job-reference rules as `/job` and shows the complete durable `media_job_events` timeline newest first.
+
+Each event includes its sequence number, Helix-local timestamp, and actual technical event name such as `job.running`, `job.succeeded`, or `delivery.failed`. The history is not silently truncated to ten rows.
+
+## Operational Telegram alerts
+
+`TelegramAlertService` proactively notifies the configured operator without taking ownership of execution.
+
+Current alerts:
+
+```text
+job.failed
+job.timed_out
+terminal delivery.failed
+worker offline
+worker recovered
+```
+
+Generation success does not create a separate alert because the generated artifact already arrives through normal Telegram delivery.
+
+Migration `0003_operator_alerts.sql` adds `operator_alerts`, `operator_alert_cursors`, and `operator_worker_alert_state`.
+
+The domain-event cursor is initialized at the latest existing event so deployment does not replay historical failures. Event-derived alerts use durable dedupe keys and bounded Telegram send retry.
+
+Worker monitoring requires consecutive observations before an offline/recovered transition is emitted. Initial successful reachability establishes the worker as online without emitting a false recovery alert. A cooldown reduces transition flapping.
+
+## Confirmed Telegram cancellation
+
+`/cancel <id>` and hidden alias `/cc` are the only write-capable Telegram commands in this checkpoint.
+
+Migration `0004_operator_actions.sql` adds `operator_pending_actions`, with one pending action per configured operator chat.
+
+The flow is terminal-style rather than button-driven:
+
+```text
+/cancel <id>
+      ↓
+durable pending action
+      ↓
+60-second confirmation
+      ↓
+yes / no
+```
+
+Rules:
+
+- `yes` / `no` are case-insensitive;
+- three invalid responses abort the request;
+- a new slash command silently abandons the pending confirmation;
+- expiry is quiet;
+- pending state survives runtime restart until expiry;
+- terminal jobs never enter the confirmation flow;
+- no inline destructive buttons, message edits, or message deletion.
+
+Durable operator-intent events:
+
+```text
+operator.telegram.cancel_requested
+operator.telegram.cancel_confirmed
+operator.telegram.cancel_aborted
+operator.telegram.cancel_expired
+```
+
+A confirmed request delegates to the existing `JobService.cancel()` path. Telegram does not call ComfyUI directly.
+
+The confirmation state machine was validated with a synthetic running job that had no backend job ID. That exercised confirmation, `no`, invalid-response limits, new-command abandonment, timeout expiry, terminal-job protection, confirmed intent, and durable audit events without risking a real generation.
 
 ## Read-only Comfy update awareness
 
-The current worker pin is configured as `HELIX_WORKER_RTX4060_REVISION`.
+The worker pin is configured as `HELIX_WORKER_RTX4060_REVISION`.
 
-`ComfyUpdateChecker` compares that revision with official `Comfy-Org/ComfyUI` `master` using GitHub's compare API. Results are cached for 15 minutes; temporary failures are retried sooner and render as unavailable rather than breaking `/status`.
-
-The status is informational only:
-
-```text
-Current
-```
-
-or:
-
-```text
-Available (N commits)
-```
-
-When drift exists, Telegram links `Available` to the official ComfyUI releases page for review. The worker is never updated automatically.
-
-This is commit-level upstream drift, not a claim that every upstream commit is a new stable release.
+`ComfyUpdateChecker` compares that revision with official `Comfy-Org/ComfyUI` `master` using GitHub's compare API. Results are cached for 15 minutes and are informational only. The worker is never updated automatically.
 
 ## Cancellation and timeout
 
@@ -235,15 +285,15 @@ Helix exposes this through:
 POST /v1/media/jobs/:jobId/cancel
 ```
 
-Cancelling an already-terminal Helix job is a no-op and reports the existing status.
+Cancelling an already-terminal job is a no-op and reports the existing status.
 
-Running-job timeout uses the same cancellation path. It is configured with `HELIX_JOB_TIMEOUT_SECONDS`; the deployed value is currently `3600` seconds. Only jobs already in `running` state consume this timeout, so queued jobs waiting for the single GPU are not timed out by this policy.
+Running-job timeout uses the same cancellation path and is configured with `HELIX_JOB_TIMEOUT_SECONDS`; the deployed value is currently `3600` seconds. Only jobs already in `running` state consume this timeout.
 
 A timed-out job is persisted as `timed_out` with a durable `job.timed_out` event.
 
 ## Durable Telegram output delivery
 
-The current delivery path is:
+The delivery path is:
 
 ```text
 job succeeded
@@ -257,51 +307,24 @@ Comfy /view
 VPS temporary spool
     ↓
 ffprobe
-    ├── width / height
-    ├── duration
-    ├── size
-    └── audio present / absent
     ↓
 Telegram sendDocument
     ├── original MP4 file
     └── metadata as HTML caption
           └── expandable blockquote
     ↓
-persist Telegram document message ID
+persist Telegram message ID
     ↓
 remove VPS temporary copy
 ```
 
-The original video is sent as a Telegram document/file so Telegram does not recompress it. Filename/title stays outside the expandable caption metadata, and generation job IDs are displayed as the first six characters after `job_` plus `...` where a compact identifier is appropriate.
+The original video is sent as a Telegram document/file so Telegram does not recompress it. Generation and delivery state remain separate.
 
-Current delivery persists the same Telegram message ID into both legacy `metadata_message_id` and `document_message_id` columns because metadata and document now live in one message.
-
-Generation state and delivery state remain separate. A successful generation stays `succeeded` even if delivery fails.
-
-Delivery claims use PostgreSQL state, `FOR UPDATE SKIP LOCKED`, stale-delivery recovery, and exponential backoff. Retries are bounded to five attempts:
-
-```text
-attempt 1 failure -> retry after 30s
-attempt 2 failure -> retry after 60s
-attempt 3 failure -> retry after 120s
-attempt 4 failure -> retry after 240s
-attempt 5 failure -> terminal failed
-```
-
-Malformed artifact metadata is a permanent delivery error and stops immediately. Terminal delivery failures remain visible as `failed` with `next_attempt_at = NULL` and are no longer claimed.
+Delivery claims use PostgreSQL state, `FOR UPDATE SKIP LOCKED`, stale-delivery recovery, and exponential backoff. Retries are bounded to five attempts. Permanent malformed-artifact failures stop immediately. Terminal delivery failures remain `failed` with `next_attempt_at = NULL`.
 
 The Telegram bot token and chat ID remain deployment secrets outside Git.
 
 ## Proven runs on 2026-08-22
-
-First runtime-controlled replay:
-
-```text
-Helix job:    job_d305b8b3b4aa4336a455b35043e3060a
-Comfy prompt: af67e3be-d307-4757-89fd-6606304c4c4d
-Result:       succeeded
-Artifact:     video/LTX-2.5_i2v_00004_.mp4
-```
 
 C6 hybrid runtime run:
 
@@ -314,82 +337,62 @@ Result:       succeeded
 Artifact:     video/LTX-2.5_i2v_00005_.mp4
 ```
 
-These runs proved durable acceptance, live reconciliation, artifact capture/retrieval, and the delivery path. Cancellation plumbing was also validated safely against the already-completed C6 job as a no-op.
+These runs proved durable acceptance, live reconciliation, artifact capture/retrieval, and the delivery path. Cancellation plumbing was also safely validated against completed jobs, and the Telegram confirmation state machine was validated with synthetic non-backend work.
 
-## C6 workflow note
+## Workflow policy
 
-The active experimental API graph is stored on the VPS at:
-
-```text
-/opt/helix-runtime/workflows/c6.api.json
-```
-
-It is intentionally not frozen into the repository.
-
-The API export contained 54 executable nodes. A UI/API serialization mismatch was discovered for `LTXVLoopingSampler.temporal_overlap_cond_strength`: the UI workflow's named value said `0.35`, while the exported API graph contained `0.5`. The runtime test copy was corrected to `0.35` before the successful C6 run.
-
-## Input state: intentionally deferred
-
-A semantic image override already exists. It finds the unique `LoadImage` node, preferring title `Load First Frame`, validates a relative Comfy input filename, clones the graph, and changes only the clone.
-
-Actual upload/staging through Comfy `/upload/image` is not implemented yet.
-
-Full LTX semantic bindings are intentionally deferred because the workflow is still changing. Current/future graphs may expose additional prompt paths, Prompt Relay controls, sampler controls, Director controls, image inputs, and separate T2V behavior.
-
-Current policy:
+Raw Comfy API workflow remains the execution contract while workflow experiments continue.
 
 ```text
-raw Comfy API workflow remains the execution contract
+raw Comfy API workflow
+        ↓
+helix-runtime execution
         ↓
 workflow experiments continue in ComfyUI
         ↓
-I2V / T2V graphs can be submitted raw when needed
+choose stable I2V / T2V families
         ↓
-freeze semantic bindings only after a workflow family stabilizes
+freeze/version graphs
+        ↓
+add semantic bindings
 ```
+
+Actual image upload/staging, broad semantic prompt/relay/sampler bindings, T2V bindings, persistent WebSocket tracking, and worker output-retention deletion infrastructure remain deferred.
 
 ## Runtime checkpoint
 
-Workflow-independent runtime hardening and the read-only Telegram operator surface are complete enough to pause here.
+Workflow-independent runtime hardening and the Telegram operational-control surface are complete enough to pause here.
 
 Completed:
 
 - durable submission and restart recovery;
 - artifact capture/retrieval;
-- Telegram original-file delivery with same-message metadata caption;
-- durable delivery retry/state and VPS spool cleanup;
+- durable original-file Telegram delivery and bounded retry;
 - cancellation and running timeout;
 - race-safe terminal job states;
-- delivery status observability and bounded retry/backoff;
-- permanent delivery failure handling;
 - human-friendly worker presentation name;
-- read-only `/status`, `/queue`, `/jobs`, `/job`, `/outbox`, `/help` Telegram commands;
-- full durable IDs in `/jobs` and safe prefix lookup in `/job`;
-- read-only outbox attention view with retry/failure semantics;
-- live worker RAM/VRAM diagnostics;
+- `/status`, `/queue`, `/jobs`, `/job`, `/outbox`, `/errors`, `/events`, `/cancel`, `/help`;
+- full durable IDs and safe prefix lookup;
+- durable operational alerts and deduplication;
+- worker offline/recovered transition monitoring;
+- complete timestamped durable event inspection;
+- durable 60-second terminal-style cancellation confirmation;
 - read-only pinned-revision/upstream update awareness.
 
 Deferred:
 
 - worker output retention cleanup;
 - actual image upload/staging;
-- prompt/relay/sampler semantic bindings;
+- semantic workflow bindings;
 - T2V semantic bindings;
 - persistent WebSocket execution tracking;
-- write-capable Telegram operations such as cancellation.
-
-Worker output retention is intentionally deferred. The current traditional Comfy output path does not give this runtime a clean enough per-artifact delete primitive, and adding a worker-side deletion service only for retention is not justified at this checkpoint. VPS temporary copies are already deleted after every delivery attempt.
+- broader Telegram write actions beyond confirmed cancellation.
 
 ## Next direction
 
-Continue lightweight system/operator polish as useful without turning Telegram into an unrestricted control plane. When returning to workflow work:
+The next main Helix phase is **Niche Intelligence**. The Production runtime should remain stable while Intelligence defines platform-first evidence, content features, niche structure, trend/saturation/novelty signals, and the `NicheModel` contract consumed later by the Director.
 
-1. continue I2V workflow optimization;
-2. add and validate a simple native LTX 2.5 T2V workflow;
-3. discover the final prompt/relay/sampler/Director controls that materially matter;
-4. keep using raw API-format graphs through Helix during experimentation;
-5. freeze/version workflow families only after they stabilize;
-6. add semantic Helix bindings after that point.
+When Production workflow work resumes separately, continue I2V optimization and establish a simple native LTX 2.5 T2V baseline before freezing semantic bindings.
 
 ## Runtime stack
 
@@ -409,7 +412,7 @@ Continue lightweight system/operator polish as useful without turning Telegram i
 - Keep `maxConcurrentGpuJobs: 1` for the current RTX 4060 worker.
 - Preserve the durable worker ID even when the display name changes.
 - Treat the Comfy revision as a production pin; update only deliberately after validation.
-- Keep Telegram diagnostics/job/outbox views read-only unless a separate write-capability checkpoint is explicitly chosen.
+- Keep Telegram write scope narrow: confirmed job cancellation is allowed, while restart, shell, update, and arbitrary mutation commands remain prohibited.
 - Do not let n8n own low-level Comfy polling/tracking.
 - Do not store Telegram tokens or other secrets in Git.
 - Do not freeze/package experimental LTX workflows until a stable baseline is chosen.
