@@ -6,17 +6,21 @@ The project is intentionally divided so that the **brain of the system is indepe
 
 ## Current status
 
-**Preparation / foundation phase.**
+**Preparation / foundation phase, with the first Production execution slice locked as a stable checkpoint.**
 
-After preparation, the active development path is:
+The active brain-development path is:
 
 ```text
-Intelligence
-  → Director
-  → Experiment Engine
+Niche Intelligence
+      ↓
+Director
+      ↓
+Experiment Engine
 ```
 
-Production/generation will be developed as a separate branch and connected through stable briefs/contracts later.
+Production/generation continues as a separate workstream and will connect through stable briefs/contracts rather than shaping the Intelligence or Director architecture.
+
+The current Production checkpoint already includes a durable ComfyUI execution runtime, PostgreSQL job/delivery state, original-file Telegram delivery, operator diagnostics, durable operational alerts, complete job-event debugging, and guarded terminal-style job cancellation. See [`production/README.md`](production/README.md) and [`production/media-runtime/README.md`](production/media-runtime/README.md).
 
 ## System divisions
 
