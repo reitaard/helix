@@ -35,6 +35,18 @@ import {
 } from "./repositories/outbox-repository.js";
 
 import {
+  EventRepository
+} from "./repositories/event-repository.js";
+
+import {
+  OperatorAlertRepository
+} from "./repositories/operator-alert-repository.js";
+
+import {
+  OperatorActionRepository
+} from "./repositories/operator-action-repository.js";
+
+import {
   DeliveryWorker
 } from "./delivery/worker.js";
 
@@ -45,6 +57,18 @@ import {
 import {
   TelegramCommandService
 } from "./telegram/command-service.js";
+
+import {
+  TelegramDebugService
+} from "./telegram/debug-service.js";
+
+import {
+  TelegramCancelService
+} from "./telegram/cancel-service.js";
+
+import {
+  TelegramAlertService
+} from "./telegram/alert-service.js";
 
 import {
   ComfyUpdateChecker
@@ -102,12 +126,44 @@ const deliveryRepository =
 const outboxRepository =
   new OutboxRepository(db);
 
+const eventRepository =
+  new EventRepository(db);
+
+const operatorAlertRepository =
+  new OperatorAlertRepository(
+    db
+  );
+
+const operatorActionRepository =
+  new OperatorActionRepository(
+    db
+  );
+
+const telegramDebugService =
+  new TelegramDebugService(
+    jobRepository,
+    eventRepository
+  );
+
 const jobs =
   new JobService(
     jobRepository,
     registry,
     deliveryRepository
   );
+
+const telegramCancelService =
+  config.telegram &&
+  config.workers[0]
+    ? new TelegramCancelService(
+        config.telegram.chatId,
+        operatorActionRepository,
+        jobRepository,
+        jobs,
+        config.workers[0].id,
+        config.workers[0].name
+      )
+    : null;
 
 const reconciler =
   new JobReconciler(
@@ -142,10 +198,24 @@ const comfyUpdateChecker =
       )
     : null;
 
+const telegramAlertService =
+  config.telegram &&
+  config.workers[0]
+    ? new TelegramAlertService(
+        config.telegram.botToken,
+        config.telegram.chatId,
+        config.workers[0].id,
+        config.workers[0].name,
+        operatorAlertRepository,
+        registry
+      )
+    : null;
+
 const telegramCommandService =
   config.telegram &&
   config.workers[0] &&
-  comfyUpdateChecker
+  comfyUpdateChecker &&
+  telegramCancelService
     ? new TelegramCommandService(
         config.telegram.botToken,
         config.telegram.chatId,
@@ -155,7 +225,9 @@ const telegramCommandService =
         registry,
         jobRepository,
         deliveryRepository,
-        outboxRepository
+        outboxRepository,
+        telegramDebugService,
+        telegramCancelService
       )
     : null;
 
@@ -175,6 +247,8 @@ async function shutdown(
 
   reconciler.stop();
   deliveryWorker?.stop();
+  telegramAlertService?.stop();
+  telegramCancelService?.stop();
   telegramCommandService?.stop();
 
   await app.close();
@@ -209,6 +283,8 @@ try {
 
   reconciler.start();
   deliveryWorker?.start();
+  telegramAlertService?.start();
+  telegramCancelService?.start();
   telegramCommandService?.start();
 }
 catch (error) {
@@ -216,6 +292,7 @@ catch (error) {
 
   reconciler.stop();
   deliveryWorker?.stop();
+  telegramAlertService?.stop();
   telegramCommandService?.stop();
 
   await db.end();

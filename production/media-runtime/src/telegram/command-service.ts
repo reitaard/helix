@@ -15,6 +15,14 @@ import {
 } from "../repositories/outbox-repository.js";
 
 import {
+  TelegramDebugService
+} from "./debug-service.js";
+
+import {
+  TelegramCancelService
+} from "./cancel-service.js";
+
+import {
   WorkerRegistry
 } from "../workers/registry.js";
 
@@ -444,7 +452,13 @@ export class TelegramCommandService {
     private readonly deliveries:
       DeliveryRepository,
     private readonly outbox:
-      OutboxRepository
+      OutboxRepository,
+
+    private readonly debug:
+      TelegramDebugService,
+
+    private readonly cancel:
+      TelegramCancelService
   ) {}
 
   private endpoint(
@@ -623,7 +637,10 @@ export class TelegramCommandService {
       `<code>/queue</code> <b>-</b> <b>Queue check</b>\n` +
       `<code>/jobs</code> <b>-</b> <b>Recent jobs</b>\n` +
       `<code>/job &lt;id&gt;</code> <b>-</b> <b>Job details</b>\n` +
-      `<code>/outbox</code> <b>-</b> <b>Send queue</b>`
+      `<code>/outbox</code> <b>-</b> <b>Send queue</b>\n` +
+      `<code>/errors</code> <b>-</b> <b>Recent failures</b>\n` +
+      `<code>/events &lt;id&gt;</code> <b>-</b> <b>Job events</b>\n` +
+      `<code>/cancel &lt;id&gt;</code> <b>-</b> <b>Cancel job</b>`
     );
   }
 
@@ -966,9 +983,9 @@ export class TelegramCommandService {
                 shortJobId(job.id)
               )
             }</code> · ` +
-            `<b>${
+            `<b>[${
               escapeHtml(job.status)
-            }</b> · ` +
+            }]</b> · ` +
             `<i>${
               escapeHtml(
                 ageFrom(since)
@@ -1012,12 +1029,12 @@ export class TelegramCommandService {
             );
 
           return (
-            `<b>Job ID:</b> <code>${
+            `<b>ID:</b> <code>${
               escapeHtml(job.id)
             }</code> · ` +
-            `<b>${
+            `<b>[${
               escapeHtml(job.status)
-            }</b> · ` +
+            }]</b> · ` +
             `<i>${
               escapeHtml(runtime)
             }</i>`
@@ -1342,26 +1359,41 @@ export class TelegramCommandService {
     const text =
       message.text.trim();
 
-    if (!text.startsWith("/")) {
-      return;
-    }
-
-    const parts =
-      text.split(/\s+/);
-
-    const rawCommand =
-      parts[0]
-        ?.toLowerCase() ??
-      "";
-
-    const command =
-      rawCommand
-        .split("@")[0];
-
-    const args =
-      parts.slice(1);
-
     try {
+      if (!text.startsWith("/")) {
+        const response =
+          await this.cancel
+            .handlePlainText(
+              text
+            );
+
+        if (response) {
+          await this.sendHtml(
+            response
+          );
+        }
+
+        return;
+      }
+
+      await this.cancel
+        .abandonPendingForCommand();
+
+      const parts =
+        text.split(/\s+/);
+
+      const rawCommand =
+        parts[0]
+          ?.toLowerCase() ??
+        "";
+
+      const command =
+        rawCommand
+          .split("@")[0];
+
+      const args =
+        parts.slice(1);
+
       switch (command) {
         case "/st":
         case "/stat":
@@ -1399,6 +1431,34 @@ export class TelegramCommandService {
         case "/outbox":
           await this.sendHtml(
             await this.outboxHtml()
+          );
+          break;
+
+        case "/err":
+        case "/errors":
+          await this.sendHtml(
+            await this.debug
+              .errorsHtml()
+          );
+          break;
+
+        case "/ev":
+        case "/events":
+          await this.sendHtml(
+            await this.debug
+              .eventsHtml(
+                args[0] ?? ""
+              )
+          );
+          break;
+
+        case "/cc":
+        case "/cancel":
+          await this.sendHtml(
+            await this.cancel
+              .begin(
+                args[0] ?? ""
+              )
           );
           break;
 
