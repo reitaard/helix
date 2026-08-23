@@ -244,6 +244,15 @@ export class DeliveryWorker {
               media.sizeBytes
             )}`;
 
+          const worker =
+            this.workers.get(
+              delivery.workerId
+            );
+
+          const workerName =
+            worker?.name ??
+            delivery.workerId;
+
           const document =
             await this.telegram
               .sendDocument({
@@ -270,8 +279,10 @@ export class DeliveryWorker {
                       ? "Present"
                       : "Absent",
 
-                  workerId:
-                    delivery.workerId,
+                  tool:
+                    delivery.tool,
+
+                  workerName,
 
                   jobId:
                     delivery.jobId,

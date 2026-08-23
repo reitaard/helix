@@ -138,11 +138,16 @@ export class WorkerRegistry {
     let state:
       WorkerState = "degraded";
 
+    const executionReady =
+      result.checks.runtime &&
+      result.checks.queue &&
+      result.checks.capabilities;
+
     if (!result.checks.runtime) {
       state = "offline";
     }
     else if (
-      result.transportReady
+      executionReady
     ) {
       state =
         (result.queue?.running ?? 0) > 0

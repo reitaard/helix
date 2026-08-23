@@ -11,7 +11,8 @@ interface MetadataInput {
   runtime: string;
   video: string;
   audio: string;
-  workerId: string;
+  tool: string;
+  workerName: string;
   jobId: string;
   completedAt: string | null;
 }
@@ -177,39 +178,41 @@ export class TelegramDelivery {
         : "Unknown";
 
     const metadata = [
-      "<b>[COMFY • GEN]</b>",
+      `<b>[${escapeHtml(
+        input.tool
+      )}]</b>`,
 
-      `<b>Runtime</b>: <b><i>${
+      `<b>Runtime</b> · <b><i>${
         escapeHtml(
           input.runtime
         )
       }</i></b>`,
 
-      `<b>Video</b>: <b><i>${
+      `<b>Video</b> · <b><i>${
         escapeHtml(
           input.video
         )
       }</i></b>`,
 
-      `<b>Audio</b>: <b><i>${
+      `<b>Audio</b> · <b><i>${
         escapeHtml(
           input.audio
         )
       }</i></b>`,
 
-      `<b>Worker</b>: <code>${
+      `<b>Worker</b> · <b>${
         escapeHtml(
-          input.workerId
+          input.workerName
         )
-      }</code>`,
+      }</b>`,
 
-      `<b>Status</b>: <b>Completed</b> <i>(${
+      `<b>Status</b> · <b>Completed</b> · <i>${
         escapeHtml(
           completedTime
         )
-      })</i>`,
+      }</i>`,
 
-      `<i>Job</i> <code>${
+      `<b>Job</b> · <code>${
         escapeHtml(
           shortJobId(
             input.jobId

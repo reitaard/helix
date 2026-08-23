@@ -17,6 +17,8 @@ import {
 } from "./workflow-inputs.js";
 
 export interface CreateMediaJobInput {
+  tool: string;
+
   workerId: string;
 
   workflow:
@@ -247,6 +249,9 @@ export class JobService {
       .createAccepted({
         id,
 
+        tool:
+          input.tool,
+
         workerId:
           input.workerId,
 
@@ -257,6 +262,9 @@ export class JobService {
           input.idempotencyKey,
 
         request: {
+          tool:
+            input.tool,
+
           workerId:
             input.workerId,
 

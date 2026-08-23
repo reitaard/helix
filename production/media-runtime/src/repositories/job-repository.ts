@@ -211,6 +211,7 @@ export class JobRepository {
   async createAccepted(
     input: {
       id: string;
+      tool: string;
       workerId: string;
       adapter: string;
 
@@ -241,16 +242,17 @@ export class JobRepository {
         )
         VALUES (
           $1,
-          'video.i2v',
-          'accepted',
           $2,
+          'accepted',
           $3,
           $4,
-          $5::jsonb
+          $5,
+          $6::jsonb
         )
         `,
         [
           input.id,
+          input.tool,
           input.workerId,
           input.adapter,
           input.idempotencyKey,

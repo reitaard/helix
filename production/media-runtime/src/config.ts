@@ -44,6 +44,13 @@ const envSchema = z.object({
       .min(1)
       .default("/tmp/helix-spool"),
 
+  HELIX_T2V_WORKFLOW_PATH:
+    z.string()
+      .min(1)
+      .default(
+        "/app/workflows/video_ltx2_5_t2v.api.json"
+      ),
+
   HELIX_JOB_TIMEOUT_SECONDS:
     z.coerce
       .number()
@@ -92,6 +99,9 @@ export const config = {
   spoolDir:
     env.HELIX_SPOOL_DIR,
 
+  t2vWorkflowPath:
+    env.HELIX_T2V_WORKFLOW_PATH,
+
   jobTimeoutMs:
     env.HELIX_JOB_TIMEOUT_SECONDS *
     1000,
@@ -117,7 +127,8 @@ export const config = {
         env.HELIX_WORKER_RTX4060_URL,
 
       capabilities: [
-        "video.i2v"
+        "video.i2v",
+        "video.t2v"
       ],
 
       modelFamilies: {

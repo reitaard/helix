@@ -23,6 +23,10 @@ import {
 } from "./cancel-service.js";
 
 import {
+  TelegramT2VService
+} from "./t2v-service.js";
+
+import {
   WorkerRegistry
 } from "../workers/registry.js";
 
@@ -458,7 +462,10 @@ export class TelegramCommandService {
       TelegramDebugService,
 
     private readonly cancel:
-      TelegramCancelService
+      TelegramCancelService,
+
+    private readonly t2v:
+      TelegramT2VService
   ) {}
 
   private endpoint(
@@ -640,6 +647,7 @@ export class TelegramCommandService {
       `<code>/outbox</code> <b>-</b> <b>Send queue</b>\n` +
       `<code>/errors</code> <b>-</b> <b>Recent failures</b>\n` +
       `<code>/events &lt;id&gt;</code> <b>-</b> <b>Job events</b>\n` +
+      `<code>/t2v</code> <b>-</b> <b>Generate video</b>\n` +
       `<code>/cancel &lt;id&gt;</code> <b>-</b> <b>Cancel job</b>`
     );
   }
@@ -1361,15 +1369,57 @@ export class TelegramCommandService {
 
     try {
       if (!text.startsWith("/")) {
-        const response =
+        if (
           await this.cancel
-            .handlePlainText(
-              text
-            );
+            .hasPending()
+        ) {
+          const response =
+            await this.cancel
+              .handlePlainText(
+                text
+              );
 
-        if (response) {
+          if (response) {
+            await this.sendHtml(
+              response
+            );
+          }
+
+          return;
+        }
+
+        if (
+          await this.t2v
+            .hasPending()
+        ) {
+          const response =
+            await this.t2v
+              .handlePlainText(
+                text
+              );
+
+          if (response) {
+            await this.sendHtml(
+              response
+            );
+          }
+
+          return;
+        }
+
+        const answer =
+          text
+            .trim()
+            .toLowerCase();
+
+        if (
+          answer === "yes" ||
+          answer === "no"
+        ) {
           await this.sendHtml(
-            response
+            `${title("CONFIRM")}
+` +
+            `<b><i>No confirmation is pending.</i></b>`
           );
         }
 
@@ -1377,6 +1427,9 @@ export class TelegramCommandService {
       }
 
       await this.cancel
+        .abandonPendingForCommand();
+
+      await this.t2v
         .abandonPendingForCommand();
 
       const parts =
@@ -1449,6 +1502,12 @@ export class TelegramCommandService {
               .eventsHtml(
                 args[0] ?? ""
               )
+          );
+          break;
+
+        case "/t2v":
+          await this.sendHtml(
+            await this.t2v.begin()
           );
           break;
 

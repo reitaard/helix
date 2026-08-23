@@ -47,6 +47,10 @@ import {
 } from "./repositories/operator-action-repository.js";
 
 import {
+  T2VPendingRepository
+} from "./repositories/t2v-pending-repository.js";
+
+import {
   DeliveryWorker
 } from "./delivery/worker.js";
 
@@ -65,6 +69,10 @@ import {
 import {
   TelegramCancelService
 } from "./telegram/cancel-service.js";
+
+import {
+  TelegramT2VService
+} from "./telegram/t2v-service.js";
 
 import {
   TelegramAlertService
@@ -139,6 +147,11 @@ const operatorActionRepository =
     db
   );
 
+const t2vPendingRepository =
+  new T2VPendingRepository(
+    db
+  );
+
 const telegramDebugService =
   new TelegramDebugService(
     jobRepository,
@@ -162,6 +175,19 @@ const telegramCancelService =
         jobs,
         config.workers[0].id,
         config.workers[0].name
+      )
+    : null;
+
+const telegramT2VService =
+  config.telegram &&
+  config.workers[0]
+    ? new TelegramT2VService(
+        config.telegram.chatId,
+        config.workers[0].id,
+        config.workers[0].name,
+        config.t2vWorkflowPath,
+        jobs,
+        t2vPendingRepository
       )
     : null;
 
@@ -215,7 +241,8 @@ const telegramCommandService =
   config.telegram &&
   config.workers[0] &&
   comfyUpdateChecker &&
-  telegramCancelService
+  telegramCancelService &&
+  telegramT2VService
     ? new TelegramCommandService(
         config.telegram.botToken,
         config.telegram.chatId,
@@ -227,7 +254,8 @@ const telegramCommandService =
         deliveryRepository,
         outboxRepository,
         telegramDebugService,
-        telegramCancelService
+        telegramCancelService,
+        telegramT2VService
       )
     : null;
 
@@ -249,6 +277,7 @@ async function shutdown(
   deliveryWorker?.stop();
   telegramAlertService?.stop();
   telegramCancelService?.stop();
+  telegramT2VService?.stop();
   telegramCommandService?.stop();
 
   await app.close();
@@ -285,6 +314,7 @@ try {
   deliveryWorker?.start();
   telegramAlertService?.start();
   telegramCancelService?.start();
+  telegramT2VService?.start();
   telegramCommandService?.start();
 }
 catch (error) {
@@ -293,6 +323,7 @@ catch (error) {
   reconciler.stop();
   deliveryWorker?.stop();
   telegramAlertService?.stop();
+  telegramT2VService?.stop();
   telegramCommandService?.stop();
 
   await db.end();

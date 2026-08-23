@@ -30,6 +30,9 @@ interface DeliveryRow {
   worker_id:
     string | null;
 
+  tool:
+    string;
+
   started_at:
     Date | null;
 
@@ -60,6 +63,9 @@ export interface ClaimedDelivery {
     string | null;
 
   workerId:
+    string;
+
+  tool:
     string;
 
   startedAt:
@@ -294,6 +300,7 @@ export class DeliveryRepository {
             c.metadata_message_id,
             c.document_message_id,
             j.worker_id,
+            j.tool,
             j.started_at,
             j.finished_at
           FROM claimed c
@@ -344,6 +351,9 @@ export class DeliveryRepository {
 
         workerId:
           row.worker_id,
+
+        tool:
+          row.tool,
 
         startedAt:
           row.started_at

@@ -173,6 +173,19 @@ export class TelegramCancelService {
     this.timer = null;
   }
 
+  async hasPending() {
+    await this.actions
+      .expireDue(
+        this.chatId
+      );
+
+    return (
+      await this.actions.get(
+        this.chatId
+      )
+    ) !== null;
+  }
+
   async abandonPendingForCommand() {
     await this.actions
       .expireDue(

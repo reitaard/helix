@@ -24,6 +24,15 @@ const createJobSchema =
     workerId:
       z.string().min(1),
 
+    tool:
+      z.enum([
+        "video.i2v",
+        "video.t2v"
+      ])
+      .default(
+        "video.i2v"
+      ),
+
     workflow:
       z.record(
         z.string(),
@@ -228,6 +237,9 @@ export function createApp(
       try {
         const job =
           await jobs.create({
+            tool:
+              parsed.data.tool,
+
             workerId:
               parsed.data
                 .workerId,
