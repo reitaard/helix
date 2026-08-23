@@ -1236,7 +1236,6 @@ export class TelegramCommandService {
 
     if (snapshot.total === 0) {
       lines.push(
-        "",
         "<i>Outbox is clear.</i>"
       );
     }
