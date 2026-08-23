@@ -504,6 +504,9 @@ export class DeliveryRepository {
           status =
             'delivered',
 
+          metadata_message_id =
+            $2,
+
           document_message_id =
             $2,
 

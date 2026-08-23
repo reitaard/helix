@@ -244,14 +244,16 @@ export class DeliveryWorker {
               media.sizeBytes
             )}`;
 
-          let metadataMessageId =
-            delivery
-              .metadataMessageId;
+          const document =
+            await this.telegram
+              .sendDocument({
+                filePath:
+                  destination,
 
-          if (!metadataMessageId) {
-            const metadata =
-              await this.telegram
-                .sendMetadata({
+                filename:
+                  safeFilename,
+
+                metadata: {
                   filename:
                     safeFilename,
 
@@ -276,32 +278,7 @@ export class DeliveryWorker {
 
                   completedAt:
                     delivery.finishedAt
-                });
-
-            metadataMessageId =
-              metadata.messageId;
-
-            await this.deliveries
-              .markMetadataSent({
-                id:
-                  delivery.id,
-
-                jobId:
-                  delivery.jobId,
-
-                messageId:
-                  metadataMessageId
-              });
-          }
-
-          const document =
-            await this.telegram
-              .sendDocument({
-                filePath:
-                  destination,
-
-                filename:
-                  safeFilename
+                }
               });
 
           await this.deliveries
@@ -323,7 +300,7 @@ export class DeliveryWorker {
             });
 
           console.log(
-            `[delivery] ${delivery.jobId} -> telegram metadata ${metadataMessageId}, document ${document.messageId}`
+            `[delivery] ${delivery.jobId} -> telegram document+caption ${document.messageId}`
           );
         }
         catch (error) {

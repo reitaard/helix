@@ -16,6 +16,17 @@ interface MetadataInput {
   completedAt: string | null;
 }
 
+function shortJobId(
+  value: string
+) {
+  const id =
+    value.startsWith("job_")
+      ? value.slice(4)
+      : value;
+
+  return `${id.slice(0, 6)}...`;
+}
+
 function escapeHtml(
   value: string
 ) {
@@ -142,9 +153,9 @@ export class TelegramDelivery {
     );
   }
 
-  async sendMetadata(
+  private metadataHtml(
     input: MetadataInput
-  ): Promise<TelegramMessageResult> {
+  ) {
     const completedTime =
       input.completedAt
         ? new Date(
@@ -157,19 +168,16 @@ export class TelegramDelivery {
               hour: "numeric",
               minute: "2-digit",
               hour12: true,
-              timeZone: process.env.HELIX_TIME_ZONE ?? "UTC"
+              timeZone:
+                process.env
+                  .HELIX_TIME_ZONE ??
+                "UTC"
             }
           )
         : "Unknown";
 
-    const text = [
+    const metadata = [
       "<b>[COMFY • GEN]</b>",
-
-      `<code>${
-        escapeHtml(
-          input.filename
-        )
-      }</code>`,
 
       `<b>Runtime</b>: <b><i>${
         escapeHtml(
@@ -203,59 +211,29 @@ export class TelegramDelivery {
 
       `<i>Job</i> <code>${
         escapeHtml(
-          input.jobId
+          shortJobId(
+            input.jobId
+          )
         )
       }</code>`
     ].join("\n");
 
-    const response =
-      await fetch(
-        this.endpoint(
-          "sendMessage"
-        ),
-        {
-          method: "POST",
+    return [
+      `<code>${
+        escapeHtml(
+          input.filename
+        )
+      }</code>`,
 
-          headers: {
-            "content-type":
-              "application/json"
-          },
-
-          body:
-            JSON.stringify({
-              chat_id:
-                this.chatId,
-
-              text,
-
-              parse_mode:
-                "HTML",
-
-              link_preview_options: {
-                is_disabled: true
-              }
-            }),
-
-          signal:
-            AbortSignal.timeout(
-              30000
-            )
-        }
-      );
-
-    const body =
-      await response.json();
-
-    return parseMessageResult(
-      body,
-      "Telegram sendMessage"
-    );
+      `<blockquote>${metadata}</blockquote>`
+    ].join("\n");
   }
 
   async sendDocument(
     input: {
       filePath: string;
       filename: string;
+      metadata: MetadataInput;
     }
   ): Promise<TelegramMessageResult> {
     const blob =
@@ -279,6 +257,18 @@ export class TelegramDelivery {
       "document",
       blob,
       input.filename
+    );
+
+    form.set(
+      "caption",
+      this.metadataHtml(
+        input.metadata
+      )
+    );
+
+    form.set(
+      "parse_mode",
+      "HTML"
     );
 
     form.set(
