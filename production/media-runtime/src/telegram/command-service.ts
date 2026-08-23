@@ -7,6 +7,10 @@ import {
 } from "../repositories/job-repository.js";
 
 import {
+  DeliveryRepository
+} from "../repositories/delivery-repository.js";
+
+import {
   WorkerRegistry
 } from "../workers/registry.js";
 
@@ -120,6 +124,91 @@ function ageFrom(
 
   return formatDuration(
     milliseconds / 1000
+  );
+}
+
+
+function durationBetween(
+  startedAt: string | null,
+  finishedAt: string | null
+) {
+  if (!startedAt) {
+    return "waiting";
+  }
+
+  const start =
+    new Date(
+      startedAt
+    ).getTime();
+
+  const end =
+    finishedAt
+      ? new Date(
+          finishedAt
+        ).getTime()
+      : Date.now();
+
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(end)
+  ) {
+    return "unknown";
+  }
+
+  return formatDuration(
+    Math.max(
+      0,
+      end - start
+    ) / 1000
+  );
+}
+
+
+function formatTimestamp(
+  value: string | null
+) {
+  if (!value) {
+    return "—";
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    !Number.isFinite(
+      date.getTime()
+    )
+  ) {
+    return value;
+  }
+
+  return date.toLocaleString(
+    "en-US",
+    {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone:
+        process.env
+          .HELIX_TIME_ZONE ??
+        "UTC"
+    }
+  );
+}
+
+
+function displayProvider(
+  value: string
+) {
+  if (!value) {
+    return value;
+  }
+
+  return (
+    value[0]!.toUpperCase() +
+    value.slice(1)
   );
 }
 
@@ -276,7 +365,10 @@ export class TelegramCommandService {
       WorkerRegistry,
 
     private readonly jobs:
-      JobRepository
+      JobRepository,
+
+    private readonly deliveries:
+      DeliveryRepository
   ) {}
 
 
@@ -477,9 +569,11 @@ export class TelegramCommandService {
 
   private helpHtml() {
     return (
-      `<b><i>• COMMANDS •</i></b>\n` +
+      `<b><i>• <u>COMMANDS</u> •</i></b>\n` +
       `<code>/status</code> <b>-</b> <b>Diagnostics</b>\n` +
-      `<code>/queue</code> <b>-</b> <b>Queue check</b>`
+      `<code>/queue</code> <b>-</b> <b>Queue check</b>\n` +
+      `<code>/jobs</code> <b>-</b> <b>Recent jobs</b>\n` +
+      `<code>/job &lt;id&gt;</code> <b>-</b> <b>Job details</b>`
     );
   }
 
@@ -721,11 +815,11 @@ export class TelegramCommandService {
         free !== null
       ) {
         system.push(
-          `<b>VRAM</b> · <b>${
+          `<b>VRAM</b> · <b><i>${
             formatGiB(free)
-          }</b> / ${
+          }</i></b> / <b><i>${
             formatGiB(total)
-          } GB free`
+          } GB</i></b> <i>free</i>`
         );
       }
 
@@ -774,7 +868,7 @@ export class TelegramCommandService {
     }
 
     return (
-      `<b><i>• STATUS •</i></b>\n` +
+      `<b><i>• <u>STATUS</u> •</i></b>\n` +
       `<blockquote expandable>${
         lines.join("\n")
       }</blockquote>`
@@ -874,7 +968,265 @@ export class TelegramCommandService {
     }
 
     return (
-      `<b><i>• QUEUE •</i></b>\n` +
+      `<b><i>• <u>QUEUE</u> •</i></b>\n` +
+      lines.join("\n")
+    );
+  }
+
+  private async jobsHtml() {
+    const jobs =
+      await this.jobs
+        .listRecent(5);
+
+    if (jobs.length === 0) {
+      return (
+        `<b><i>• <u>JOBS</u> •</i></b>\n` +
+        `<i>No jobs yet.</i>`
+      );
+    }
+
+    const lines =
+      jobs.map(
+        job => {
+          const runtime =
+            durationBetween(
+              job.startedAt,
+              job.finishedAt
+            );
+
+          return (
+            `<b>Job ID:</b> <code>${
+              escapeHtml(
+                job.id
+              )
+            }</code> · ` +
+            `<b>${
+              escapeHtml(
+                job.status
+              )
+            }</b> · ` +
+            `<i>${
+              escapeHtml(
+                runtime
+              )
+            }</i>`
+          );
+        }
+      );
+
+    return (
+      `<b><i>• <u>JOBS</u> •</i></b>\n` +
+      lines.join("\n")
+    );
+  }
+
+  private async jobHtml(
+    reference: string
+  ) {
+    let clean =
+      reference
+        .trim()
+        .replace(
+          /\.+$/,
+          ""
+        );
+
+    if (
+      clean.startsWith(
+        "job_"
+      )
+    ) {
+      clean =
+        clean.slice(4);
+    }
+
+    if (
+      clean.length < 4 ||
+      !/^[a-zA-Z0-9_-]+$/
+        .test(clean)
+    ) {
+      return (
+        `<b><i>• <u>JOB</u> •</i></b>\n` +
+        `<b>Usage</b> · ` +
+        `<code>/job &lt;id&gt;</code>`
+      );
+    }
+
+    const matches =
+      await this.jobs
+        .findByPrefix(
+          `job_${clean}`
+        );
+
+    if (
+      matches.length === 0
+    ) {
+      return (
+        `<b><i>• <u>JOB</u> •</i></b>\n` +
+        `<i>Job not found.</i>`
+      );
+    }
+
+    if (
+      matches.length > 1
+    ) {
+      return (
+        `<b><i>• <u>JOB</u> •</i></b>\n` +
+        `<i>Prefix is ambiguous. Use more characters.</i>`
+      );
+    }
+
+    const job =
+      matches[0]!;
+
+    const worker =
+      job.workerId
+        ? this.workers.get(
+            job.workerId
+          )
+        : null;
+
+    const workerName =
+      worker?.name ??
+      job.workerId ??
+      "Unassigned";
+
+    const runtime =
+      durationBetween(
+        job.startedAt,
+        job.finishedAt
+      );
+
+    const deliveryRows =
+      await this.deliveries
+        .listForJob(
+          job.id
+        );
+
+    const lines = [
+      `<b>ID</b> · <code>${
+        escapeHtml(
+          shortJobId(
+            job.id
+          )
+        )
+      }</code>`,
+
+      `<b>Status</b> · <b>${
+        escapeHtml(
+          job.status
+        )
+      }</b>`,
+
+      `<b>Worker</b> · <b>${
+        escapeHtml(
+          workerName
+        )
+      }</b>`,
+
+      `<b>Tool</b> · <code>${
+        escapeHtml(
+          job.tool
+        )
+      }</code>`,
+
+      `<b>Runtime</b> · <i>${
+        escapeHtml(
+          runtime
+        )
+      }</i>`,
+
+      `<b>Started</b> · <i>${
+        escapeHtml(
+          formatTimestamp(
+            job.startedAt
+          )
+        )
+      }</i>`,
+
+      `<b>Finished</b> · <i>${
+        escapeHtml(
+          formatTimestamp(
+            job.finishedAt
+          )
+        )
+      }</i>`
+    ];
+
+    lines.push(
+      "",
+      "<b><i>[Delivery]</i></b>"
+    );
+
+    if (
+      deliveryRows.length ===
+      0
+    ) {
+      lines.push(
+        "<i>None</i>"
+      );
+    }
+    else if (
+      deliveryRows.length ===
+      1
+    ) {
+      const delivery =
+        deliveryRows[0]!;
+
+      lines.push(
+        `<b>${
+          escapeHtml(
+            displayProvider(
+              delivery.provider
+            )
+          )
+        }</b> · <b>${
+          escapeHtml(
+            delivery.status
+          )
+        }</b>`,
+
+        `<b>Attempts</b> · <b>${
+          delivery.attemptCount
+        }</b>`
+      );
+    }
+    else {
+      for (
+        const delivery of
+        deliveryRows
+      ) {
+        const noun =
+          delivery.attemptCount ===
+          1
+            ? "attempt"
+            : "attempts";
+
+        lines.push(
+          `<b>${
+            escapeHtml(
+              displayProvider(
+                delivery.provider
+              )
+            )
+          } #${
+            delivery.artifactIndex +
+            1
+          }</b> · ` +
+          `<b>${
+            escapeHtml(
+              delivery.status
+            )
+          }</b> · ` +
+          `<b>${
+            delivery.attemptCount
+          }</b> <i>${noun}</i>`
+        );
+      }
+    }
+
+    return (
+      `<b><i>• <u>JOB</u> •</i></b>\n` +
       lines.join("\n")
     );
   }
@@ -910,15 +1262,20 @@ export class TelegramCommandService {
       return;
     }
 
+    const parts =
+      text.split(/\s+/);
+
     const rawCommand =
-      text
-        .split(/\s+/)[0]
+      parts[0]
         ?.toLowerCase() ??
       "";
 
     const command =
       rawCommand
         .split("@")[0];
+
+    const args =
+      parts.slice(1);
 
     try {
       switch (command) {
@@ -938,6 +1295,23 @@ export class TelegramCommandService {
           );
           break;
 
+        case "/jbs":
+        case "/jobs":
+          await this.sendHtml(
+            await this.jobsHtml()
+          );
+          break;
+
+        case "/jb":
+        case "/job":
+          await this.sendHtml(
+            await this.jobHtml(
+              args[0] ?? ""
+            )
+          );
+          break;
+
+        case "/h":
         case "/help":
         default:
           await this.sendHtml(

@@ -147,7 +147,8 @@ const telegramCommandService =
         comfyUpdateChecker,
         db,
         registry,
-        jobRepository
+        jobRepository,
+        deliveryRepository
       )
     : null;
 

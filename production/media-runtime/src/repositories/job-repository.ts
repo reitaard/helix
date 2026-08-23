@@ -445,6 +445,88 @@ export class JobRepository {
     }
   }
 
+  async listRecent(
+    limit = 5
+  ): Promise<MediaJob[]> {
+    const safeLimit =
+      Math.max(
+        1,
+        Math.min(
+          20,
+          Math.floor(limit)
+        )
+      );
+
+    const result =
+      await this.db.query<
+        MediaJobRow
+      >(
+        `
+        SELECT
+          id,
+          tool,
+          status,
+          worker_id,
+          adapter,
+          backend_job_id,
+          idempotency_key,
+          request,
+          result,
+          error,
+          created_at,
+          updated_at,
+          started_at,
+          finished_at
+        FROM media_jobs
+        ORDER BY created_at DESC
+        LIMIT $1
+        `,
+        [safeLimit]
+      );
+
+    return result.rows.map(
+      mapJob
+    );
+  }
+
+
+  async findByPrefix(
+    prefix: string
+  ): Promise<MediaJob[]> {
+    const result =
+      await this.db.query<
+        MediaJobRow
+      >(
+        `
+        SELECT
+          id,
+          tool,
+          status,
+          worker_id,
+          adapter,
+          backend_job_id,
+          idempotency_key,
+          request,
+          result,
+          error,
+          created_at,
+          updated_at,
+          started_at,
+          finished_at
+        FROM media_jobs
+        WHERE id LIKE $1
+        ORDER BY created_at DESC
+        LIMIT 2
+        `,
+        [`${prefix}%`]
+      );
+
+    return result.rows.map(
+      mapJob
+    );
+  }
+
+
   async listActive():
     Promise<MediaJob[]> {
 
