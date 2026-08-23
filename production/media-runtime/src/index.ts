@@ -31,6 +31,10 @@ import {
 } from "./repositories/delivery-repository.js";
 
 import {
+  OutboxRepository
+} from "./repositories/outbox-repository.js";
+
+import {
   DeliveryWorker
 } from "./delivery/worker.js";
 
@@ -45,7 +49,6 @@ import {
 import {
   ComfyUpdateChecker
 } from "./workers/comfy-update-checker.js";
-
 
 import {
   WorkerRegistry
@@ -95,6 +98,9 @@ const jobRepository =
 
 const deliveryRepository =
   new DeliveryRepository(db);
+
+const outboxRepository =
+  new OutboxRepository(db);
 
 const jobs =
   new JobService(
@@ -148,7 +154,8 @@ const telegramCommandService =
         db,
         registry,
         jobRepository,
-        deliveryRepository
+        deliveryRepository,
+        outboxRepository
       )
     : null;
 

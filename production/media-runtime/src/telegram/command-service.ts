@@ -11,13 +11,16 @@ import {
 } from "../repositories/delivery-repository.js";
 
 import {
+  OutboxRepository
+} from "../repositories/outbox-repository.js";
+
+import {
   WorkerRegistry
 } from "../workers/registry.js";
 
 import {
   ComfyUpdateChecker
 } from "../workers/comfy-update-checker.js";
-
 
 
 interface TelegramUpdate {
@@ -27,19 +30,16 @@ interface TelegramUpdate {
     text?: string;
 
     chat?: {
-      id:
-        number | string;
+      id: number | string;
     };
   };
 }
-
 
 interface TelegramEnvelope<T> {
   ok?: boolean;
   result?: T;
   description?: string;
 }
-
 
 function escapeHtml(
   value: string
@@ -50,6 +50,15 @@ function escapeHtml(
     .replaceAll(">", "&gt;");
 }
 
+function title(
+  value: string
+) {
+  return (
+    `<b><i>• <u>${
+      escapeHtml(value)
+    }</u> •</i></b>`
+  );
+}
 
 function shortJobId(
   value: string
@@ -61,7 +70,6 @@ function shortJobId(
 
   return `${id.slice(0, 6)}...`;
 }
-
 
 function formatDuration(
   seconds: number
@@ -86,22 +94,15 @@ function formatDuration(
     whole % 60;
 
   if (hours > 0) {
-    return (
-      `${hours}h ` +
-      `${minutes}m`
-    );
+    return `${hours}h ${minutes}m`;
   }
 
   if (minutes > 0) {
-    return (
-      `${minutes}m ` +
-      `${secs}s`
-    );
+    return `${minutes}m ${secs}s`;
   }
 
   return `${secs}s`;
 }
-
 
 function ageFrom(
   value: string | null
@@ -127,7 +128,6 @@ function ageFrom(
   );
 }
 
-
 function durationBetween(
   startedAt: string | null,
   finishedAt: string | null
@@ -137,15 +137,13 @@ function durationBetween(
   }
 
   const start =
-    new Date(
-      startedAt
-    ).getTime();
+    new Date(startedAt)
+      .getTime();
 
   const end =
     finishedAt
-      ? new Date(
-          finishedAt
-        ).getTime()
+      ? new Date(finishedAt)
+          .getTime()
       : Date.now();
 
   if (
@@ -162,7 +160,6 @@ function durationBetween(
     ) / 1000
   );
 }
-
 
 function formatTimestamp(
   value: string | null
@@ -198,6 +195,35 @@ function formatTimestamp(
   );
 }
 
+function timeUntil(
+  value: string | null
+) {
+  if (!value) {
+    return "—";
+  }
+
+  const milliseconds =
+    new Date(value).getTime() -
+    Date.now();
+
+  if (
+    !Number.isFinite(
+      milliseconds
+    )
+  ) {
+    return "unknown";
+  }
+
+  if (milliseconds <= 0) {
+    return "now";
+  }
+
+  return formatDuration(
+    Math.ceil(
+      milliseconds / 1000
+    )
+  );
+}
 
 function displayProvider(
   value: string
@@ -212,6 +238,71 @@ function displayProvider(
   );
 }
 
+function displayDeliveryState(
+  status: string,
+  nextAttemptAt: string | null
+) {
+  if (status === "delivering") {
+    return "sending";
+  }
+
+  if (
+    status === "failed" &&
+    nextAttemptAt
+  ) {
+    return "retrying";
+  }
+
+  return status;
+}
+
+function errorMessage(
+  value: unknown
+) {
+  let message =
+    "Unknown error";
+
+  if (typeof value === "string") {
+    message = value;
+  }
+  else if (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  ) {
+    const candidate =
+      (value as Record<
+        string,
+        unknown
+      >).message;
+
+    if (
+      typeof candidate ===
+      "string"
+    ) {
+      message = candidate;
+    }
+  }
+
+  const compact =
+    message
+      .replace(/\s+/g, " ")
+      .trim();
+
+  if (compact.length <= 120) {
+    return compact;
+  }
+
+  return `${compact.slice(0, 117)}...`;
+}
+
+function attemptWord(
+  count: number
+) {
+  return count === 1
+    ? "attempt"
+    : "attempts";
+}
 
 function asRecord(
   value: unknown
@@ -228,39 +319,34 @@ function asRecord(
     Record<string, unknown>;
 }
 
-
 function readString(
   record:
     Record<string, unknown> | null,
-
   key: string
 ) {
   const value =
     record?.[key];
 
-  return typeof value ===
-    "string"
-      ? value
-      : null;
+  return typeof value === "string"
+    ? value
+    : null;
 }
-
 
 function readNumber(
   record:
     Record<string, unknown> | null,
-
   key: string
 ) {
   const value =
     record?.[key];
 
-  return typeof value ===
-    "number" &&
+  return (
+    typeof value === "number" &&
     Number.isFinite(value)
-      ? value
-      : null;
+  )
+    ? value
+    : null;
 }
-
 
 function displayWorkerState(
   value: string
@@ -289,7 +375,6 @@ function displayWorkerState(
   }
 }
 
-
 function compactVersion(
   value: string
 ) {
@@ -300,7 +385,6 @@ function compactVersion(
     value
   );
 }
-
 
 function compactGpuName(
   value: string
@@ -321,7 +405,6 @@ function compactGpuName(
     .trim();
 }
 
-
 function formatGiB(
   bytes: number
 ) {
@@ -333,7 +416,6 @@ function formatGiB(
   ).toFixed(1);
 }
 
-
 export class TelegramCommandService {
   private running = false;
 
@@ -344,33 +426,26 @@ export class TelegramCommandService {
   private offset:
     number | undefined;
 
-
   constructor(
     private readonly botToken:
       string,
-
     private readonly chatId:
       string,
-
     private readonly workerId:
       string,
-
     private readonly updates:
       ComfyUpdateChecker,
-
     private readonly db:
       Pool,
-
     private readonly workers:
       WorkerRegistry,
-
     private readonly jobs:
       JobRepository,
-
     private readonly deliveries:
-      DeliveryRepository
+      DeliveryRepository,
+    private readonly outbox:
+      OutboxRepository
   ) {}
-
 
   private endpoint(
     method: string
@@ -383,22 +458,18 @@ export class TelegramCommandService {
     );
   }
 
-
   private async postJson<T>(
     method: string,
     body: unknown,
     timeoutMs = 30000,
-    externalSignal?:
-      AbortSignal
+    externalSignal?: AbortSignal
   ): Promise<T> {
     const controller =
       new AbortController();
 
     const timeout =
       setTimeout(
-        () => {
-          controller.abort();
-        },
+        () => controller.abort(),
         timeoutMs
       );
 
@@ -410,9 +481,7 @@ export class TelegramCommandService {
       ?.addEventListener(
         "abort",
         abort,
-        {
-          once: true
-        }
+        { once: true }
       );
 
     try {
@@ -421,15 +490,12 @@ export class TelegramCommandService {
           this.endpoint(method),
           {
             method: "POST",
-
             headers: {
               "content-type":
                 "application/json"
             },
-
             body:
               JSON.stringify(body),
-
             signal:
               controller.signal
           }
@@ -465,7 +531,6 @@ export class TelegramCommandService {
     }
   }
 
-
   private sendHtml(
     html: string
   ) {
@@ -474,13 +539,8 @@ export class TelegramCommandService {
       {
         chat_id:
           this.chatId,
-
-        text:
-          html,
-
-        parse_mode:
-          "HTML",
-
+        text: html,
+        parse_mode: "HTML",
         link_preview_options: {
           is_disabled: true
         }
@@ -488,9 +548,7 @@ export class TelegramCommandService {
     );
   }
 
-
   private async clearCommands() {
-    // Remove commands registered specifically for this chat.
     await this.postJson(
       "deleteMyCommands",
       {
@@ -501,14 +559,11 @@ export class TelegramCommandService {
       }
     );
 
-    // Also remove any default/global bot command list so
-    // Telegram does not fall back to showing a Menu button.
     await this.postJson(
       "deleteMyCommands",
       {}
     );
   }
-
 
   private async discardPending() {
     const updates =
@@ -520,7 +575,6 @@ export class TelegramCommandService {
           offset: -1,
           limit: 1,
           timeout: 0,
-
           allowed_updates: [
             "message"
           ]
@@ -536,7 +590,6 @@ export class TelegramCommandService {
     }
   }
 
-
   private async poll() {
     this.pollAbort =
       new AbortController();
@@ -547,12 +600,9 @@ export class TelegramCommandService {
       >(
         "getUpdates",
         {
-          offset:
-            this.offset,
-
+          offset: this.offset,
           limit: 20,
           timeout: 25,
-
           allowed_updates: [
             "message"
           ]
@@ -566,14 +616,14 @@ export class TelegramCommandService {
     }
   }
 
-
   private helpHtml() {
     return (
-      `<b><i>• <u>COMMANDS</u> •</i></b>\n` +
+      `${title("COMMANDS")}\n` +
       `<code>/status</code> <b>-</b> <b>Diagnostics</b>\n` +
       `<code>/queue</code> <b>-</b> <b>Queue check</b>\n` +
       `<code>/jobs</code> <b>-</b> <b>Recent jobs</b>\n` +
-      `<code>/job &lt;id&gt;</code> <b>-</b> <b>Job details</b>`
+      `<code>/job &lt;id&gt;</code> <b>-</b> <b>Job details</b>\n` +
+      `<code>/outbox</code> <b>-</b> <b>Send queue</b>`
     );
   }
 
@@ -600,12 +650,10 @@ export class TelegramCommandService {
     ] =
       await Promise.allSettled([
         databaseCheck,
-
         this.workers
           .readiness(
             this.workerId
           ),
-
         this.updates.check()
       ]);
 
@@ -626,8 +674,7 @@ export class TelegramCommandService {
       }`
     ];
 
-    const system:
-      string[] = [];
+    const system: string[] = [];
 
     if (
       readiness.status ===
@@ -639,13 +686,9 @@ export class TelegramCommandService {
 
       lines.push(
         `<b>Worker</b> · <b>${
-          escapeHtml(
-            value.name
-          )
-        }</b>`
-      );
+          escapeHtml(value.name)
+        }</b>`,
 
-      lines.push(
         `<b>State</b> · <code>${
           escapeHtml(
             displayWorkerState(
@@ -654,23 +697,16 @@ export class TelegramCommandService {
           )
         }</code> · <i>${
           value.latencyMs
-        } ms</i>`
-      );
+        } ms</i>`,
 
-      lines.push(
         `<b>Queue</b> · <b>${
-          value.queue
-            ?.running ?? 0
+          value.queue?.running ?? 0
         }</b> <i>running</i> · <b>${
-          value.queue
-            ?.pending ?? 0
+          value.queue?.pending ?? 0
         }</b> <i>pending</i>`
       );
 
-      if (
-        value.backend
-          ?.version
-      ) {
+      if (value.backend?.version) {
         system.push(
           `<b>Comfy</b> · <b>${
             escapeHtml(
@@ -737,10 +773,7 @@ export class TelegramCommandService {
         );
       }
 
-      if (
-        value.backend
-          ?.python
-      ) {
+      if (value.backend?.python) {
         system.push(
           `<b>Python</b> · <b>${
             escapeHtml(
@@ -752,10 +785,7 @@ export class TelegramCommandService {
         );
       }
 
-      if (
-        value.backend
-          ?.runtime
-      ) {
+      if (value.backend?.runtime) {
         system.push(
           `<b>Torch</b> · <b><i>${
             escapeHtml(
@@ -768,9 +798,7 @@ export class TelegramCommandService {
       }
 
       const device =
-        asRecord(
-          value.device
-        );
+        asRecord(value.device);
 
       const deviceName =
         readString(
@@ -837,9 +865,7 @@ export class TelegramCommandService {
         );
       }
 
-      if (
-        value.errors.length > 0
-      ) {
+      if (value.errors.length > 0) {
         system.push(
           `<b>Checks</b> · <i>${
             escapeHtml(
@@ -857,9 +883,7 @@ export class TelegramCommandService {
       );
     }
 
-    if (
-      system.length > 0
-    ) {
+    if (system.length > 0) {
       lines.push(
         "",
         "<b><i>[System]</i></b>",
@@ -868,7 +892,7 @@ export class TelegramCommandService {
     }
 
     return (
-      `<b><i>• <u>STATUS</u> •</i></b>\n` +
+      `${title("STATUS")}\n` +
       `<blockquote expandable>${
         lines.join("\n")
       }</blockquote>`
@@ -884,12 +908,10 @@ export class TelegramCommandService {
         this.workers.queue(
           this.workerId
         ),
-
         this.jobs.listActive()
       ]);
 
-    const lines:
-      string[] = [];
+    const lines: string[] = [];
 
     if (
       comfy.status ===
@@ -921,8 +943,7 @@ export class TelegramCommandService {
       );
 
       if (
-        active.value.length ===
-        0
+        active.value.length === 0
       ) {
         lines.push(
           "<i>Queue is clear.</i>"
@@ -942,15 +963,11 @@ export class TelegramCommandService {
           lines.push(
             `<code>${
               escapeHtml(
-                shortJobId(
-                  job.id
-                )
+                shortJobId(job.id)
               )
             }</code> · ` +
             `<b>${
-              escapeHtml(
-                job.status
-              )
+              escapeHtml(job.status)
             }</b> · ` +
             `<i>${
               escapeHtml(
@@ -968,7 +985,7 @@ export class TelegramCommandService {
     }
 
     return (
-      `<b><i>• <u>QUEUE</u> •</i></b>\n` +
+      `${title("QUEUE")}\n` +
       lines.join("\n")
     );
   }
@@ -980,7 +997,7 @@ export class TelegramCommandService {
 
     if (jobs.length === 0) {
       return (
-        `<b><i>• <u>JOBS</u> •</i></b>\n` +
+        `${title("JOBS")}\n` +
         `<i>No jobs yet.</i>`
       );
     }
@@ -996,26 +1013,20 @@ export class TelegramCommandService {
 
           return (
             `<b>Job ID:</b> <code>${
-              escapeHtml(
-                job.id
-              )
+              escapeHtml(job.id)
             }</code> · ` +
             `<b>${
-              escapeHtml(
-                job.status
-              )
+              escapeHtml(job.status)
             }</b> · ` +
             `<i>${
-              escapeHtml(
-                runtime
-              )
+              escapeHtml(runtime)
             }</i>`
           );
         }
       );
 
     return (
-      `<b><i>• <u>JOBS</u> •</i></b>\n` +
+      `${title("JOBS")}\n` +
       lines.join("\n")
     );
   }
@@ -1032,12 +1043,9 @@ export class TelegramCommandService {
         );
 
     if (
-      clean.startsWith(
-        "job_"
-      )
+      clean.startsWith("job_")
     ) {
-      clean =
-        clean.slice(4);
+      clean = clean.slice(4);
     }
 
     if (
@@ -1046,7 +1054,7 @@ export class TelegramCommandService {
         .test(clean)
     ) {
       return (
-        `<b><i>• <u>JOB</u> •</i></b>\n` +
+        `${title("JOB")}\n` +
         `<b>Usage</b> · ` +
         `<code>/job &lt;id&gt;</code>`
       );
@@ -1058,26 +1066,21 @@ export class TelegramCommandService {
           `job_${clean}`
         );
 
-    if (
-      matches.length === 0
-    ) {
+    if (matches.length === 0) {
       return (
-        `<b><i>• <u>JOB</u> •</i></b>\n` +
+        `${title("JOB")}\n` +
         `<i>Job not found.</i>`
       );
     }
 
-    if (
-      matches.length > 1
-    ) {
+    if (matches.length > 1) {
       return (
-        `<b><i>• <u>JOB</u> •</i></b>\n` +
+        `${title("JOB")}\n` +
         `<i>Prefix is ambiguous. Use more characters.</i>`
       );
     }
 
-    const job =
-      matches[0]!;
+    const job = matches[0]!;
 
     const worker =
       job.workerId
@@ -1099,43 +1102,26 @@ export class TelegramCommandService {
 
     const deliveryRows =
       await this.deliveries
-        .listForJob(
-          job.id
-        );
+        .listForJob(job.id);
 
     const lines = [
       `<b>ID</b> · <code>${
         escapeHtml(
-          shortJobId(
-            job.id
-          )
+          shortJobId(job.id)
         )
       }</code>`,
-
       `<b>Status</b> · <b>${
-        escapeHtml(
-          job.status
-        )
+        escapeHtml(job.status)
       }</b>`,
-
       `<b>Worker</b> · <b>${
-        escapeHtml(
-          workerName
-        )
+        escapeHtml(workerName)
       }</b>`,
-
       `<b>Tool</b> · <code>${
-        escapeHtml(
-          job.tool
-        )
+        escapeHtml(job.tool)
       }</code>`,
-
       `<b>Runtime</b> · <i>${
-        escapeHtml(
-          runtime
-        )
+        escapeHtml(runtime)
       }</i>`,
-
       `<b>Started</b> · <i>${
         escapeHtml(
           formatTimestamp(
@@ -1143,7 +1129,6 @@ export class TelegramCommandService {
           )
         )
       }</i>`,
-
       `<b>Finished</b> · <i>${
         escapeHtml(
           formatTimestamp(
@@ -1155,40 +1140,12 @@ export class TelegramCommandService {
 
     lines.push(
       "",
-      "<b><i>[Delivery]</i></b>"
+      "<b><i>[Outbox]</i></b>"
     );
 
-    if (
-      deliveryRows.length ===
-      0
-    ) {
+    if (deliveryRows.length === 0) {
       lines.push(
         "<i>None</i>"
-      );
-    }
-    else if (
-      deliveryRows.length ===
-      1
-    ) {
-      const delivery =
-        deliveryRows[0]!;
-
-      lines.push(
-        `<b>${
-          escapeHtml(
-            displayProvider(
-              delivery.provider
-            )
-          )
-        }</b> · <b>${
-          escapeHtml(
-            delivery.status
-          )
-        }</b>`,
-
-        `<b>Attempts</b> · <b>${
-          delivery.attemptCount
-        }</b>`
       );
     }
     else {
@@ -1196,37 +1153,169 @@ export class TelegramCommandService {
         const delivery of
         deliveryRows
       ) {
-        const noun =
-          delivery.attemptCount ===
-          1
-            ? "attempt"
-            : "attempts";
+        const state =
+          displayDeliveryState(
+            delivery.status,
+            delivery.nextAttemptAt
+          );
+
+        const provider =
+          displayProvider(
+            delivery.provider
+          );
+
+        const prefix =
+          deliveryRows.length === 1
+            ? `<b>${escapeHtml(provider)}</b>`
+            : `<b>${escapeHtml(provider)} #${
+                delivery.artifactIndex + 1
+              }</b>`;
 
         lines.push(
-          `<b>${
+          `${prefix} · <b>${
+            escapeHtml(state)
+          }</b>`,
+          `<b>Attempts</b> · <b>${
+            delivery.attemptCount
+          }</b>`
+        );
+
+        if (state === "retrying") {
+          lines.push(
+            `<b>Retry</b> · <i>${
+              escapeHtml(
+                timeUntil(
+                  delivery.nextAttemptAt
+                )
+              )
+            }</i>`
+          );
+        }
+        else if (state === "failed") {
+          lines.push(
+            `<b>Error</b> · <i>${
+              escapeHtml(
+                errorMessage(
+                  delivery.error
+                )
+              )
+            }</i>`
+          );
+        }
+      }
+    }
+
+    return (
+      `${title("JOB")}\n` +
+      lines.join("\n")
+    );
+  }
+
+  private async outboxHtml() {
+    const snapshot =
+      await this.outbox
+        .snapshot(
+          "telegram",
+          5
+        );
+
+    const lines = [
+      `<b>Pending</b> · <b>${
+        snapshot.pending
+      }</b>`,
+      `<b>Sending</b> · <b>${
+        snapshot.sending
+      }</b>`,
+      `<b>Retrying</b> · <b>${
+        snapshot.retrying
+      }</b>`,
+      `<b>Failed</b> · <b>${
+        snapshot.failed
+      }</b>`
+    ];
+
+    if (snapshot.total === 0) {
+      lines.push(
+        "",
+        "<i>Outbox is clear.</i>"
+      );
+    }
+    else {
+      lines.push("");
+
+      for (
+        const item of
+        snapshot.items
+      ) {
+        const provider =
+          displayProvider(
+            item.provider
+          );
+
+        let line =
+          `<code>${
             escapeHtml(
-              displayProvider(
-                delivery.provider
+              shortJobId(
+                item.jobId
               )
             )
-          } #${
-            delivery.artifactIndex +
-            1
+          }</code> · ` +
+          `<b>${
+            escapeHtml(provider)
           }</b> · ` +
           `<b>${
-            escapeHtml(
-              delivery.status
-            )
-          }</b> · ` +
-          `<b>${
-            delivery.attemptCount
-          }</b> <i>${noun}</i>`
+            escapeHtml(item.state)
+          }</b>`;
+
+        if (item.attemptCount > 0) {
+          line +=
+            ` · <b>${
+              item.attemptCount
+            }</b> <i>${
+              attemptWord(
+                item.attemptCount
+              )
+            }</i>`;
+        }
+
+        lines.push(line);
+
+        if (item.state === "retrying") {
+          lines.push(
+            `<b>Retry</b> · <i>${
+              escapeHtml(
+                timeUntil(
+                  item.nextAttemptAt
+                )
+              )
+            }</i>`
+          );
+        }
+        else if (item.state === "failed") {
+          lines.push(
+            `<b>Error</b> · <i>${
+              escapeHtml(
+                errorMessage(
+                  item.error
+                )
+              )
+            }</i>`
+          );
+        }
+      }
+
+      if (snapshot.hiddenCount > 0) {
+        lines.push(
+          "",
+          `<i>+${
+            snapshot.hiddenCount
+          } more</i>`
         );
       }
     }
 
     return (
-      `<b><i>• <u>JOB</u> •</i></b>\n` +
+      `${title("OUTBOX")}\n` +
       lines.join("\n")
     );
   }
@@ -1245,9 +1334,7 @@ export class TelegramCommandService {
     }
 
     if (
-      String(
-        message.chat.id
-      ) !==
+      String(message.chat.id) !==
       this.chatId
     ) {
       return;
@@ -1256,9 +1343,7 @@ export class TelegramCommandService {
     const text =
       message.text.trim();
 
-    if (
-      !text.startsWith("/")
-    ) {
+    if (!text.startsWith("/")) {
       return;
     }
 
@@ -1311,6 +1396,13 @@ export class TelegramCommandService {
           );
           break;
 
+        case "/ob":
+        case "/outbox":
+          await this.sendHtml(
+            await this.outboxHtml()
+          );
+          break;
+
         case "/h":
         case "/help":
         default:
@@ -1321,7 +1413,7 @@ export class TelegramCommandService {
       }
     }
     catch (error) {
-      const message =
+      const detail =
         error instanceof Error
           ? error.message
           : String(error);
@@ -1329,20 +1421,16 @@ export class TelegramCommandService {
       await this.sendHtml(
         `<code>HELIX • ERROR</code>\n` +
         `<blockquote>${
-          escapeHtml(message)
+          escapeHtml(detail)
         }</blockquote>`
       );
     }
   }
 
-
   private async run() {
     try {
-      await this
-        .clearCommands();
-
-      await this
-        .discardPending();
+      await this.clearCommands();
+      await this.discardPending();
 
       console.log(
         "[telegram] command service ready"
@@ -1360,13 +1448,9 @@ export class TelegramCommandService {
         const updates =
           await this.poll();
 
-        for (
-          const update of
-          updates
-        ) {
+        for (const update of updates) {
           this.offset =
-            update.update_id +
-            1;
+            update.update_id + 1;
 
           await this.handleUpdate(
             update
@@ -1395,21 +1479,17 @@ export class TelegramCommandService {
     }
   }
 
-
   start() {
     if (this.running) {
       return;
     }
 
     this.running = true;
-
     void this.run();
   }
 
-
   stop() {
     this.running = false;
-
     this.pollAbort?.abort();
     this.pollAbort = null;
   }
