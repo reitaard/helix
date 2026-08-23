@@ -2,19 +2,19 @@
 
 ## Current phase
 
-**Preparation / foundation.**
+**Preparation / foundation, with a validated Production execution slice.**
 
-The system division is established at a high level. We are not building the complete architecture yet.
+The high-level Helix system division is established. The project is still avoiding a premature full-system implementation, but the Production-side ComfyUI execution path has now been hardened enough to serve as a stable checkpoint while workflow research continues.
 
-## Current direction
+## Primary system direction
 
-The primary post-preparation workstream is the **Helix brain**:
+The main post-preparation Helix brain remains:
 
 ```text
 Niche Intelligence -> Director -> Experiment Engine
 ```
 
-Generation/production is a separate workstream connected through stable creative/variant briefs rather than being allowed to shape the Intelligence or Helix Director architecture.
+Production/generation remains a separate workstream connected through stable creative/variant briefs rather than being allowed to shape Intelligence or Helix Director architecture.
 
 ## Current project divisions
 
@@ -32,33 +32,110 @@ Generation/production is a separate workstream connected through stable creative
 - asynchronous generation pattern: create task -> task id -> status/result -> output;
 - Runway workflow concepts and task-monitor behavior;
 - Reitaard as a future application shell/interface;
-- provider/model/workflow research as provisional future Production input;
+- provider/model/workflow research as provisional Production input;
 - local LTX 2.5 / ComfyUI production research, including reproducible generation manifests and controlled prompt/seed/workflow testing;
-- LTX Director research: timed prompts, keyframes, IC-LoRA/motion/reference guidance, audio, retake and long-video chunking are candidate **Production control surfaces**, not Helix Director dependencies;
-- a provisional pattern where Helix-owned execution intent is compiled into backend-specific workflows instead of agents manipulating provider UIs directly.
+- LTX Director research: timed prompts, keyframes, Prompt Relay, CGlide continuation, Lightricks temporal tiling, audio, retake and long-video controls as candidate **Production control surfaces**, not Helix Director dependencies;
+- a pattern where Helix-owned execution intent is compiled into backend-specific workflows instead of agents manipulating provider UIs directly;
+- a durable self-hosted Production runtime boundary: caller/n8n -> `helix-runtime` -> PostgreSQL -> ComfyUI worker -> artifact delivery.
 
-## Active Production-side validation slice
+## Active Production-side checkpoint
 
-A deliberately narrow LTX Director experiment is active without changing the main Helix build order.
+Current status as of 2026-08-23:
 
-Current status (2026-08-21):
+```text
+caller / n8n
+    ↓
+helix-runtime :8787
+    ↓
+helix-db
+    ↓
+ComfyAdapter / ComfyClient
+    ↓ Tailscale
+helix-rtx4060-01
+    ↓
+ComfyUI :8188
+    ↓
+generated artifact
+    ↓
+VPS temporary spool
+    ↓
+Telegram delivery
+```
 
-- WhatDreamsCost LTX Director nodes load successfully on the local ComfyUI Desktop installation;
-- ComfyUI-KJNodes is installed in the active `Documents\ComfyUI\custom_nodes` directory;
-- the active ComfyUI venv required `av>=16.0.0`;
-- no separate ComfyUI-LTXVideo custom-node package has been required for the validated WhatDreamsCost path;
-- the known-good native LTX 2.5 I2V workflow remains preserved;
-- the Director-enabled workflow follows the upstream two-stage Director topology while retaining the local LTX 2.5 model/upscale/decode backend;
-- **D0 single-prompt Director generation passed**: playable output saved in about `403.6 s`;
-- D0 discovered an important runtime rule: Director width/height must be explicit for large guide images; zero inherited the 3200x1800 source and created a 3168x1792 latent;
-- **D1 Prompt Relay passed as a mechanism test**: logs showed three active token ranges, temporal latent regions `[8, 9, 8]`, and Prompt Relay penalty matrices in both sampling stages;
-- **D2 extreme Prompt Relay stress test passed as a mechanism test**: the model attempted large temporal world changes but 8 seconds was too short for clean radical transitions;
-- Prompt Relay is therefore considered validated for within-window temporal control, not a complete long-scene continuity solution;
-- research identified `CGlide/LTX-2.5-Director` as the next Production experiment because it already implements chunk writing, handoff frames and assembly for long videos;
-- the next sequence is C0 CGlide smoke test -> C1 handoff writer -> C2 two-chunk continuation -> C3 four-chunk ~32-second scene;
-- the current Comfy graphs remain execution prototypes, not the final agent-facing Director control surface.
+The dedicated RTX 4060 ComfyUI worker is pinned and operational. The VPS-side runtime now supports:
 
-This Production validation remains separate from the primary Niche Intelligence design work.
+- durable media job acceptance and PostgreSQL state;
+- raw Comfy API-workflow submission through `POST /prompt`;
+- Comfy `prompt_id` persistence as the backend job ID;
+- queue/history reconciliation and restart recovery;
+- live `queued -> running -> succeeded` tracking;
+- artifact discovery and retrieval through Comfy `/view`;
+- ffprobe media metadata inspection;
+- durable Telegram metadata + original-file delivery;
+- delivery retry/backoff, stale-claim recovery and terminal retry limits;
+- delivery state exposed through `GET /v1/media/jobs/:jobId`;
+- prompt-specific media-job cancellation;
+- race-safe terminal job transitions;
+- configurable running-job timeout;
+- immediate VPS spool cleanup after each delivery attempt.
+
+Two runtime-controlled LTX 2.5 I2V generations have been proven, including the C6 hybrid run:
+
+```text
+Helix job:    job_e2a4a9efff7a47b8b70cd41c068073ac
+Comfy prompt: cc8e51f4-1799-4600-8ff0-6226c2e291e4
+Result:       succeeded
+Artifact:     video/LTX-2.5_i2v_00005_.mp4
+```
+
+The C6 artifact was also delivered through the durable Telegram path in one attempt, with delivery state persisted separately from generation state.
+
+## Production workflow policy
+
+The runtime is intentionally **not** being expanded into a large semantic workflow API yet.
+
+Current policy:
+
+```text
+raw Comfy API workflow
+        ↓
+helix-runtime execution
+        ↓
+continue I2V / T2V workflow research in ComfyUI
+        ↓
+choose stable workflow families
+        ↓
+freeze/version those graphs
+        ↓
+add semantic Helix bindings around proven controls
+```
+
+Deferred while workflow controls are still moving:
+
+- actual image upload/staging through `/upload/image`;
+- broad prompt/chunk-prompt bindings;
+- Prompt Relay semantic bindings;
+- sampler/Director semantic bindings;
+- T2V semantic bindings;
+- persistent WebSocket execution tracking;
+- worker output-retention deletion infrastructure.
+
+Worker retention is deferred because the traditional Comfy output path does not currently provide the runtime with a clean per-artifact delete primitive. Adding a separate worker-side deletion service only for cleanup is not justified at this checkpoint.
+
+## Current Production direction
+
+The next Production work is workflow development rather than runtime plumbing:
+
+1. continue I2V quality/continuity optimization;
+2. establish a simple native LTX 2.5 T2V baseline;
+3. test only controls that materially improve output or continuity;
+4. discover which prompt, temporal, sampler and Director controls actually deserve a stable interface;
+5. keep raw API-format graphs usable through Helix during experimentation;
+6. freeze/version I2V and T2V workflow families only after they stabilize.
+
+The existing LTX Director/CGlide/Lightricks findings remain valuable Production research, but they are no longer the next unvalidated infrastructure milestone. See `production/ltx-director/` for detailed experiment history.
+
+One operational validation remains pending: the Windows scheduled task has been started successfully by hand, but a real reboot -> automatic ComfyUI worker startup has not yet been proven.
 
 ## Preparation checklist
 
@@ -66,24 +143,25 @@ This Production validation remains separate from the primary Niche Intelligence 
 - [ ] Define common IDs and object names across system divisions.
 - [ ] Define draft contracts for `Niche`, `ResearchFinding`, `NicheModel`, `ContentIdea`, `ContentSpec`, `Experiment`, `Variant`, `MediaAsset`, `PublishedPost`, and `PerformanceSnapshot`.
 - [ ] Define evidence/provenance requirements for Intelligence research.
-- [ ] Decide what durable state must live outside n8n.
+- [x] Establish durable Production state outside n8n for the active ComfyUI execution path.
 - [ ] Keep real credentials outside git and document configuration names only when introduced.
 - [ ] Document Reitaard <-> Helix boundaries when backend contracts become clearer.
-- [ ] Preserve provider-neutral generation job notes inside Production/workflows without making them a blocker for Intelligence work.
-- [ ] When Production implementation resumes, validate whether an internal `ProductionPlan` boundary is useful before promoting it to a shared schema.
-- [x] Complete LTX Director D0 single-prompt generation and record the working settings/result.
-- [x] Validate D1 Prompt Relay temporal control.
-- [x] Stress-test Prompt Relay with intentionally large temporal changes.
-- [ ] Validate CGlide LTX 2.5 Director on the local workstation.
-- [ ] Validate CGlide 8-frame handoff writing and two-chunk continuation.
-- [ ] Attempt a four-chunk ~32-second continuous scene only after the two-chunk test passes.
-- [ ] Pin exact Director/KJNodes commits before treating a local Director stack as stable.
+- [x] Preserve provider-neutral generation job knowledge inside Production without making it a blocker for Intelligence work.
+- [ ] When Production workflow families stabilize, validate whether an internal `ProductionPlan` boundary is useful before promoting it to a shared schema.
+- [x] Validate native LTX 2.5 I2V generation on the standalone worker.
+- [x] Validate Prompt Relay as a Production temporal-control mechanism.
+- [x] Validate CGlide chunk continuation and handoff behavior.
+- [x] Validate Lightricks LoopingSampler temporal extension.
+- [x] Pin the standalone ComfyUI/custom-node execution stack.
+- [x] Submit, track, recover and deliver a real generation through `helix-runtime`.
+- [ ] Validate a simple T2V workflow before defining T2V semantic bindings.
+- [ ] Validate real Windows reboot/AtStartup behavior for the ComfyUI worker.
 
-## Next phase
+## Next Helix brain phase
 
 **Niche Intelligence design.**
 
-The next design work should answer:
+The next brain-design work should answer:
 
 1. What exactly is a niche in Helix?
 2. What sources and observations enter the Intelligence system?
@@ -99,6 +177,6 @@ After the Intelligence contract is coherent:
 
 1. Director skill design;
 2. Experiment Engine algorithms;
-3. separate Production implementation;
+3. connect the stable Production execution/workflow boundary;
 4. Distribution;
 5. closed-loop Analytics/Feedback.
