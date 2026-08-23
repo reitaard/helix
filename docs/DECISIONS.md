@@ -41,3 +41,15 @@ Only choices we are willing to treat as current project commitments belong here.
 **Decision:** Tool-specific generation/control layers such as LTX Director and ComfyUI workflow state belong inside Production adapters. They are not the Helix Director contract.
 
 **Reason:** Helix Director should express creative intent independently. Production can translate that intent into timeline segments, keyframes, IC-LoRA guidance, audio controls, retake regions, sampler/model settings, or equivalent backend-specific controls without coupling the brain to one generation stack.
+
+## 2026-08-23 — Production workers stay pinned; update awareness is read-only
+
+**Decision:** The active ComfyUI worker uses an explicit production revision pin. Helix may compare that revision with official upstream state for operator visibility, but it must not automatically update the worker.
+
+**Reason:** ComfyUI, custom nodes, PyTorch/CUDA behavior, and LTX workflow compatibility form one validated execution stack. Upstream drift is useful information; mutation of the production worker requires an explicit inspect → update → restart → validation checkpoint.
+
+## 2026-08-23 — Telegram is an operator surface, not a control plane
+
+**Decision:** The first Telegram command checkpoint is read-only and lives inside `helix-runtime`. It may report status and queue information, but it does not expose restart, shell, package-update, or arbitrary worker-mutation actions.
+
+**Reason:** Telegram is useful for compact operational visibility, while low-level execution ownership remains in Helix runtime/worker boundaries. Restricting commands to the configured chat ID and clearing Telegram's command menu also keeps the surface small and intentional.

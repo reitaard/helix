@@ -34,9 +34,10 @@ Production/generation remains a separate workstream connected through stable cre
 - Reitaard as a future application shell/interface;
 - provider/model/workflow research as provisional Production input;
 - local LTX 2.5 / ComfyUI production research, including reproducible generation manifests and controlled prompt/seed/workflow testing;
-- LTX Director research: timed prompts, keyframes, Prompt Relay, CGlide continuation, Lightricks temporal tiling, audio, retake and long-video controls as candidate **Production control surfaces**, not Helix Director dependencies;
+- LTX Director research: timed prompts, keyframes, Prompt Relay, CGlide continuation, Lightricks temporal tiling, audio, retake and long-video controls as candidate Production control surfaces, not Helix Director dependencies;
 - a pattern where Helix-owned execution intent is compiled into backend-specific workflows instead of agents manipulating provider UIs directly;
-- a durable self-hosted Production runtime boundary: caller/n8n -> `helix-runtime` -> PostgreSQL -> ComfyUI worker -> artifact delivery.
+- a durable self-hosted Production runtime boundary: caller/n8n -> `helix-runtime` -> PostgreSQL -> ComfyUI worker -> artifact delivery;
+- a read-only Telegram operator surface inside the runtime for diagnostics and queue visibility without giving Telegram write control over the worker.
 
 ## Active Production-side checkpoint
 
@@ -46,8 +47,8 @@ Current status as of 2026-08-23:
 caller / n8n
     ↓
 helix-runtime :8787
-    ↓
-helix-db
+    ├── helix-db
+    ├── TelegramCommandService
     ↓
 ComfyAdapter / ComfyClient
     ↓ Tailscale
@@ -59,10 +60,23 @@ generated artifact
     ↓
 VPS temporary spool
     ↓
-Telegram delivery
+Telegram original document + caption
 ```
 
-The dedicated RTX 4060 ComfyUI worker is pinned and operational. The VPS-side runtime now supports:
+The dedicated RTX 4060 ComfyUI worker is pinned and operational.
+
+Current identity/runtime facts:
+
+```text
+durable worker ID: helix-rtx4060-01
+display name: Christopher Nolan
+ComfyUI: 0.33.0
+Comfy revision: 7dde56176efa71fd74ef7b3930ab5882d1926288
+Python: 3.12.11
+PyTorch: 2.10.0+cu130
+```
+
+The VPS-side runtime now supports:
 
 - durable media job acceptance and PostgreSQL state;
 - raw Comfy API-workflow submission through `POST /prompt`;
@@ -71,13 +85,24 @@ The dedicated RTX 4060 ComfyUI worker is pinned and operational. The VPS-side ru
 - live `queued -> running -> succeeded` tracking;
 - artifact discovery and retrieval through Comfy `/view`;
 - ffprobe media metadata inspection;
-- durable Telegram metadata + original-file delivery;
+- durable Telegram original-file delivery with metadata in the same document caption;
 - delivery retry/backoff, stale-claim recovery and terminal retry limits;
 - delivery state exposed through `GET /v1/media/jobs/:jobId`;
 - prompt-specific media-job cancellation;
 - race-safe terminal job transitions;
 - configurable running-job timeout;
-- immediate VPS spool cleanup after each delivery attempt.
+- immediate VPS spool cleanup after each delivery attempt;
+- human-friendly worker naming without changing durable IDs;
+- live Comfy/Python/Torch/GPU/VRAM/RAM diagnostics;
+- direct lightweight Comfy queue summaries;
+- read-only Telegram `/status`, `/queue`, `/help` commands;
+- hidden `/st`, `/stat`, `/qu`, `/que` aliases without advertising them;
+- read-only pinned-Comfy-revision comparison against upstream `master` with a 15-minute cache;
+- Telegram command registration cleared on startup so the bot does not force a Menu button.
+
+The Telegram command service accepts messages only from the configured chat ID and remains deliberately read-only. It does not expose restart, shell, update, or other mutation actions.
+
+The update indicator is informational only. It reports whether official ComfyUI `master` has commits beyond the configured production pin; it does not automatically update the worker and should not be interpreted as a stable-release guarantee.
 
 Two runtime-controlled LTX 2.5 I2V generations have been proven, including the C6 hybrid run:
 
@@ -92,7 +117,7 @@ The C6 artifact was also delivered through the durable Telegram path in one atte
 
 ## Production workflow policy
 
-The runtime is intentionally **not** being expanded into a large semantic workflow API yet.
+The runtime is intentionally not being expanded into a large semantic workflow API yet.
 
 Current policy:
 
@@ -118,7 +143,8 @@ Deferred while workflow controls are still moving:
 - sampler/Director semantic bindings;
 - T2V semantic bindings;
 - persistent WebSocket execution tracking;
-- worker output-retention deletion infrastructure.
+- worker output-retention deletion infrastructure;
+- write-capable Telegram operator actions.
 
 Worker retention is deferred because the traditional Comfy output path does not currently provide the runtime with a clean per-artifact delete primitive. Adding a separate worker-side deletion service only for cleanup is not justified at this checkpoint.
 
@@ -154,6 +180,8 @@ One operational validation remains pending: the Windows scheduled task has been 
 - [x] Validate Lightricks LoopingSampler temporal extension.
 - [x] Pin the standalone ComfyUI/custom-node execution stack.
 - [x] Submit, track, recover and deliver a real generation through `helix-runtime`.
+- [x] Add a read-only Telegram operator checkpoint for system status and queue visibility.
+- [x] Add live worker RAM/VRAM diagnostics and read-only Comfy upstream-drift awareness.
 - [ ] Validate a simple T2V workflow before defining T2V semantic bindings.
 - [ ] Validate real Windows reboot/AtStartup behavior for the ComfyUI worker.
 
