@@ -225,7 +225,7 @@ export class TelegramDelivery {
         )
       }</code>`,
 
-      `<blockquote>${metadata}</blockquote>`
+      `<blockquote expandable>${metadata}</blockquote>`
     ].join("\n");
   }
 
