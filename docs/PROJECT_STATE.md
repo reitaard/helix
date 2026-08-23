@@ -2,9 +2,9 @@
 
 ## Current phase
 
-**Preparation / foundation, with a validated Production execution slice.**
+**Preparation / foundation, with a validated Production execution slice and a read-only operator surface.**
 
-The high-level Helix system division is established. The project is still avoiding a premature full-system implementation, but the Production-side ComfyUI execution path has now been hardened enough to serve as a stable checkpoint while workflow research continues.
+The high-level Helix system division is established. The project is still avoiding a premature full-system implementation, but the Production-side ComfyUI execution path has now been hardened enough to serve as a stable checkpoint while workflow research and system polish continue independently.
 
 ## Primary system direction
 
@@ -37,7 +37,7 @@ Production/generation remains a separate workstream connected through stable cre
 - LTX Director research: timed prompts, keyframes, Prompt Relay, CGlide continuation, Lightricks temporal tiling, audio, retake and long-video controls as candidate Production control surfaces, not Helix Director dependencies;
 - a pattern where Helix-owned execution intent is compiled into backend-specific workflows instead of agents manipulating provider UIs directly;
 - a durable self-hosted Production runtime boundary: caller/n8n -> `helix-runtime` -> PostgreSQL -> ComfyUI worker -> artifact delivery;
-- a read-only Telegram operator surface inside the runtime for diagnostics and queue visibility without giving Telegram write control over the worker.
+- a read-only Telegram operator surface inside the runtime for diagnostics, queue state, durable job inspection, and post-generation outbox visibility without giving Telegram unrestricted write control over the worker.
 
 ## Active Production-side checkpoint
 
@@ -49,6 +49,7 @@ caller / n8n
 helix-runtime :8787
     ├── helix-db
     ├── TelegramCommandService
+    ├── OutboxRepository
     ↓
 ComfyAdapter / ComfyClient
     ↓ Tailscale
@@ -95,12 +96,17 @@ The VPS-side runtime now supports:
 - human-friendly worker naming without changing durable IDs;
 - live Comfy/Python/Torch/GPU/VRAM/RAM diagnostics;
 - direct lightweight Comfy queue summaries;
-- read-only Telegram `/status`, `/queue`, `/help` commands;
-- hidden `/st`, `/stat`, `/qu`, `/que` aliases without advertising them;
+- read-only Telegram `/status`, `/queue`, `/jobs`, `/job`, `/outbox`, `/help` commands;
+- full durable IDs in `/jobs` for direct copying;
+- unique-prefix `/job` lookup with copied trailing-dot cleanup;
+- read-only outbox summary for pending/sending/retrying/terminal-failed deliveries;
+- hidden `/st`, `/stat`, `/qu`, `/que`, `/jbs`, `/jb`, `/ob`, `/h` aliases without advertising them;
 - read-only pinned-Comfy-revision comparison against upstream `master` with a 15-minute cache;
 - Telegram command registration cleared on startup so the bot does not force a Menu button.
 
-The Telegram command service accepts messages only from the configured chat ID and remains deliberately read-only. It does not expose restart, shell, update, or other mutation actions.
+The Telegram command service accepts messages only from the configured chat ID and remains deliberately read-only. It does not expose restart, shell, package update, or arbitrary worker mutation actions.
+
+The Outbox view is presentation-only. `OutboxRepository` reads durable `media_deliveries` state but does not claim, retry, reset, or mutate deliveries. `DeliveryWorker` remains responsible for delivery execution.
 
 The update indicator is informational only. It reports whether official ComfyUI `master` has commits beyond the configured production pin; it does not automatically update the worker and should not be interpreted as a stable-release guarantee.
 
@@ -114,6 +120,32 @@ Artifact:     video/LTX-2.5_i2v_00005_.mp4
 ```
 
 The C6 artifact was also delivered through the durable Telegram path in one attempt, with delivery state persisted separately from generation state.
+
+## Telegram operator checkpoint
+
+The current read-only command surface is:
+
+```text
+/status      diagnostics
+/queue       current Comfy + Helix queue state
+/jobs        five most recent jobs with full durable IDs
+/job <id>    one job plus its Outbox/send state
+/outbox      only send work still needing attention
+/help        command list
+```
+
+`/outbox` excludes already-delivered rows. Its presentation maps internal delivery states as follows:
+
+```text
+pending                         -> pending
+delivering                      -> sending
+failed + next_attempt_at set    -> retrying
+failed + next_attempt_at null   -> failed
+```
+
+The command shows at most five attention items, prioritizes terminal failures, and reports retry timing or compact terminal error text where useful. This keeps the operator surface actionable rather than turning it into another history list.
+
+Write-capable Telegram actions remain deferred. A future `/cancel <id>` can be considered separately after the read-only job/outbox layer is proven in normal use.
 
 ## Production workflow policy
 
@@ -150,16 +182,17 @@ Worker retention is deferred because the traditional Comfy output path does not 
 
 ## Current Production direction
 
-The next Production work is workflow development rather than runtime plumbing:
+The immediate session-level focus may remain lightweight runtime/operator polish rather than generation workflow work. This does not change the longer Production sequence:
 
-1. continue I2V quality/continuity optimization;
-2. establish a simple native LTX 2.5 T2V baseline;
-3. test only controls that materially improve output or continuity;
-4. discover which prompt, temporal, sampler and Director controls actually deserve a stable interface;
-5. keep raw API-format graphs usable through Helix during experimentation;
-6. freeze/version I2V and T2V workflow families only after they stabilize.
+1. keep the runtime and operator surface small and reliable;
+2. continue I2V quality/continuity optimization when returning to workflow work;
+3. establish a simple native LTX 2.5 T2V baseline;
+4. test only controls that materially improve output or continuity;
+5. discover which prompt, temporal, sampler and Director controls actually deserve a stable interface;
+6. keep raw API-format graphs usable through Helix during experimentation;
+7. freeze/version I2V and T2V workflow families only after they stabilize.
 
-The existing LTX Director/CGlide/Lightricks findings remain valuable Production research, but they are no longer the next unvalidated infrastructure milestone. See `production/ltx-director/` for detailed experiment history.
+The existing LTX Director/CGlide/Lightricks findings remain valuable Production research, but they are not a reason to destabilize the current runtime checkpoint. See `production/ltx-director/` for detailed experiment history.
 
 One operational validation remains pending: the Windows scheduled task has been started successfully by hand, but a real reboot -> automatic ComfyUI worker startup has not yet been proven.
 
@@ -180,7 +213,9 @@ One operational validation remains pending: the Windows scheduled task has been 
 - [x] Validate Lightricks LoopingSampler temporal extension.
 - [x] Pin the standalone ComfyUI/custom-node execution stack.
 - [x] Submit, track, recover and deliver a real generation through `helix-runtime`.
-- [x] Add a read-only Telegram operator checkpoint for system status and queue visibility.
+- [x] Add read-only Telegram system status and queue visibility.
+- [x] Add Telegram recent-job and unique-prefix job inspection.
+- [x] Add read-only Telegram Outbox/send-state visibility.
 - [x] Add live worker RAM/VRAM diagnostics and read-only Comfy upstream-drift awareness.
 - [ ] Validate a simple T2V workflow before defining T2V semantic bindings.
 - [ ] Validate real Windows reboot/AtStartup behavior for the ComfyUI worker.
