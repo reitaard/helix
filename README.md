@@ -20,7 +20,7 @@ Experiment Engine
 
 Production/generation continues as a separate workstream and will connect through stable briefs/contracts rather than shaping the Intelligence or Director architecture.
 
-The current Production checkpoint already includes a durable ComfyUI execution runtime, PostgreSQL job/delivery state, original-file Telegram delivery, operator diagnostics, durable operational alerts, complete job-event debugging, and guarded terminal-style job cancellation. See [`production/README.md`](production/README.md) and [`production/media-runtime/README.md`](production/media-runtime/README.md).
+The current Production checkpoint includes a durable ComfyUI execution runtime, PostgreSQL job/delivery state, original-file Telegram delivery, operator diagnostics, durable operational alerts, complete job-event debugging, guarded terminal-style job cancellation, and a validated native LTX 2.5 T2V path initiated from Telegram with pre-submit confirmation. See [`production/README.md`](production/README.md) and [`production/media-runtime/README.md`](production/media-runtime/README.md).
 
 ## System divisions
 

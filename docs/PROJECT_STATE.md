@@ -2,9 +2,9 @@
 
 ## Current phase
 
-**Preparation / foundation, with a validated Production execution slice and a narrow Telegram operator surface.**
+**Preparation / foundation, with a validated Production execution slice, a narrow Telegram operator surface, and a proven native LTX 2.5 T2V input/output loop.**
 
-The high-level Helix system division is established. Production execution is now hardened enough to pause as a stable checkpoint while the project returns to the main Helix brain path.
+The high-level Helix system division is established. Production execution is hardened enough to pause as a stable checkpoint while the project returns to the main Helix brain path.
 
 ## Primary system direction
 
@@ -26,16 +26,17 @@ Production/generation remains a separate workstream connected later through stab
 
 ## Active Production checkpoint
 
-Current status as of 2026-08-23:
+Current status as of 2026-08-24:
 
 ```text
-caller / n8n
+caller / n8n / Telegram
     ↓
 helix-runtime :8787
     ├── helix-db
     ├── TelegramCommandService
     ├── TelegramAlertService
     ├── TelegramCancelService
+    ├── TelegramT2VService
     ├── OutboxRepository
     ↓
 ComfyAdapter / ComfyClient
@@ -61,6 +62,7 @@ Comfy revision: 7dde56176efa71fd74ef7b3930ab5882d1926288
 Python: 3.12.11
 PyTorch: 2.10.0+cu130
 GPU: RTX 4060
+validated tools: video.i2v, video.t2v
 max GPU jobs: 1
 ```
 
@@ -68,6 +70,7 @@ The VPS-side runtime supports:
 
 - durable media-job acceptance and PostgreSQL state;
 - raw Comfy API-workflow submission;
+- explicit job tool persistence (`video.i2v`, `video.t2v`);
 - Comfy `prompt_id` persistence as backend job ID;
 - queue/history reconciliation and restart recovery;
 - race-safe terminal transitions;
@@ -80,7 +83,8 @@ The VPS-side runtime supports:
 - live Comfy/Python/Torch/GPU/VRAM/RAM diagnostics;
 - read-only pinned-Comfy revision comparison against upstream `master`;
 - durable operator alerts and debug views;
-- one deliberately narrow write-capable Telegram action: confirmed job cancellation.
+- confirmed job cancellation;
+- durable T2V prompt capture and pre-submit confirmation.
 
 ## Telegram operator checkpoint
 
@@ -94,6 +98,7 @@ Current advertised commands:
 /outbox      send work still needing attention
 /errors      recent generation/terminal-delivery failures
 /events <id> complete durable event timeline
+/t2v         confirmed native LTX 2.5 generation
 /cancel <id> confirmed job cancellation
 /help        command list
 ```
@@ -122,7 +127,7 @@ The service accepts messages only from the configured Telegram chat ID. It does 
 
 `/errors` shows the five most recent failed/timed-out generation jobs and terminal Outbox failures. Cancelled jobs are excluded.
 
-`/events <id>` shows the complete durable `media_job_events` timeline, newest first, with sequence numbers, Helix-local timestamps, and the actual technical event names.
+`/events <id>` shows the complete durable `media_job_events` timeline, newest first, with sequence numbers, Helix-local timestamps, and actual technical event names.
 
 ### Operational alerts
 
@@ -136,15 +141,11 @@ worker offline
 worker recovered
 ```
 
-Event-derived alerts are persisted in `operator_alerts`, deduplicated by durable keys, and delivered with bounded retry. `operator_alert_cursors` starts at the latest existing event during migration so historical failures are not replayed on deployment.
-
-Worker liveness alerts require consecutive observations. `Christopher Nolan` is not declared offline on a single failed check, and a recovery alert is only emitted after a real offline transition. A transition cooldown reduces flapping.
+Event-derived alerts are persisted in `operator_alerts`, deduplicated by durable keys, and delivered with bounded retry. Worker liveness alerts require consecutive observations and a cooldown.
 
 ### Safe cancellation
 
-`/cancel <id>` and hidden alias `/cc` are the only write-capable Telegram actions.
-
-The flow is deliberately terminal-style:
+`/cancel <id>` and hidden alias `/cc` use durable terminal-style confirmation:
 
 ```text
 /cancel <id>
@@ -156,45 +157,61 @@ durable pending action
 yes / no
 ```
 
-Rules:
+Three invalid responses abort the request, a new slash command abandons pending confirmation, expiry is quiet, and confirmed cancellation delegates to `JobService.cancel()` rather than calling ComfyUI directly.
 
-- one pending cancellation per configured Telegram operator chat;
-- `yes` / `no` are case-insensitive;
-- three invalid responses abort the request;
-- a new slash command silently abandons the pending confirmation;
-- expiry is quiet;
-- pending state survives runtime restart until expiry;
-- no inline destructive buttons, message edits, or message deletion.
+### Confirmed T2V input
 
-Operator intent is recorded separately from state transition:
+`/t2v` now separates prompt entry from GPU execution:
 
 ```text
-operator.telegram.cancel_requested
-operator.telegram.cancel_confirmed
-operator.telegram.cancel_aborted
-operator.telegram.cancel_expired
+/t2v
+  ↓
+awaiting_prompt
+  ↓
+prompt preview
+  ↓
+awaiting_confirmation
+  ↓ yes
+video.t2v
 ```
 
-Confirmed cancellation delegates to the existing `JobService.cancel()` path. Telegram does not call ComfyUI directly.
+Pending T2V state is durable in `operator_pending_t2v`. The prompt window is five minutes and the confirmation window is 60 seconds. Three invalid confirmation responses abort. A new slash command abandons the pending T2V action. No media job exists until `yes` is confirmed.
 
-The safe confirmation state machine was validated with a synthetic running job that had no backend job ID, so the tests could not interrupt a real generation. Terminal-job protection, `no`, invalid-response limits, command abandonment, expiry, confirmed intent, and durable audit events were exercised. The next naturally running real generation can provide the final end-to-end proof of an actual backend interruption.
+The current native LTX 2.5 T2V semantic surface is deliberately prompt-only. Helix mutates `405:376.inputs.value` and verifies that prompt enhancement at `405:383` remains disabled. The current 16:9 / 0.9 MP / 24 fps / 5-second baseline remains fixed.
+
+Worker state no longer treats a transient Comfy WebSocket-events timeout as execution failure by itself. Runtime, queue and capability checks determine execution readiness; event-socket failure remains visible as an advisory diagnostic.
 
 ## Proven Production runs
 
-Two runtime-controlled LTX 2.5 I2V generations have been proven, including:
+Runtime-controlled LTX 2.5 I2V generation remains proven, including:
 
 ```text
 Helix job:    job_e2a4a9efff7a47b8b70cd41c068073ac
-Comfy prompt: cc8e51f4-1799-4600-8ff0-6226c2e291e4
 Result:       succeeded
 Artifact:     video/LTX-2.5_i2v_00005_.mp4
 ```
 
-The C6 artifact was delivered through the durable Telegram path with generation state and delivery state persisted separately.
+The first native T2V production loop is also proven:
+
+```text
+Helix job:    job_b270eea4177746d881c0c96d0f2f4b35
+Tool:         video.t2v
+Result:       succeeded
+Runtime:      4m 10s
+Artifact:     video/LTX_2.5_t2v_00001_.mp4
+Video:        1280×704 · 5.0s
+Audio:        present
+Delivery:     Telegram, 1 attempt
+Worker:       Christopher Nolan
+```
+
+This proves Telegram intent -> Helix durable job -> native LTX 2.5 generation -> artifact reconciliation -> original-file Telegram delivery.
+
+The durable pre-submit confirmation layer was added after the successful generation proof so future prompt entry does not immediately spend GPU time.
 
 ## Production workflow policy
 
-The runtime is intentionally not being expanded into a large semantic workflow API while the generation graphs are still changing.
+The runtime is intentionally not being expanded into a large semantic workflow API while generation graphs are still changing.
 
 ```text
 raw Comfy API workflow
@@ -214,11 +231,12 @@ Still deferred:
 
 - actual image upload/staging through `/upload/image`;
 - broad prompt/chunk-prompt bindings;
-- Prompt Relay/sampler/Director semantic bindings;
-- T2V semantic bindings;
+- Prompt Relay/Director bindings;
+- broader T2V settings beyond the fixed prompt-only baseline;
+- sampler/model tuning as stable user-facing semantics;
 - persistent WebSocket execution tracking;
 - worker output-retention deletion infrastructure;
-- broader Telegram mutation commands beyond confirmed job cancellation.
+- broader Telegram mutation commands.
 
 One operational validation remains pending: the Windows scheduled task has been started successfully by hand, but a real reboot -> automatic ComfyUI worker startup has not yet been proven.
 
@@ -237,7 +255,9 @@ One operational validation remains pending: the Windows scheduled task has been 
 - [x] Add `/errors` and complete timestamped `/events` debug views.
 - [x] Add safe durable `/cancel` + `/cc` confirmation flow.
 - [x] Add live worker RAM/VRAM diagnostics and read-only Comfy upstream-drift awareness.
-- [ ] Validate a simple T2V workflow before defining T2V semantic bindings.
+- [x] Validate a simple native LTX 2.5 T2V workflow and Telegram production loop.
+- [x] Add durable T2V pre-submit confirmation.
+- [ ] Design the stable T2V settings contract.
 - [ ] Validate real Windows reboot/AtStartup behavior for the ComfyUI worker.
 
 ## Next Helix brain phase

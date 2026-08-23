@@ -50,18 +50,48 @@ Only choices we are willing to treat as current project commitments belong here.
 
 ## 2026-08-23 — Telegram is an operator surface, not a general control plane
 
-**Decision:** Telegram lives inside `helix-runtime` as a narrow operator surface. It may expose diagnostics, queue/job/outbox inspection, durable debug views, operational alerts, and explicitly confirmed media-job cancellation, but not restart, shell, package-update, or arbitrary worker-mutation actions.
+**Decision:** Telegram lives inside `helix-runtime` as a narrow operator surface. It may expose diagnostics, queue/job/outbox inspection, durable debug views, operational alerts, explicitly confirmed media-job cancellation, and explicitly confirmed T2V generation, but not restart, shell, package-update, or arbitrary worker-mutation actions.
 
 **Reason:** Telegram is useful for compact operational visibility and bounded intervention, while low-level execution ownership remains in Helix runtime/worker boundaries. Restricting access to the configured chat ID and keeping the command surface intentionally small preserves that boundary.
 
 ## 2026-08-23 — Telegram cancellation requires durable terminal-style confirmation
 
-**Decision:** `/cancel <id>` and hidden alias `/cc` are the only write-capable Telegram commands in the current checkpoint. A cancellation request creates one durable pending action for the configured operator chat, expires after 60 seconds, and requires a case-insensitive `yes` or `no`. Three invalid responses abort the request. A new slash command silently abandons the pending confirmation.
+**Decision:** `/cancel <id>` and hidden alias `/cc` create one durable pending action for the configured operator chat, expire after 60 seconds, and require a case-insensitive `yes` or `no`. Three invalid responses abort the request. A new slash command silently abandons the pending confirmation.
 
-**Reason:** Job cancellation is already owned by `JobService`, so Telegram should only provide a guarded operator path into that existing service. Durable pending state and separate audit events (`operator.telegram.cancel_requested`, `operator.telegram.cancel_confirmed`, `operator.telegram.cancel_aborted`, `operator.telegram.cancel_expired`) preserve intent and survive runtime restarts without introducing destructive buttons or direct Comfy control.
+**Reason:** Job cancellation is already owned by `JobService`, so Telegram should only provide a guarded operator path into that existing service. Durable pending state preserves intent and survives runtime restarts without introducing destructive buttons or direct Comfy control.
 
 ## 2026-08-23 — Operational alerts are durable and deduplicated
 
 **Decision:** Failed/timed-out jobs, terminal Outbox failures, and confirmed worker offline/recovered transitions may proactively alert the configured Telegram operator. Event-derived alerts are persisted and deduplicated; worker transition alerts require consecutive observations and a cooldown.
 
 **Reason:** Operator notification must not depend on a single process tick or flood the chat during polling/restart. Durable alert rows, a migration-time event cursor, bounded send retry, transition thresholds, and cooldown provide observability without turning transient observations into repeated noise.
+
+## 2026-08-24 — Telegram T2V generation requires pre-submit confirmation
+
+**Decision:** Receiving a T2V prompt must not immediately spend GPU time. `/t2v` captures the prompt durably, previews it, and requires terminal-style `yes` / `no` confirmation before `JobService.create()` is called.
+
+**Reason:** Generation is a meaningful compute action and operator text may contain mistakes. Prompt entry and execution intent must remain separate.
+
+## 2026-08-24 — Initial T2V semantic surface is prompt-only
+
+**Decision:** The first validated native LTX 2.5 T2V binding mutates only `405:376.inputs.value` in the vetted runtime workflow. Prompt enhancement remains disabled and the current resolution/aspect, duration, FPS, negative prompt, model and sampler controls remain workflow-defined.
+
+**Reason:** The full T2V settings contract has not been designed yet. A narrow binding proves the end-to-end Production path without prematurely freezing unstable Comfy node controls as public Helix semantics.
+
+## 2026-08-24 — T2V settings must be Helix semantics, not raw Comfy node controls
+
+**Decision:** Future T2V settings should expose stable concepts such as aspect ratio, duration, quality/resolution preset and prompt enhancement first. Seed, negative prompt, sampler/model tuning and workflow-specific values remain advanced/internal until their value and stability are proven.
+
+**Reason:** The operator surface should remain understandable and portable across future workflow revisions. Raw node IDs and model-specific sampler details are implementation details, not the long-term Production contract.
+
+## 2026-08-24 — WebSocket event readiness is advisory
+
+**Decision:** A transient Comfy WebSocket events-probe timeout does not by itself mark an otherwise execution-ready worker `Degraded`. Runtime reachability, queue access and capability inspection determine execution readiness; event-socket errors remain visible as diagnostics.
+
+**Reason:** Helix job correctness comes from durable queue/history reconciliation. Treating one optional event probe as the entire worker state made `/status` flap despite successful active generation.
+
+## 2026-08-24 — Telegram artifact captions identify the Helix tool
+
+**Decision:** Generated artifact captions use the actual media tool such as `[video.t2v]` instead of a generic Comfy heading, and use the configured worker presentation name rather than the durable worker ID.
+
+**Reason:** Operator output should describe the Helix action that produced the artifact while preserving durable IDs internally. Presentation naming and execution identity remain separate concerns.
