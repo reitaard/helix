@@ -31,8 +31,8 @@ Current status as of 2026-08-24:
 ```text
 caller / n8n / Telegram
     ↓
-helix-runtime :8787
-    ├── helix-db
+comfy-runtime :8787
+    ├── comfy-db
     ├── TelegramCommandService
     ├── TelegramAlertService
     ├── TelegramCancelService
@@ -41,7 +41,7 @@ helix-runtime :8787
     ↓
 ComfyAdapter / ComfyClient
     ↓ Tailscale
-helix-rtx4060-01
+comfy-rtx4060-01
     ↓
 ComfyUI :8188
     ↓
@@ -55,7 +55,7 @@ Telegram original document + caption
 Current worker identity/runtime facts:
 
 ```text
-durable worker ID: helix-rtx4060-01
+durable worker ID: comfy-rtx4060-01
 display name: Christopher Nolan
 ComfyUI: 0.33.0
 Comfy revision: 7dde56176efa71fd74ef7b3930ab5882d1926288
@@ -216,7 +216,7 @@ The runtime is intentionally not being expanded into a large semantic workflow A
 ```text
 raw Comfy API workflow
         ↓
-helix-runtime execution
+comfy-runtime execution
         ↓
 continue I2V / T2V workflow research in ComfyUI
         ↓
@@ -249,7 +249,7 @@ One operational validation remains pending: the Windows scheduled task has been 
 - [x] Establish durable Production state outside n8n for the active ComfyUI execution path.
 - [x] Validate native LTX 2.5 I2V generation on the standalone worker.
 - [x] Pin the standalone ComfyUI/custom-node execution stack.
-- [x] Submit, track, recover and deliver a real generation through `helix-runtime`.
+- [x] Submit, track, recover and deliver a real generation through `comfy-runtime`.
 - [x] Add Telegram system status, queue, job, and Outbox visibility.
 - [x] Add durable Telegram operational alerts and deduplication.
 - [x] Add `/errors` and complete timestamped `/events` debug views.

@@ -74,7 +74,7 @@ export function createApp(
     "/v1/health",
     async () => ({
       service:
-        "helix-runtime",
+        "comfy-runtime",
 
       status: "ok",
 

@@ -1,6 +1,6 @@
 # ComfyUI Worker
 
-This folder records the active ComfyUI execution workstream only.
+This folder records the active Helix Production Comfy Services execution workstream only.
 
 The goal is to keep the dedicated ComfyUI GPU worker reliable while workflow experiments continue changing. It does not define the rest of Helix.
 
@@ -9,13 +9,13 @@ The goal is to keep the dedicated ComfyUI GPU worker reliable while workflow exp
 ```text
 caller / n8n / Telegram
     ↓
-helix-runtime :8787
+comfy-runtime :8787
     ↓
-helix-db
+comfy-db
     ↓
 ComfyAdapter / ComfyClient
     ↓ Tailscale
-helix-rtx4060-01
+comfy-rtx4060-01
     ↓
 ComfyUI :8188
     ↓
@@ -29,7 +29,7 @@ Telegram original document + caption
 ## Stable worker
 
 ```text
-workerId: helix-rtx4060-01
+workerId: comfy-rtx4060-01
 display name: Christopher Nolan
 profile: comfy-video-ltx-stable
 Comfy revision: 7dde56176efa71fd74ef7b3930ab5882d1926288
@@ -42,7 +42,7 @@ validated capabilities: video.i2v, video.t2v
 max concurrent GPU jobs: 1
 ```
 
-The durable ID remains `helix-rtx4060-01`; `Christopher Nolan` is a configurable human-facing name.
+The durable ID remains `comfy-rtx4060-01`; `Christopher Nolan` is a configurable human-facing name.
 
 LTX 2.3 and 2.5 assets are available. LTX 2.5 is the validated generation path.
 
@@ -85,7 +85,7 @@ validate LTX/custom nodes/models
 change the Helix production revision pin only after validation
 ```
 
-`helix-runtime` reports upstream drift through `/status` by comparing the configured pinned revision with official `Comfy-Org/ComfyUI` `master`. This is informational only and never mutates the worker.
+`comfy-runtime` reports upstream drift through `/status` by comparing the configured pinned revision with official `Comfy-Org/ComfyUI` `master`. This is informational only and never mutates the worker.
 
 ## Live diagnostics
 
@@ -109,8 +109,8 @@ A transient WebSocket events-probe timeout is advisory. Runtime reachability, qu
 - standalone pinned ComfyUI worker on Windows;
 - private Tailscale connectivity from VPS to Comfy;
 - HTTP and WebSocket connectivity;
-- `helix-runtime` container on `127.0.0.1:8787`;
-- dedicated PostgreSQL `helix-db`;
+- `comfy-runtime` container on `127.0.0.1:8787`;
+- dedicated PostgreSQL `comfy-db`;
 - worker registration and readiness persistence;
 - human-friendly configurable worker name;
 - cheap `/live` and heavier `/readiness` probes;
@@ -195,7 +195,7 @@ backend_job_id / prompt_id
 reconcile durable state
 ```
 
-This means `helix-runtime` can restart and recover unfinished/completed jobs. Persistent WebSocket tracking can be added later for lower latency, but is not required for correctness.
+This means `comfy-runtime` can restart and recover unfinished/completed jobs. Persistent WebSocket tracking can be added later for lower latency, but is not required for correctness.
 
 Running jobs can also be cancelled through the prompt-specific Comfy cancellation endpoint. Helix persists `cancelled` as a terminal state and protects it from late reconciler transitions.
 
@@ -258,7 +258,7 @@ Pending prompt/confirmation state is durable in `operator_pending_t2v`. No GPU j
 The deployment-managed workflow lives at:
 
 ```text
-/opt/helix-runtime/workflows/video_ltx2_5_t2v.api.json
+/opt/comfy-runtime/workflows/video_ltx2_5_t2v.api.json
 ```
 
 It is intentionally not frozen into Git yet.
@@ -302,7 +302,7 @@ When workflow families stabilize, add semantic bindings around the chosen graphs
 The experimental executable graph currently lives on the VPS at:
 
 ```text
-/opt/helix-runtime/workflows/c6.api.json
+/opt/comfy-runtime/workflows/c6.api.json
 ```
 
 It is not frozen into the repository.
@@ -363,7 +363,7 @@ One operational validation remains pending: the Windows scheduled task has been 
 
 - Raw ComfyUI remains private over Tailscale; do not expose port `8188` publicly.
 - Keep `maxConcurrentGpuJobs: 1` for the RTX 4060 worker.
-- Preserve durable ID `helix-rtx4060-01`; presentation names may change independently.
+- Preserve durable ID `comfy-rtx4060-01`; presentation names may change independently.
 - Keep the Comfy revision pinned until an update has been explicitly inspected and validated.
 - Do not auto-update ComfyUI from Telegram or the runtime.
 - Do not alter the pinned custom-node/model stack casually.

@@ -301,7 +301,7 @@ export class ComfyClient {
     timeoutMs = 5000
   ): Promise<unknown> {
     const clientId =
-      `helix-runtime-${crypto
+      `comfy-runtime-${crypto
         .randomUUID()
         .replaceAll("-", "")}`;
 

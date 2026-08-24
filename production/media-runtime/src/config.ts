@@ -4,8 +4,16 @@ import type {
   WorkerDefinition
 } from "./domain/worker.js";
 
+function preferComfyEnv(
+  name: string,
+  legacyName = name
+) {
+  return process.env[`COMFY_${name}`] ??
+    process.env[`HELIX_${legacyName}`];
+}
+
 const envSchema = z.object({
-  HELIX_PORT:
+  COMFY_RUNTIME_PORT:
     z.coerce
       .number()
       .int()
@@ -13,45 +21,45 @@ const envSchema = z.object({
       .max(65535)
       .default(8787),
 
-  HELIX_WORKER_RTX4060_URL:
+  COMFY_WORKER_RTX4060_URL:
     z.string().url(),
 
-  HELIX_WORKER_RTX4060_NAME:
+  COMFY_WORKER_RTX4060_NAME:
     z.string()
       .min(1)
       .default(
         "Christopher Nolan"
       ),
 
-  HELIX_WORKER_RTX4060_REVISION:
+  COMFY_WORKER_RTX4060_REVISION:
     z.string()
       .min(7)
       .default(
         "7dde56176efa71fd74ef7b3930ab5882d1926288"
       ),
 
-  HELIX_DATABASE_URL:
+  COMFY_DATABASE_URL:
     z.string().min(1),
 
-  HELIX_TELEGRAM_BOT_TOKEN:
+  COMFY_TELEGRAM_BOT_TOKEN:
     z.string().min(1).optional(),
 
-  HELIX_TELEGRAM_CHAT_ID:
+  COMFY_TELEGRAM_CHAT_ID:
     z.string().min(1).optional(),
 
-  HELIX_SPOOL_DIR:
+  COMFY_SPOOL_DIR:
     z.string()
       .min(1)
-      .default("/tmp/helix-spool"),
+      .default("/tmp/comfy-spool"),
 
-  HELIX_T2V_WORKFLOW_PATH:
+  COMFY_T2V_WORKFLOW_PATH:
     z.string()
       .min(1)
       .default(
         "/app/workflows/video_ltx2_5_t2v.api.json"
       ),
 
-  HELIX_JOB_TIMEOUT_SECONDS:
+  COMFY_JOB_TIMEOUT_SECONDS:
     z.coerce
       .number()
       .int()
@@ -60,14 +68,47 @@ const envSchema = z.object({
 });
 
 const env =
-  envSchema.parse(process.env);
+  envSchema.parse({
+    COMFY_RUNTIME_PORT:
+      preferComfyEnv(
+        "RUNTIME_PORT",
+        "PORT"
+      ),
+
+    COMFY_WORKER_RTX4060_URL:
+      preferComfyEnv("WORKER_RTX4060_URL"),
+
+    COMFY_WORKER_RTX4060_NAME:
+      preferComfyEnv("WORKER_RTX4060_NAME"),
+
+    COMFY_WORKER_RTX4060_REVISION:
+      preferComfyEnv("WORKER_RTX4060_REVISION"),
+
+    COMFY_DATABASE_URL:
+      preferComfyEnv("DATABASE_URL"),
+
+    COMFY_TELEGRAM_BOT_TOKEN:
+      preferComfyEnv("TELEGRAM_BOT_TOKEN"),
+
+    COMFY_TELEGRAM_CHAT_ID:
+      preferComfyEnv("TELEGRAM_CHAT_ID"),
+
+    COMFY_SPOOL_DIR:
+      preferComfyEnv("SPOOL_DIR"),
+
+    COMFY_T2V_WORKFLOW_PATH:
+      preferComfyEnv("T2V_WORKFLOW_PATH"),
+
+    COMFY_JOB_TIMEOUT_SECONDS:
+      preferComfyEnv("JOB_TIMEOUT_SECONDS")
+  });
 
 if (
   Boolean(
-    env.HELIX_TELEGRAM_BOT_TOKEN
+    env.COMFY_TELEGRAM_BOT_TOKEN
   ) !==
   Boolean(
-    env.HELIX_TELEGRAM_CHAT_ID
+    env.COMFY_TELEGRAM_CHAT_ID
   )
 ) {
   throw new Error(
@@ -77,45 +118,45 @@ if (
 
 export const config = {
   port:
-    env.HELIX_PORT,
+    env.COMFY_RUNTIME_PORT,
 
   database: {
     connectionString:
-      env.HELIX_DATABASE_URL
+      env.COMFY_DATABASE_URL
   },
 
   telegram:
-    env.HELIX_TELEGRAM_BOT_TOKEN &&
-    env.HELIX_TELEGRAM_CHAT_ID
+    env.COMFY_TELEGRAM_BOT_TOKEN &&
+    env.COMFY_TELEGRAM_CHAT_ID
       ? {
           botToken:
-            env.HELIX_TELEGRAM_BOT_TOKEN,
+            env.COMFY_TELEGRAM_BOT_TOKEN,
 
           chatId:
-            env.HELIX_TELEGRAM_CHAT_ID
+            env.COMFY_TELEGRAM_CHAT_ID
         }
       : null,
 
   spoolDir:
-    env.HELIX_SPOOL_DIR,
+    env.COMFY_SPOOL_DIR,
 
   t2vWorkflowPath:
-    env.HELIX_T2V_WORKFLOW_PATH,
+    env.COMFY_T2V_WORKFLOW_PATH,
 
   jobTimeoutMs:
-    env.HELIX_JOB_TIMEOUT_SECONDS *
+    env.COMFY_JOB_TIMEOUT_SECONDS *
     1000,
 
   workers: [
     {
       id:
-        "helix-rtx4060-01",
+        "comfy-rtx4060-01",
 
       name:
-        env.HELIX_WORKER_RTX4060_NAME,
+        env.COMFY_WORKER_RTX4060_NAME,
 
       revision:
-        env.HELIX_WORKER_RTX4060_REVISION,
+        env.COMFY_WORKER_RTX4060_REVISION,
 
       profile:
         "comfy-video-ltx-stable",
@@ -124,7 +165,7 @@ export const config = {
         "comfy",
 
       endpoint:
-        env.HELIX_WORKER_RTX4060_URL,
+        env.COMFY_WORKER_RTX4060_URL,
 
       capabilities: [
         "video.i2v",

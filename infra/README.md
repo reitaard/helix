@@ -2,7 +2,7 @@
 
 Infrastructure should support proven execution needs rather than speculative architecture.
 
-As of 2026-08-23 the active Production infrastructure is a dedicated standalone ComfyUI GPU worker plus the VPS-side `helix-runtime`, its dedicated PostgreSQL database, and durable Telegram artifact delivery.
+As of 2026-08-23 the active Helix Production infrastructure is Comfy Services: a `comfy-runtime`, `comfy-db`, the RTX 4060 ComfyUI execution worker, and durable Telegram artifact delivery. `Christopher Nolan` is its human-facing Production profile.
 
 For the focused worker/runtime roadmap, see:
 
@@ -14,10 +14,10 @@ For the focused worker/runtime roadmap, see:
 ```text
 caller / n8n
     ↓
-helix-runtime :8787
+comfy-runtime :8787
     ↓
 WorkerService + JobService
-    ├── helix-db
+    ├── comfy-db
     │   ├── workers
     │   ├── worker_observations
     │   ├── media_jobs
@@ -30,7 +30,7 @@ MediaAdapter
     ↓
 ComfyAdapter / ComfyClient
     ↓ Tailscale
-helix-rtx4060-01
+comfy-rtx4060-01
     ↓
 ComfyUI :8188
     ↓
@@ -57,7 +57,7 @@ Raw ComfyUI is not exposed publicly.
 - CUDA build used by PyTorch: `13.0`
 - production API port: `8188`
 - listen address: `0.0.0.0`
-- worker ID: `helix-rtx4060-01`
+- worker ID: `comfy-rtx4060-01`
 - worker profile: `comfy-video-ltx-stable`
 - currently validated capability: `video.i2v`
 - max concurrent GPU jobs: `1`
@@ -175,7 +175,7 @@ Validated paths:
 - main Windows PC -> worker over Tailscale;
 - VPS host -> worker over Tailscale;
 - n8n container -> VPS runtime;
-- `helix-runtime` -> worker HTTP + WebSocket.
+- `comfy-runtime` -> worker HTTP + WebSocket.
 
 Validated Comfy surfaces now include:
 
@@ -198,8 +198,8 @@ WS   /ws
 The Production runtime runs as:
 
 ```text
-container: helix-runtime
-image: helix-runtime:dev
+container: comfy-runtime
+image: comfy-runtime:dev
 host binding: 127.0.0.1:8787
 networks: helix-network + n8n_default
 runtime: Node 24 container
@@ -228,11 +228,11 @@ POST /v1/media/jobs/:jobId/cancel
 The VPS runs a dedicated private PostgreSQL database:
 
 ```text
-container: helix-db
+container: comfy-db
 image: postgres:16-alpine
 database: helix
 private Docker network only
-volume: helix-db-data
+volume: helix-db-data (retained durable Docker volume)
 ```
 
 Applied runtime migrations currently provide:
@@ -308,7 +308,7 @@ job_e2a4a9efff7a47b8b70cd41c068073ac
   -> video/LTX-2.5_i2v_00005_.mp4
 ```
 
-Restart recovery was proven by reconciling an unfinished/completed job after `helix-runtime` restarted.
+Restart recovery was proven by reconciling an unfinished/completed job after `comfy-runtime` restarted.
 
 ## Cancellation and timeout
 
@@ -329,7 +329,7 @@ Terminal transitions are guarded so a late reconciler tick cannot overwrite a re
 Running-job timeout reuses the cancellation path and is configured with:
 
 ```text
-HELIX_JOB_TIMEOUT_SECONDS=3600
+COMFY_JOB_TIMEOUT_SECONDS=3600
 ```
 
 Only jobs already in `running` state consume this timeout. Queued jobs waiting for the single GPU are not timed out by this policy.

@@ -1,14 +1,14 @@
 # Production
 
-Production is the execution layer. This area contains the active ComfyUI worker/runtime work as well as model/workflow experiments.
+Production is the execution layer. Its Comfy Services area contains the active ComfyUI worker/runtime work as well as model/workflow experiments.
 
 ## Current execution path
 
 ```text
 n8n / caller / Telegram
     ↓
-helix-runtime
-    ├── helix-db + worker/job/delivery/operator state
+comfy-runtime
+    ├── comfy-db + worker/job/delivery/operator state
     ├── TelegramCommandService (operator/debug surface)
     ├── TelegramAlertService (durable operational alerts)
     ├── TelegramCancelService (confirmed cancellation)
@@ -17,7 +17,7 @@ helix-runtime
     ↓
 ComfyAdapter / ComfyClient
     ↓ Tailscale
-helix-rtx4060-01
+comfy-rtx4060-01
     ↓
 ComfyUI :8188
     ↓
@@ -38,7 +38,7 @@ See [`production/media-runtime/`](media-runtime/) for the deployed TypeScript ru
 
 The standalone RTX 4060 worker has validated native LTX 2.5 I2V and T2V generation and exposes the pinned ComfyUI/custom-node stack only through the private Tailscale path.
 
-The durable worker ID is `helix-rtx4060-01`; the human-facing display name is `Christopher Nolan`. The current Comfy revision is pinned at `7dde56176efa71fd74ef7b3930ab5882d1926288`.
+The durable worker ID is `comfy-rtx4060-01`; the human-facing display name is `Christopher Nolan`. The current Comfy revision is pinned at `7dde56176efa71fd74ef7b3930ab5882d1926288`.
 
 Current validated media capabilities are:
 
@@ -58,7 +58,7 @@ Do not hard-code a large semantic input contract while workflows are still chang
 ```text
 raw Comfy API workflow
         ↓
-helix-runtime execution
+comfy-runtime execution
         ↓
 continue optimization in ComfyUI
         ↓
@@ -158,7 +158,7 @@ video.t2v JobService submission
 
 Migration `0005_t2v_confirmations.sql` adds `operator_pending_t2v`. The prompt-entry window is five minutes and the confirmation window is 60 seconds. Three invalid confirmation responses abort the action. A new slash command abandons the pending T2V action. No media job is created until `yes` is confirmed.
 
-The current runtime workflow is deployment-managed at `/opt/helix-runtime/workflows/video_ltx2_5_t2v.api.json` and mounted read-only into the runtime container. It remains outside Git because the broader T2V workflow/settings contract is not frozen yet.
+The current runtime workflow is deployment-managed at `/opt/comfy-runtime/workflows/video_ltx2_5_t2v.api.json` and mounted read-only into the runtime container. It remains outside Git because the broader T2V workflow/settings contract is not frozen yet.
 
 ## Proven native T2V production run
 

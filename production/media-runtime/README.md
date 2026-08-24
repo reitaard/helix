@@ -1,6 +1,6 @@
-# Helix Media Runtime
+# Comfy Runtime
 
-Execution service used to control the dedicated ComfyUI GPU worker.
+Comfy Services execution service used to control the dedicated ComfyUI GPU worker.
 
 The active scope is intentionally narrow: accept durable media jobs, submit raw Comfy API workflows, reconcile execution, support cancellation/timeouts, capture artifacts, deliver generated media, expose a narrow Telegram operator surface, and keep the worker/runtime boundary reliable while workflow experiments continue changing.
 
@@ -11,10 +11,10 @@ See [`../comfyui-worker/README.md`](../comfyui-worker/README.md) for the focused
 ```text
 caller / n8n / Telegram
     ↓
-helix-runtime :8787
+comfy-runtime :8787
     ├── WorkerService + JobService
     │     ↓
-    │   helix-db
+    │   comfy-db
     │     ├── workers
     │     ├── worker_observations
     │     ├── media_jobs
@@ -30,7 +30,7 @@ helix-runtime :8787
     │     ↓
     │   ComfyAdapter / ComfyClient
     │     ↓ Tailscale
-    │   helix-rtx4060-01
+    │   comfy-rtx4060-01
     │     ↓
     │   ComfyUI :8188
     │
@@ -61,7 +61,7 @@ helix-runtime :8787
 
 ## Current worker
 
-- Durable ID: `helix-rtx4060-01`
+- Durable ID: `comfy-rtx4060-01`
 - Human-facing name: `Christopher Nolan`
 - Profile: `comfy-video-ltx-stable`
 - Adapter: `comfy`
@@ -74,7 +74,11 @@ helix-runtime :8787
 - LTX 2.5: available and validated
 - Max concurrent GPU jobs: 1
 
-The worker name is presentation/configuration only. Durable references continue to use `helix-rtx4060-01`.
+The worker name is presentation/configuration only. Durable references use `comfy-rtx4060-01`.
+
+### Durable ID migration
+
+Migration `0006_rename_comfy_worker.sql` changes the existing `workers.id` in place from the legacy worker ID to `comfy-rtx4060-01`. It first makes the direct worker foreign keys (`worker_observations.worker_id`, `media_jobs.worker_id`, and `operator_worker_alert_state.worker_id`) cascade on update, then updates the parent primary key in one transaction. `media_job_events`, `media_deliveries`, operator actions, alerts, and pending confirmations remain attached through their unchanged job IDs. Apply this migration before deploying the runtime configured with the new worker ID; it rejects a split state where both IDs exist.
 
 ## Current API
 
@@ -121,7 +125,7 @@ backend error -> failed
 
 Comfy's `prompt_id` is stored as `backend_job_id`.
 
-Correctness comes from Comfy `/history/{prompt_id}` plus `/queue`. The reconciler runs inside `helix-runtime`, so unfinished jobs can be recovered after a runtime restart. Persistent WebSocket tracking remains an optional latency optimization.
+Correctness comes from Comfy `/history/{prompt_id}` plus `/queue`. The reconciler runs inside `comfy-runtime`, so unfinished jobs can be recovered after a runtime restart. Persistent WebSocket tracking remains an optional latency optimization.
 
 Terminal job transitions are race-safe: once Helix records `cancelled` or another terminal state, a late reconciler tick cannot overwrite it with `running`, `succeeded`, or `failed`.
 
@@ -139,7 +143,7 @@ This avoids status flapping while preserving visibility into the event channel. 
 
 ## Telegram operator commands
 
-`TelegramCommandService` is a narrow operator surface inside `helix-runtime`. It uses Telegram `getUpdates` long polling and accepts messages only from the configured `HELIX_TELEGRAM_CHAT_ID`; other chats are ignored.
+`TelegramCommandService` is a narrow operator surface inside `comfy-runtime`. It uses Telegram `getUpdates` long polling and accepts messages only from the configured `COMFY_TELEGRAM_CHAT_ID`; other chats are ignored.
 
 Diagnostics and debugging remain read-only. The only write-capable media actions in this checkpoint are explicitly confirmed cancellation and explicitly confirmed native T2V generation.
 
@@ -268,7 +272,7 @@ Migration `0005_t2v_confirmations.sql` adds `operator_pending_t2v`.
 
 The operator has five minutes to provide the prompt. Once captured, the prompt is shown back with the fixed baseline settings. Confirmation lasts 60 seconds. Three invalid responses abort the action. A new slash command abandons it. No GPU job is submitted before `yes`.
 
-The vetted T2V workflow is deployment-managed at `/opt/helix-runtime/workflows/video_ltx2_5_t2v.api.json` and bind-mounted read-only as `/app/workflows/video_ltx2_5_t2v.api.json`.
+The vetted T2V workflow is deployment-managed at `/opt/comfy-runtime/workflows/video_ltx2_5_t2v.api.json` and bind-mounted read-only as `/app/workflows/video_ltx2_5_t2v.api.json`.
 
 The current semantic mutation is intentionally limited to:
 
@@ -315,7 +319,7 @@ Worker monitoring requires consecutive observations before an offline/recovered 
 
 ## Read-only Comfy update awareness
 
-The worker pin is configured as `HELIX_WORKER_RTX4060_REVISION`.
+The worker pin is configured as `COMFY_WORKER_RTX4060_REVISION`.
 
 `ComfyUpdateChecker` compares that revision with official `Comfy-Org/ComfyUI` `master` using GitHub's compare API. Results are cached for 15 minutes and are informational only. The worker is never updated automatically.
 
@@ -335,7 +339,7 @@ POST /v1/media/jobs/:jobId/cancel
 
 Cancelling an already-terminal job is a no-op and reports the existing status.
 
-Running-job timeout uses the same cancellation path and is configured with `HELIX_JOB_TIMEOUT_SECONDS`; the deployed value is currently `3600` seconds. Only jobs already in `running` state consume this timeout.
+Running-job timeout uses the same cancellation path and is configured with `COMFY_JOB_TIMEOUT_SECONDS`; the deployed value is currently `3600` seconds. Only jobs already in `running` state consume this timeout.
 
 A timed-out job is persisted as `timed_out` with a durable `job.timed_out` event.
 
@@ -412,7 +416,7 @@ Raw Comfy API workflow remains the execution contract while workflow experiments
 ```text
 raw Comfy API workflow
         ↓
-helix-runtime execution
+comfy-runtime execution
         ↓
 workflow experiments continue in ComfyUI
         ↓

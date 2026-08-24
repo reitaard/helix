@@ -76,7 +76,7 @@ export class ComfyUpdateChecker {
                 "application/vnd.github+json",
 
               "user-agent":
-                "helix-runtime"
+                "comfy-runtime"
             },
 
             signal:

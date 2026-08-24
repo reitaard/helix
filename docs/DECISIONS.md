@@ -50,9 +50,9 @@ Only choices we are willing to treat as current project commitments belong here.
 
 ## 2026-08-23 — Telegram is an operator surface, not a general control plane
 
-**Decision:** Telegram lives inside `helix-runtime` as a narrow operator surface. It may expose diagnostics, queue/job/outbox inspection, durable debug views, operational alerts, explicitly confirmed media-job cancellation, and explicitly confirmed T2V generation, but not restart, shell, package-update, or arbitrary worker-mutation actions.
+**Decision:** Telegram lives inside `comfy-runtime` as a narrow operator surface. It may expose diagnostics, queue/job/outbox inspection, durable debug views, operational alerts, explicitly confirmed media-job cancellation, and explicitly confirmed T2V generation, but not restart, shell, package-update, or arbitrary worker-mutation actions.
 
-**Reason:** Telegram is useful for compact operational visibility and bounded intervention, while low-level execution ownership remains in Helix runtime/worker boundaries. Restricting access to the configured chat ID and keeping the command surface intentionally small preserves that boundary.
+**Reason:** Telegram is useful for compact operational visibility and bounded intervention, while low-level execution ownership remains in Comfy Services runtime/worker boundaries. Restricting access to the configured chat ID and keeping the command surface intentionally small preserves that boundary.
 
 ## 2026-08-23 — Telegram cancellation requires durable terminal-style confirmation
 
@@ -65,6 +65,12 @@ Only choices we are willing to treat as current project commitments belong here.
 **Decision:** Failed/timed-out jobs, terminal Outbox failures, and confirmed worker offline/recovered transitions may proactively alert the configured Telegram operator. Event-derived alerts are persisted and deduplicated; worker transition alerts require consecutive observations and a cooldown.
 
 **Reason:** Operator notification must not depend on a single process tick or flood the chat during polling/restart. Durable alert rows, a migration-time event cursor, bounded send retry, transition thresholds, and cooldown provide observability without turning transient observations into repeated noise.
+
+## 2026-08-24 — Comfy Services use Comfy-specific infrastructure identities
+
+**Decision:** The Helix Production Comfy Services use `comfy-runtime`, `comfy-db`, and `comfy-rtx4060-01`. `Christopher Nolan` remains the human-facing Production profile/display identity and is not the execution-worker ID.
+
+**Reason:** Helix is the root system. Explicit Comfy service identities make the Production hierarchy clear without changing the durable jobs, delivery lineage, workflow behavior, or the operator-facing profile.
 
 ## 2026-08-24 — Telegram T2V generation requires pre-submit confirmation
 
