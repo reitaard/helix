@@ -2,6 +2,7 @@ import {
   ASPECT_OPTIONS,
   DEFAULT_NEGATIVE_PROMPT,
   FPS_OPTIONS,
+  T2V_TOOL,
   effectiveMegapixels,
   displayQuality
 } from "../t2v/settings.js";
@@ -20,8 +21,7 @@ import type {
 } from "../t2v/profile-service.js";
 
 import {
-  escapeHtml,
-  title
+  escapeHtml
 } from "./presentation.js";
 
 function coreKey(
@@ -69,20 +69,30 @@ function devKey(
   }
 }
 
-function settingsTitle(
-  dev: boolean
+function pageTitle(
+  value: string,
+  dev = false
 ) {
-  return dev
-    ? `${title("T2V SETTINGS")} <b>(dev)</b>`
-    : title("T2V SETTINGS");
+  return (
+    `<b>[ ${escapeHtml(value)} ]</b>` +
+    (
+      dev
+        ? ` (<b><i>dev</i></b>)`
+        : ""
+    )
+  );
 }
 
-function boolState(
-  value: boolean
+function selected(
+  value: string,
+  active: boolean
 ) {
-  return value
-    ? "[ON]"
-    : "[OFF]";
+  const safe =
+    escapeHtml(value);
+
+  return active
+    ? `<u>${safe}</u>`
+    : safe;
 }
 
 function seedValue(
@@ -102,23 +112,205 @@ function negativeState(
     : "custom";
 }
 
-function line(
-  key: string,
-  label: string,
-  value: string
+function aspectLabel(
+  settings: T2VSettings
 ) {
   return (
-    `<code>${escapeHtml(key)}</code>  ` +
-    `<b>${escapeHtml(label)}</b> · ` +
-    `<b>${escapeHtml(value)}</b>`
+    ASPECT_OPTIONS.find(
+      option =>
+        option.ratio ===
+        settings.aspect
+    )?.label ??
+    settings.aspect
+  );
+}
+
+function qualityChoices(
+  settings: T2VSettings
+) {
+  return [
+    selected(
+      "Low",
+      settings.quality === "low"
+    ),
+    selected(
+      "Standard",
+      settings.quality === "standard"
+    ),
+    selected(
+      "High",
+      settings.quality === "high"
+    )
+  ].join(" / ");
+}
+
+function fpsChoices(
+  settings: T2VSettings
+) {
+  return FPS_OPTIONS.map(
+    value =>
+      selected(
+        String(value),
+        settings.fps === value
+      )
+  ).join(" / ");
+}
+
+function settingRow(
+  key: string,
+  text: string
+) {
+  return (
+    `<code>${escapeHtml(key)}</code>` +
+    `<b>.${text}</b>`
   );
 }
 
 export class TelegramT2VSettingsService {
   constructor(
     private readonly profile:
-      T2VProfileService
+      T2VProfileService,
+
+    private readonly workerName =
+      "Christopher Nolan"
   ) {}
+
+  private workerBlock() {
+    return (
+      `<b>Worker</b> <b>&gt;</b> ` +
+      `<b>${escapeHtml(
+        this.workerName
+      )}</b>\n` +
+      `└ <b><i>${escapeHtml(
+        T2V_TOOL
+      )}</i></b>`
+    );
+  }
+
+  private aspectRow(
+    settings: T2VSettings
+  ) {
+    return settingRow(
+      "asp",
+      `Aspect : ⦗${escapeHtml(
+        settings.aspect
+      )}⦘</b> <b><i>(${escapeHtml(
+        aspectLabel(settings)
+      )})</i></b><b>`
+    );
+  }
+
+  private qualityRow(
+    settings: T2VSettings
+  ) {
+    return (
+      `<code>qual</code><b>.Quality : ` +
+      `${qualityChoices(settings)}</b>`
+    );
+  }
+
+  private durationRow(
+    settings: T2VSettings
+  ) {
+    return (
+      `<code>time</code><b>.Duration : ` +
+      `(${settings.durationSeconds})s</b> ` +
+      `<b><i>(Max=10s)</i></b>`
+    );
+  }
+
+  private enhanceRow(
+    settings: T2VSettings
+  ) {
+    return (
+      `<code>enh</code><b>.Enhance : ` +
+      `[ ${settings.enhance ? "ON" : "OFF"} ]</b>` +
+      (
+        settings.enhance
+          ? ""
+          : ` <b><i>(default)</i></b>`
+      )
+    );
+  }
+
+  private fpsRow(
+    settings: T2VSettings
+  ) {
+    return (
+      `<code>fps</code><b>.FPS : ` +
+      `${fpsChoices(settings)}</b>`
+    );
+  }
+
+  private megapixelsRow(
+    settings: T2VSettings
+  ) {
+    const context =
+      settings.megapixelsOverride ===
+      null
+        ? displayQuality(
+            settings.quality
+          )
+        : "manual";
+
+    return (
+      `<code>mp</code><b>.Megapixels : ` +
+      `${effectiveMegapixels(
+        settings
+      ).toFixed(1)} MP</b> ` +
+      `<b><i>(${escapeHtml(
+        context
+      )})</i></b>`
+    );
+  }
+
+  private coreRows(
+    settings: T2VSettings
+  ) {
+    return [
+      this.aspectRow(settings),
+      this.qualityRow(settings),
+      this.durationRow(settings),
+      this.enhanceRow(settings)
+    ];
+  }
+
+  private advancedRows(
+    settings: T2VSettings
+  ) {
+    return [
+      this.fpsRow(settings),
+      settingRow(
+        "seed",
+        `Stage1 : ${escapeHtml(
+          seedValue(settings.seed)
+        )}`
+      ),
+      settingRow(
+        "seed2",
+        `Stage2 : ${escapeHtml(
+          seedValue(settings.seed2)
+        )}`
+      ),
+      settingRow(
+        "neg",
+        `Prompt ( − ) : ${escapeHtml(
+          negativeState(settings)
+        )}`
+      ),
+      this.megapixelsRow(settings),
+      settingRow(
+        "samp",
+        `Sampler : ${escapeHtml(
+          settings.sampler
+        )}`
+      ),
+      settingRow(
+        "cfg",
+        `Guidance : ${settings.cfg.toFixed(1)}`
+      )
+    ];
+  }
 
   async panel(
     dev = false
@@ -126,91 +318,34 @@ export class TelegramT2VSettingsService {
     const settings =
       await this.profile.get();
 
-    const core = [
-      line(
-        "asp",
-        "Aspect",
-        settings.aspect
-      ),
-      line(
-        "qual",
-        "Quality",
-        displayQuality(
-          settings.quality
-        )
-      ),
-      line(
-        "time",
-        "Duration",
-        `${settings.durationSeconds}s`
-      ),
-      line(
-        "enh",
-        "Enhance",
-        boolState(
-          settings.enhance
-        )
-      )
-    ];
+    const core =
+      this.coreRows(settings);
 
     if (!dev) {
       return (
-        `${settingsTitle(false)}\n\n` +
-        `<b>[CORE]</b>\n` +
+        `${pageTitle("T2V / SETTINGS")}\n\n` +
+        `${this.workerBlock()}\n\n` +
+        `▷ <b>CORE</b>\n` +
         core.join("\n") +
         `\n\n<i>Inspect</i> · ` +
         `<code>/t2v set &lt;setting&gt;</code>`
       );
     }
 
-    const advanced = [
-      line(
-        "fps",
-        "FPS",
-        String(settings.fps)
-      ),
-      line(
-        "seed",
-        "Stage 1 Seed",
-        seedValue(settings.seed)
-      ),
-      line(
-        "seed2",
-        "Stage 2 Seed",
-        seedValue(settings.seed2)
-      ),
-      line(
-        "neg",
-        "Negative Prompt",
-        negativeState(settings)
-      ),
-      line(
-        "mp",
-        "Megapixels",
-        effectiveMegapixels(
-          settings
-        ).toFixed(1)
-      ),
-      line(
-        "samp",
-        "Sampler",
-        settings.sampler
-      ),
-      line(
-        "cfg",
-        "Guidance",
-        settings.cfg.toFixed(1)
-      )
-    ];
-
     return (
-      `${settingsTitle(true)}\n\n` +
-      `<b>[CORE]</b>\n` +
+      `${pageTitle(
+        "T2V / SETTINGS",
+        true
+      )}\n\n` +
+      `${this.workerBlock()}\n\n` +
+      `▷ <b>CORE</b>\n` +
       core.join("\n") +
-      `\n\n<b>[ADVANCED]</b>\n` +
-      advanced.join("\n") +
+      `\n\n▷ <b>ADVANCED</b>\n` +
+      this.advancedRows(
+        settings
+      ).join("\n") +
       `\n\n<i>Inspect</i> · ` +
-      `<code>/t2v set --dev &lt;setting&gt;</code>`
+      `<code>/t2v set -dev &lt;setting&gt;</code>`
     );
   }
 
@@ -218,13 +353,26 @@ export class TelegramT2VSettingsService {
     dev: boolean
   ) {
     return (
-      `${settingsTitle(dev)}\n\n` +
-      `<b>Unknown setting.</b>\n` +
+      `<b>Unknown setting</b>\n` +
       (
         dev
-          ? `<code>fps seed seed2 neg mp samp cfg</code>`
-          : `<code>asp qual time enh</code>`
+          ? `<code>fps</code> · <code>seed</code> · <code>seed2</code> · ` +
+            `<code>neg</code> · <code>mp</code> · <code>samp</code> · <code>cfg</code>`
+          : `<code>asp</code> · <code>qual</code> · <code>time</code> · <code>enh</code>`
       )
+    );
+  }
+
+  private detailHeader(
+    name: string,
+    dev = false
+  ) {
+    return (
+      `${pageTitle(
+        `${name}.T2V`,
+        dev
+      )}\n\n` +
+      `${this.workerBlock()}\n`
     );
   }
 
@@ -248,28 +396,78 @@ export class TelegramT2VSettingsService {
       if (key === "asp") {
         const options =
           ASPECT_OPTIONS.map(
-            option =>
-              `<code>${option.ratio}</code> · ${escapeHtml(option.label)}`
+            option => {
+              const label =
+                option.ratio ===
+                settings.aspect
+                  ? `<b>${escapeHtml(
+                      option.label
+                    )}</b>`
+                  : escapeHtml(
+                      option.label
+                    );
+
+              return (
+                `<code>${escapeHtml(
+                  option.ratio
+                )}</code> · ${label}`
+              );
+            }
           ).join("\n");
 
         return (
-          `${title("T2V · ASPECT")}\n\n` +
-          `<b>Current</b> · <b>${escapeHtml(settings.aspect)}</b>\n\n` +
-          `<b>Options</b>\n${options}\n\n` +
-          `<b>Set</b>\n` +
+          `${this.detailHeader(
+            "ASPECT"
+          )}` +
+          `<b>Aspect : ⦗${escapeHtml(
+            settings.aspect
+          )}⦘</b> ` +
+          `<b><i>(${escapeHtml(
+            aspectLabel(settings)
+          )})</i></b>\n\n` +
+          `<blockquote expandable>` +
+          `<b><i>• options •</i></b>\n` +
+          `${options}</blockquote>\n\n` +
+          `<i>Set</i> · ` +
           `<code>/t2v set asp &lt;ratio&gt;</code>`
         );
       }
 
       if (key === "qual") {
+        const choices = [
+          [
+            "Low",
+            "0.5 MP",
+            settings.quality === "low"
+          ],
+          [
+            "Standard",
+            "0.9 MP",
+            settings.quality === "standard"
+          ],
+          [
+            "High",
+            "1.2 MP",
+            settings.quality === "high"
+          ]
+        ] as const;
+
+        const options =
+          choices.map(
+            ([name, mp, active]) =>
+              `${active ? `<u><b>${name}</b></u>` : `<b>${name}</b>`} · ${mp}`
+          ).join("\n");
+
         return (
-          `${title("T2V · QUALITY")}\n\n` +
-          `<b>Current</b> · <b>${escapeHtml(displayQuality(settings.quality))}</b>\n\n` +
-          `<b>Options</b>\n` +
-          `<code>Low</code> · 0.5 MP\n` +
-          `<code>Standard</code> · 0.9 MP\n` +
-          `<code>High</code> · 1.2 MP\n\n` +
-          `<b>Set</b>\n` +
+          `${this.detailHeader(
+            "QUALITY"
+          )}` +
+          `<b>Quality : ${qualityChoices(
+            settings
+          )}</b>\n\n` +
+          `▷ <b>OPTIONS</b>\n` +
+          `${options}\n\n` +
+          `<i>Set</i> · ` +
           `<code>/t2v set qual &lt;value&gt;</code>`
         );
       }
@@ -281,21 +479,40 @@ export class TelegramT2VSettingsService {
           1;
 
         return (
-          `${title("T2V · DURATION")}\n\n` +
-          `<b>Current</b> · <b><i>${settings.durationSeconds}s</i></b>\n` +
-          `<b>FPS</b> · <b>${settings.fps}</b>\n` +
-          `<b>Frames</b> · <b>${frames}</b>\n` +
-          `<b>Range</b> · <b>1–10s</b>\n\n` +
-          `<b>Set</b>\n` +
+          `${this.detailHeader(
+            "DURATION"
+          )}` +
+          `<b>Duration : (${settings.durationSeconds})s</b> ` +
+          `<b><i>(Max=10s)</i></b>\n` +
+          `<b>FPS : ${settings.fps}</b>\n` +
+          `<b>Frames : ${frames}</b>\n\n` +
+          `<i>Set</i> · ` +
           `<code>/t2v set time &lt;seconds&gt;</code>`
         );
       }
 
       return (
-        `${title("T2V · ENHANCE")}\n\n` +
-        `<b>Current</b> · <b>${boolState(settings.enhance)}</b>\n\n` +
-        `<b>Options</b> · <code>on</code> / <code>off</code>\n\n` +
-        `<b>Set</b>\n` +
+        `${this.detailHeader(
+          "ENHANCE"
+        )}` +
+        `<b>Enhance : [ ${
+          settings.enhance
+            ? "ON"
+            : "OFF"
+        } ]</b>${
+          settings.enhance
+            ? ""
+            : ` <b><i>(default)</i></b>`
+        }\n\n` +
+        `▷ <b>OPTIONS</b>\n` +
+        `${selected(
+          "ON",
+          settings.enhance
+        )} / ${selected(
+          "OFF",
+          !settings.enhance
+        )}\n\n` +
+        `<i>Set</i> · ` +
         `<code>/t2v set enh &lt;on|off&gt;</code>`
       );
     }
@@ -311,11 +528,15 @@ export class TelegramT2VSettingsService {
 
     if (key === "fps") {
       return (
-        `${title("T2V DEV · FPS")}\n\n` +
-        `<b>Current</b> · <b>${settings.fps}</b>\n` +
-        `<b>Options</b> · <code>${FPS_OPTIONS.join(" / ")}</code>\n\n` +
-        `<b>Set</b>\n` +
-        `<code>/t2v set --dev fps &lt;value&gt;</code>`
+        `${this.detailHeader(
+          "FPS",
+          true
+        )}` +
+        `<b>FPS : ${fpsChoices(
+          settings
+        )}</b>\n\n` +
+        `<i>Set</i> · ` +
+        `<code>/t2v set -dev fps &lt;value&gt;</code>`
       );
     }
 
@@ -334,46 +555,64 @@ export class TelegramT2VSettingsService {
           : settings.seed2;
 
       return (
-        `${title(`T2V DEV · SEED ${stage}`)}\n\n` +
-        `<b>Current</b> · <code>${escapeHtml(seedValue(current))}</code>\n` +
-        `<b>Range</b> · <code>0-${Number.MAX_SAFE_INTEGER}</code>\n` +
-        `<b>Special</b> · <code>random</code>\n` +
-        (
-          key === "seed"
-            ? `<b>Alias</b> · <code>seed1</code>\n`
-            : ""
-        ) +
-        `\n<b>Set</b>\n` +
-        `<code>/t2v set --dev ${key} &lt;value&gt;</code>`
+        `${this.detailHeader(
+          `SEED ${stage}`,
+          true
+        )}` +
+        `<b>Stage${stage} : ${escapeHtml(
+          seedValue(current)
+        )}</b>\n` +
+        `<b>Range</b> · ` +
+        `<code>0-${Number.MAX_SAFE_INTEGER}</code>\n` +
+        `<b>Special</b> · <code>random</code>\n\n` +
+        `<i>Set</i> · ` +
+        `<code>/t2v set -dev ${key} &lt;value&gt;</code>`
       );
     }
 
     if (key === "neg") {
       return (
-        `${title("T2V DEV · NEGATIVE")}\n\n` +
-        `<b>Current</b> · <b>${negativeState(settings)}</b>\n` +
-        `<blockquote expandable>${escapeHtml(settings.negativePrompt)}</blockquote>\n` +
-        `<b>Reset</b> · <code>default</code>\n\n` +
-        `<b>Set</b>\n` +
-        `<code>/t2v set --dev neg &lt;text&gt;</code>`
+        `${this.detailHeader(
+          "NEGATIVE",
+          true
+        )}` +
+        `<b>Prompt ( − ) : ${escapeHtml(
+          negativeState(settings)
+        )}</b>\n\n` +
+        `<blockquote expandable>${escapeHtml(
+          settings.negativePrompt
+        )}</blockquote>\n\n` +
+        `<i>Reset</i> · <code>default</code>\n` +
+        `<i>Set</i> · ` +
+        `<code>/t2v set -dev neg &lt;text&gt;</code>`
       );
     }
 
     if (key === "mp") {
-      const mode =
+      const context =
         settings.megapixelsOverride ===
         null
-          ? `Quality · ${displayQuality(settings.quality)}`
-          : "Manual override";
+          ? displayQuality(
+              settings.quality
+            )
+          : "manual";
 
       return (
-        `${title("T2V DEV · MEGAPIXELS")}\n\n` +
-        `<b>Current</b> · <b>${effectiveMegapixels(settings).toFixed(1)} MP</b>\n` +
-        `<b>Mode</b> · <b>${escapeHtml(mode)}</b>\n` +
-        `<b>Range</b> · <code>0.1-2.0</code> · step <code>0.1</code>\n` +
+        `${this.detailHeader(
+          "MEGAPIXELS",
+          true
+        )}` +
+        `<b>Megapixels : ${effectiveMegapixels(
+          settings
+        ).toFixed(1)} MP</b> ` +
+        `<b><i>(${escapeHtml(
+          context
+        )})</i></b>\n` +
+        `<b>Range</b> · <code>0.1-2.0 MP</code>\n` +
+        `<b>Step</b> · <code>0.1</code>\n` +
         `<b>Auto</b> · <code>default</code>\n\n` +
-        `<b>Set</b>\n` +
-        `<code>/t2v set --dev mp &lt;value&gt;</code>`
+        `<i>Set</i> · ` +
+        `<code>/t2v set -dev mp &lt;value&gt;</code>`
       );
     }
 
@@ -382,27 +621,48 @@ export class TelegramT2VSettingsService {
         await this.profile
           .samplerOptions();
 
-      return (
-        `${title("T2V DEV · SAMPLER")}\n\n` +
-        `<b>Current</b> · <code>${escapeHtml(settings.sampler)}</code>\n` +
-        `<b>Applies</b> · <b>Stage 1 + Stage 2</b>\n\n` +
-        `<b>Options</b>\n` +
+      const optionLines =
         options.map(
-          option =>
-            `<code>${escapeHtml(option)}</code>`
-        ).join("\n") +
-        `\n\n<b>Set</b>\n` +
-        `<code>/t2v set --dev samp &lt;value&gt;</code>`
+          option => {
+            const value =
+              `<code>${escapeHtml(
+                option
+              )}</code>`;
+
+            return option ===
+              settings.sampler
+              ? `<u>${value}</u>`
+              : value;
+          }
+        ).join("\n");
+
+      return (
+        `${this.detailHeader(
+          "SAMPLER",
+          true
+        )}` +
+        `<b>Sampler : ${escapeHtml(
+          settings.sampler
+        )}</b>\n\n` +
+        `<blockquote expandable>` +
+        `<b><i>• options •</i></b>\n` +
+        `${optionLines}</blockquote>\n\n` +
+        `<i>Set</i> · ` +
+        `<code>/t2v set -dev samp &lt;value&gt;</code>`
       );
     }
 
     return (
-      `${title("T2V DEV · GUIDANCE")}\n\n` +
-      `<b>Current</b> · <b>${settings.cfg.toFixed(1)}</b>\n` +
-      `<b>Applies</b> · <b>Both stages · Video + Audio</b>\n` +
-      `<b>Range</b> · <code>0-100</code> · step <code>0.1</code>\n\n` +
-      `<b>Set</b>\n` +
-      `<code>/t2v set --dev cfg &lt;value&gt;</code>`
+      `${this.detailHeader(
+        "GUIDANCE",
+        true
+      )}` +
+      `<b>Guidance : ${settings.cfg.toFixed(1)}</b>\n` +
+      `<b>Range</b> · <code>0-100</code>\n` +
+      `<b>Step</b> · <code>0.1</code>\n` +
+      `<b>Applies</b> · Stage1 + Stage2 · Video + Audio\n\n` +
+      `<i>Set</i> · ` +
+      `<code>/t2v set -dev cfg &lt;value&gt;</code>`
     );
   }
 
@@ -434,78 +694,92 @@ export class TelegramT2VSettingsService {
               rawValue
             );
 
-      let label = rawKey;
-      let value = rawValue;
+      let row: string;
 
       if (!dev) {
         switch (key) {
           case "asp":
-            label = "Aspect";
-            value = settings.aspect;
+            row = this.aspectRow(
+              settings
+            );
             break;
           case "qual":
-            label = "Quality";
-            value = displayQuality(
-              settings.quality
+            row = this.qualityRow(
+              settings
             );
             break;
           case "time":
-            label = "Duration";
-            value = `${settings.durationSeconds}s`;
-            break;
-          case "enh":
-            label = "Enhance";
-            value = boolState(
-              settings.enhance
+            row = this.durationRow(
+              settings
             );
             break;
+          case "enh":
+            row = this.enhanceRow(
+              settings
+            );
+            break;
+          default:
+            row = rawKey;
         }
       }
       else {
         switch (key) {
           case "fps":
-            label = "FPS";
-            value = String(
-              settings.fps
-            );
-            break;
-          case "seed":
-            label = "Stage 1 Seed";
-            value = seedValue(
-              settings.seed
-            );
-            break;
-          case "seed2":
-            label = "Stage 2 Seed";
-            value = seedValue(
-              settings.seed2
-            );
-            break;
-          case "neg":
-            label = "Negative Prompt";
-            value = negativeState(
+            row = this.fpsRow(
               settings
             );
             break;
+          case "seed":
+            row = settingRow(
+              "seed",
+              `Stage1 : ${escapeHtml(
+                seedValue(settings.seed)
+              )}`
+            );
+            break;
+          case "seed2":
+            row = settingRow(
+              "seed2",
+              `Stage2 : ${escapeHtml(
+                seedValue(settings.seed2)
+              )}`
+            );
+            break;
+          case "neg":
+            row = settingRow(
+              "neg",
+              `Prompt ( − ) : ${escapeHtml(
+                negativeState(settings)
+              )}`
+            );
+            break;
           case "mp":
-            label = "Megapixels";
-            value = `${effectiveMegapixels(settings).toFixed(1)} MP`;
+            row = this.megapixelsRow(
+              settings
+            );
             break;
           case "samp":
-            label = "Sampler";
-            value = settings.sampler;
+            row = settingRow(
+              "samp",
+              `Sampler : ${escapeHtml(
+                settings.sampler
+              )}`
+            );
             break;
           case "cfg":
-            label = "Guidance";
-            value = settings.cfg.toFixed(1);
+            row = settingRow(
+              "cfg",
+              `Guidance : ${settings.cfg.toFixed(1)}`
+            );
             break;
+          default:
+            row = rawKey;
         }
       }
 
       return (
-        `${settingsTitle(dev)}\n\n` +
-        `<b>${escapeHtml(label)}</b> · <b>${escapeHtml(value)}</b>\n\n` +
-        `<b>[SAVED]</b>`
+        `${row}\n\n` +
+        `<b>[ SAVED ]</b>`
       );
     }
     catch (error) {
@@ -515,11 +789,10 @@ export class TelegramT2VSettingsService {
           : String(error);
 
       return (
-        `${settingsTitle(dev)}\n\n` +
         `<b>Invalid value.</b>\n` +
         `<i>${escapeHtml(message)}</i>\n\n` +
-        `<b>Inspect</b> · ` +
-        `<code>/t2v set ${dev ? "--dev " : ""}${escapeHtml(rawKey)}</code>`
+        `<i>Inspect</i> · ` +
+        `<code>/t2v set ${dev ? "-dev " : ""}${escapeHtml(rawKey)}</code>`
       );
     }
   }
