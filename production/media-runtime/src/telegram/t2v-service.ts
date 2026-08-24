@@ -190,7 +190,7 @@ export class TelegramT2VService {
       if (
         args.length === 2 &&
         args[1]?.toLowerCase() ===
-          "--dev"
+          "-dev"
       ) {
         return this.settingsUi
           .panel(true);
@@ -208,7 +208,7 @@ export class TelegramT2VService {
 
     if (
       args[index]?.toLowerCase() ===
-      "--dev"
+      "-dev"
     ) {
       dev = true;
       index += 1;
