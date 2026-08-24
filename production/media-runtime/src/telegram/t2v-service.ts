@@ -11,15 +11,37 @@ import {
 } from "../repositories/t2v-pending-repository.js";
 
 import {
+  T2VProfileService
+} from "../t2v/profile-service.js";
+
+import {
+  bindT2VWorkflow
+} from "../t2v/workflow-binder.js";
+
+import type {
+  T2VWorkflow
+} from "../t2v/workflow-binder.js";
+
+import {
+  displayQuality,
+  effectiveMegapixels,
+  hasDevOverrides,
+  normalizeStoredT2VSettings,
+  resolveT2VSettings
+} from "../t2v/settings.js";
+
+import type {
+  ResolvedT2VSettings
+} from "../t2v/settings.js";
+
+import {
+  TelegramT2VSettingsService
+} from "./t2v-settings-service.js";
+
+import {
   escapeHtml,
   title
 } from "./presentation.js";
-
-type Workflow =
-  Record<
-    string,
-    Record<string, unknown>
-  >;
 
 export class TelegramT2VService {
   private timer:
@@ -48,6 +70,12 @@ export class TelegramT2VService {
     private readonly pending:
       T2VPendingRepository,
 
+    private readonly profile:
+      T2VProfileService,
+
+    private readonly settingsUi:
+      TelegramT2VSettingsService,
+
     private readonly promptSeconds =
       300,
 
@@ -69,8 +97,21 @@ export class TelegramT2VService {
   }
 
   private confirmationHtml(
-    prompt: string
+    prompt: string,
+    settings:
+      ResolvedT2VSettings,
+    devProfile: boolean
   ) {
+    const quality =
+      settings.megapixelsOverride ===
+      null
+        ? displayQuality(
+            settings.quality
+          )
+        : `Custom · ${effectiveMegapixels(
+            settings
+          ).toFixed(1)} MP`;
+
     return (
       `${title("T2V")}\n` +
 
@@ -80,8 +121,25 @@ export class TelegramT2VService {
       )}</blockquote>\n` +
 
       `<b>Model</b> · <b>LTX 2.5</b>\n` +
-      `<b>Duration</b> · <b><i>5s</i></b>\n` +
-      `<b>Aspect</b> · <b>16:9</b>\n` +
+      `<b>Aspect</b> · <b>${escapeHtml(
+        settings.aspect
+      )}</b>\n` +
+      `<b>Quality</b> · <b>${escapeHtml(
+        quality
+      )}</b>\n` +
+      `<b>Duration</b> · <b><i>${
+        settings.durationSeconds
+      }s</i></b>\n` +
+      `<b>Enhance</b> · <b>[${
+        settings.enhance
+          ? "ON"
+          : "OFF"
+      }]</b>\n` +
+      (
+        devProfile
+          ? `<b>Profile</b> · <b>[DEV]</b>\n`
+          : ""
+      ) +
       `<b>Worker</b> · <b>${escapeHtml(
         this.workerName
       )}</b>\n\n` +
@@ -94,6 +152,96 @@ export class TelegramT2VService {
       `<code>no</code> ` +
       `<b>]</b>`
     );
+  }
+
+  private settingsUsageHtml() {
+    return (
+      `${title("T2V SETTINGS")}\n\n` +
+      `<b>Open</b>\n` +
+      `<code>/t2v settings</code>\n` +
+      `<code>/t2v s</code>\n` +
+      `<code>/t2v set</code>\n\n` +
+      `<b>Change</b>\n` +
+      `<code>/t2v set &lt;setting&gt; &lt;value&gt;</code>`
+    );
+  }
+
+  async handleCommand(
+    args: string[]
+  ) {
+    if (args.length === 0) {
+      return this.begin();
+    }
+
+    const mode =
+      args[0]
+        ?.toLowerCase() ??
+      "";
+
+    if (
+      mode === "settings" ||
+      mode === "s"
+    ) {
+      if (args.length === 1) {
+        return this.settingsUi
+          .panel(false);
+      }
+
+      if (
+        args.length === 2 &&
+        args[1]?.toLowerCase() ===
+          "--dev"
+      ) {
+        return this.settingsUi
+          .panel(true);
+      }
+
+      return this.settingsUsageHtml();
+    }
+
+    if (mode !== "set") {
+      return this.settingsUsageHtml();
+    }
+
+    let index = 1;
+    let dev = false;
+
+    if (
+      args[index]?.toLowerCase() ===
+      "--dev"
+    ) {
+      dev = true;
+      index += 1;
+    }
+
+    const setting =
+      args[index];
+
+    if (!setting) {
+      return this.settingsUi
+        .panel(dev);
+    }
+
+    const value =
+      args
+        .slice(index + 1)
+        .join(" ")
+        .trim();
+
+    if (!value) {
+      return this.settingsUi
+        .help(
+          setting,
+          dev
+        );
+    }
+
+    return this.settingsUi
+      .set(
+        setting,
+        value,
+        dev
+      );
   }
 
   private async sweepExpiry() {
@@ -179,8 +327,10 @@ export class TelegramT2VService {
   }
 
   private async workflowFor(
-    prompt: string
-  ): Promise<Workflow> {
+    prompt: string,
+    settings:
+      ResolvedT2VSettings
+  ): Promise<T2VWorkflow> {
     const raw =
       await readFile(
         this.workflowPath,
@@ -201,64 +351,11 @@ export class TelegramT2VService {
       );
     }
 
-    const workflow =
-      structuredClone(
-        parsed
-      ) as Workflow;
-
-    const promptNode =
-      workflow["405:376"];
-
-    if (
-      !promptNode ||
-      promptNode.class_type !==
-        "PrimitiveStringMultiline"
-    ) {
-      throw new Error(
-        "T2V prompt node 405:376 is missing or changed"
-      );
-    }
-
-    const inputs =
-      promptNode.inputs;
-
-    if (
-      inputs === null ||
-      typeof inputs !== "object" ||
-      Array.isArray(inputs)
-    ) {
-      throw new Error(
-        "T2V prompt node inputs are invalid"
-      );
-    }
-
-    (
-      inputs as
-        Record<string, unknown>
-    ).value =
-      prompt;
-
-    const enhanceNode =
-      workflow["405:383"];
-
-    const enhanceInputs =
-      enhanceNode?.inputs;
-
-    if (
-      enhanceInputs === null ||
-      typeof enhanceInputs !== "object" ||
-      Array.isArray(enhanceInputs) ||
-      (
-        enhanceInputs as
-          Record<string, unknown>
-      ).value !== false
-    ) {
-      throw new Error(
-        "T2V template prompt-enhance state changed"
-      );
-    }
-
-    return workflow;
+    return bindT2VWorkflow(
+      parsed as T2VWorkflow,
+      prompt,
+      settings
+    );
   }
 
   async handlePlainText(
@@ -316,11 +413,20 @@ export class TelegramT2VService {
         );
       }
 
+      const profileSettings =
+        await this.profile.get();
+
+      const resolvedSettings =
+        resolveT2VSettings(
+          profileSettings
+        );
+
       const stored =
         await this.pending
           .setPrompt(
             this.chatId,
             answer,
+            resolvedSettings,
             new Date(
               Date.now() +
               this.confirmSeconds *
@@ -333,7 +439,11 @@ export class TelegramT2VService {
       }
 
       return this.confirmationHtml(
-        answer
+        answer,
+        resolvedSettings,
+        hasDevOverrides(
+          profileSettings
+        )
       );
     }
 
@@ -367,6 +477,15 @@ export class TelegramT2VService {
       const prompt =
         state.prompt;
 
+      const settings =
+        state.settingsSnapshot
+          ? normalizeStoredT2VSettings(
+              state.settingsSnapshot
+            ) as ResolvedT2VSettings
+          : resolveT2VSettings(
+              await this.profile.get()
+            );
+
       await this.pending
         .remove(
           this.chatId
@@ -374,7 +493,8 @@ export class TelegramT2VService {
 
       const workflow =
         await this.workflowFor(
-          prompt
+          prompt,
+          settings
         );
 
       const job =
