@@ -917,7 +917,7 @@ export class TelegramCommandService {
     }
 
     return (
-      `${title("STATUS")}\n\n` +
+      `${title("STATUS")}\n` +
       `<blockquote expandable>${
         lines.join("\n")
       }</blockquote>`
@@ -1022,7 +1022,7 @@ export class TelegramCommandService {
 
     if (jobs.length === 0) {
       return (
-        `${title("JOBS")}\n\n` +
+        `${title("JOBS")}\n` +
         `<i>No jobs yet.</i>`
       );
     }
@@ -1054,8 +1054,8 @@ export class TelegramCommandService {
       );
 
     return (
-      `${title("JOBS")}\n\n` +
-      blocks.join("\n\n")
+      `${title("JOBS")}\n` +
+      blocks.join("\n")
     );
   }
 
