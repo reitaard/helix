@@ -113,23 +113,25 @@ function resolveSetting(
   raw: string,
   dev: boolean
 ): ResolvedSetting | null {
-  if (dev) {
-    const key = devKey(raw);
+  const core = coreKey(raw);
 
-    return key
-      ? {
-          kind: "dev",
-          key
-        }
-      : null;
+  if (core) {
+    return {
+      kind: "core",
+      key: core
+    };
   }
 
-  const key = coreKey(raw);
+  if (!dev) {
+    return null;
+  }
 
-  return key
+  const advanced = devKey(raw);
+
+  return advanced
     ? {
-        kind: "core",
-        key
+        kind: "dev",
+        key: advanced
       }
     : null;
 }
@@ -433,8 +435,8 @@ export class TelegramT2VSettingsService {
         "T2V / SETTINGS",
         dev
       )}\n` +
-      `${this.workerBlock()}\n\n` +
-      `${blocks.join("\n")}\n\n` +
+      `${this.workerBlock()}\n` +
+      `${blocks.join("\n")}\n` +
       `<i>Inspect</i> · ` +
       `<code>/t2v set ${
         dev ? "-dev " : ""
@@ -449,9 +451,22 @@ export class TelegramT2VSettingsService {
       `<b>Unknown setting</b>\n` +
       (
         dev
-          ? `fps · seed · seed2 · neg · mp · samp · cfg`
+          ? `asp · qual · time · enh · fps · seed · seed2 · neg · mp · samp · cfg`
           : `asp · qual · time · enh`
       )
+    );
+  }
+
+  private devRequiredHtml(
+    rawKey: string
+  ) {
+    const key = escapeHtml(rawKey);
+
+    return (
+      `<b>Dev access required</b>\n` +
+      `${key} requires <code>-dev</code>\n` +
+      `<i>Use</i> · ` +
+      `<code>/t2v set -dev ${key}</code>`
     );
   }
 
@@ -470,7 +485,8 @@ export class TelegramT2VSettingsService {
 
   private async coreHelp(
     key: T2VCoreSetting,
-    settings: T2VSettings
+    settings: T2VSettings,
+    dev = false
   ) {
     if (key === "asp") {
       const options = ASPECT_OPTIONS.map(
@@ -489,7 +505,7 @@ export class TelegramT2VSettingsService {
       );
 
       return (
-        `${this.detailHeader("ASPECT")}` +
+        `${this.detailHeader("ASPECT", dev)}` +
         `<b>Aspect : ⦗${escapeHtml(
           settings.aspect
         )}⦘</b> ` +
@@ -504,7 +520,9 @@ export class TelegramT2VSettingsService {
           }
         )}\n` +
         `<i>Set</i> · ` +
-        `<code>/t2v set asp &lt;ratio&gt;</code>`
+        `<code>/t2v set ${
+          dev ? "-dev " : ""
+        }asp &lt;ratio&gt;</code>`
       );
     }
 
@@ -525,7 +543,7 @@ export class TelegramT2VSettingsService {
       );
 
       return (
-        `${this.detailHeader("QUALITY")}` +
+        `${this.detailHeader("QUALITY", dev)}` +
         `<b>Quality : ${qualityChoices(
           settings
         )}</b>\n` +
@@ -534,7 +552,9 @@ export class TelegramT2VSettingsService {
           { heading: "options" }
         )}\n` +
         `<i>Set</i> · ` +
-        `<code>/t2v set qual &lt;value&gt;</code>`
+        `<code>/t2v set ${
+          dev ? "-dev " : ""
+        }qual &lt;value&gt;</code>`
       );
     }
 
@@ -545,19 +565,21 @@ export class TelegramT2VSettingsService {
         1;
 
       return (
-        `${this.detailHeader("DURATION")}` +
+        `${this.detailHeader("DURATION", dev)}` +
         `${quoteBlock([
           `<b>Duration : (${settings.durationSeconds})s</b> <b><i>(Max=10s)</i></b>`,
           `<b>FPS : ${settings.fps}</b>`,
           `<b>Frames : ${frames}</b>`
         ])}\n` +
         `<i>Set</i> · ` +
-        `<code>/t2v set time &lt;seconds&gt;</code>`
+        `<code>/t2v set ${
+          dev ? "-dev " : ""
+        }time &lt;seconds&gt;</code>`
       );
     }
 
     return (
-      `${this.detailHeader("ENHANCE")}` +
+      `${this.detailHeader("ENHANCE", dev)}` +
       `<b>Enhance : [ ${
         settings.enhance ? "ON" : "OFF"
       } ]</b>${
@@ -570,7 +592,9 @@ export class TelegramT2VSettingsService {
         `${selected("OFF", !settings.enhance)}`
       ], { heading: "options" })}\n` +
       `<i>Set</i> · ` +
-      `<code>/t2v set enh &lt;on|off&gt;</code>`
+      `<code>/t2v set ${
+        dev ? "-dev " : ""
+      }enh &lt;on|off&gt;</code>`
     );
   }
 
@@ -714,13 +738,18 @@ export class TelegramT2VSettingsService {
       resolveSetting(rawKey, dev);
 
     if (!resolved) {
+      if (!dev && devKey(rawKey)) {
+        return this.devRequiredHtml(rawKey);
+      }
+
       return this.invalidSettingHtml(dev);
     }
 
     if (resolved.kind === "core") {
       return this.coreHelp(
         resolved.key,
-        settings
+        settings,
+        dev
       );
     }
 
@@ -800,6 +829,10 @@ export class TelegramT2VSettingsService {
       resolveSetting(rawKey, dev);
 
     if (!resolved) {
+      if (!dev && devKey(rawKey)) {
+        return this.devRequiredHtml(rawKey);
+      }
+
       return this.invalidSettingHtml(dev);
     }
 
