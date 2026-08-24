@@ -51,6 +51,14 @@ import {
 } from "./repositories/t2v-pending-repository.js";
 
 import {
+  T2VSettingsRepository
+} from "./repositories/t2v-settings-repository.js";
+
+import {
+  T2VProfileService
+} from "./t2v/profile-service.js";
+
+import {
   DeliveryWorker
 } from "./delivery/worker.js";
 
@@ -73,6 +81,10 @@ import {
 import {
   TelegramT2VService
 } from "./telegram/t2v-service.js";
+
+import {
+  TelegramT2VSettingsService
+} from "./telegram/t2v-settings-service.js";
 
 import {
   TelegramAlertService
@@ -152,6 +164,26 @@ const t2vPendingRepository =
     db
   );
 
+const t2vSettingsRepository =
+  new T2VSettingsRepository(
+    db
+  );
+
+const t2vProfileService =
+  config.workers[0]
+    ? new T2VProfileService(
+        t2vSettingsRepository,
+        config.workers[0].endpoint
+      )
+    : null;
+
+const telegramT2VSettingsService =
+  t2vProfileService
+    ? new TelegramT2VSettingsService(
+        t2vProfileService
+      )
+    : null;
+
 const telegramDebugService =
   new TelegramDebugService(
     jobRepository,
@@ -180,14 +212,18 @@ const telegramCancelService =
 
 const telegramT2VService =
   config.telegram &&
-  config.workers[0]
+  config.workers[0] &&
+  t2vProfileService &&
+  telegramT2VSettingsService
     ? new TelegramT2VService(
         config.telegram.chatId,
         config.workers[0].id,
         config.workers[0].name,
         config.t2vWorkflowPath,
         jobs,
-        t2vPendingRepository
+        t2vPendingRepository,
+        t2vProfileService,
+        telegramT2VSettingsService
       )
     : null;
 
