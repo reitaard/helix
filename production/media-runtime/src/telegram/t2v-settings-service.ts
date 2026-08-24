@@ -3,8 +3,8 @@ import {
   DEFAULT_NEGATIVE_PROMPT,
   FPS_OPTIONS,
   T2V_TOOL,
-  effectiveMegapixels,
-  displayQuality
+  displayQuality,
+  effectiveMegapixels
 } from "../t2v/settings.js";
 
 import type {
@@ -457,17 +457,8 @@ export class TelegramT2VSettingsService {
     );
   }
 
-  private devRequiredHtml(
-    rawKey: string
-  ) {
-    const key = escapeHtml(rawKey);
-
-    return (
-      `<b>Dev access required</b>\n` +
-      `${key} requires <code>-dev</code>\n` +
-      `<i>Use</i> · ` +
-      `<code>/t2v set -dev ${key}</code>`
-    );
+  private devRequiredHtml() {
+    return `<b>Dev access required.</b>`;
   }
 
   private detailHeader(
@@ -739,7 +730,7 @@ export class TelegramT2VSettingsService {
 
     if (!resolved) {
       if (!dev && devKey(rawKey)) {
-        return this.devRequiredHtml(rawKey);
+        return this.devRequiredHtml();
       }
 
       return this.invalidSettingHtml(dev);
@@ -759,63 +750,101 @@ export class TelegramT2VSettingsService {
     );
   }
 
-  private savedCoreRow(
+  private savedCoreHtml(
     key: T2VCoreSetting,
     settings: T2VSettings
   ) {
     switch (key) {
       case "asp":
-        return this.aspectRow(settings);
+        return (
+          `<b>[ Aspect : ⦗${escapeHtml(
+            settings.aspect
+          )}⦘</b> ` +
+          `<b><i>(${escapeHtml(
+            aspectLabel(settings)
+          )})</i></b> ` +
+          `<b>]</b>`
+        );
+
       case "qual":
-        return this.qualityRow(settings);
+        return (
+          `<b>[ Quality : ${escapeHtml(
+            displayQuality(settings.quality)
+          )} ]</b>`
+        );
+
       case "time":
-        return this.durationRow(settings);
+        return (
+          `<b>[ Duration : (${settings.durationSeconds})s ]</b>`
+        );
+
       case "enh":
-        return this.enhanceRow(settings);
+        return (
+          `<b>[ Enhance : ${
+            settings.enhance
+              ? "ON"
+              : "OFF"
+          } ]</b>`
+        );
     }
   }
 
-  private savedDevRow(
+  private savedDevHtml(
     key: T2VDevSetting,
     settings: T2VSettings
   ) {
     switch (key) {
       case "fps":
-        return this.fpsRow(settings);
+        return (
+          `<b>[ FPS : ${settings.fps} ]</b>`
+        );
+
       case "seed":
-        return settingRow(
-          "seed",
-          `Stage1 : ${escapeHtml(
+        return (
+          `<b>[ Stage1 : ${escapeHtml(
             seedValue(settings.seed)
-          )}`
+          )} ]</b>`
         );
+
       case "seed2":
-        return settingRow(
-          "seed2",
-          `Stage2 : ${escapeHtml(
+        return (
+          `<b>[ Stage2 : ${escapeHtml(
             seedValue(settings.seed2)
-          )}`
+          )} ]</b>`
         );
+
       case "neg":
-        return settingRow(
-          "neg",
-          `Prompt ( − ) : ${escapeHtml(
+        return (
+          `<b>[ Prompt ( − ) : ${escapeHtml(
             negativeState(settings)
-          )}`
+          )} ]</b>`
         );
-      case "mp":
-        return this.megapixelsRow(settings);
+
+      case "mp": {
+        const context =
+          settings.megapixelsOverride === null
+            ? displayQuality(settings.quality)
+            : "manual";
+
+        return (
+          `<b>[ Megapixels : ${effectiveMegapixels(
+            settings
+          ).toFixed(1)} MP</b> ` +
+          `<b><i>(${escapeHtml(context)})</i></b> ` +
+          `<b>]</b>`
+        );
+      }
+
       case "samp":
-        return settingRow(
-          "samp",
-          `Sampler : ${escapeHtml(
+        return (
+          `<b>[ Sampler : ${escapeHtml(
             settings.sampler
-          )}`
+          )} ]</b>`
         );
+
       case "cfg":
-        return settingRow(
-          "cfg",
-          `Guidance : ${settings.cfg.toFixed(1)}`
+        return (
+          `<b>[ Guidance : ${settings.cfg.toFixed(1)} ]</b>`
         );
     }
   }
@@ -830,7 +859,7 @@ export class TelegramT2VSettingsService {
 
     if (!resolved) {
       if (!dev && devKey(rawKey)) {
-        return this.devRequiredHtml(rawKey);
+        return this.devRequiredHtml();
       }
 
       return this.invalidSettingHtml(dev);
@@ -844,12 +873,9 @@ export class TelegramT2VSettingsService {
             rawValue
           );
 
-        return (
-          `${this.savedCoreRow(
-            resolved.key,
-            settings
-          )}\n` +
-          `<b>[ SAVED ]</b>`
+        return this.savedCoreHtml(
+          resolved.key,
+          settings
         );
       }
 
@@ -859,12 +885,9 @@ export class TelegramT2VSettingsService {
           rawValue
         );
 
-      return (
-        `${this.savedDevRow(
-          resolved.key,
-          settings
-        )}\n` +
-        `<b>[ SAVED ]</b>`
+      return this.savedDevHtml(
+        resolved.key,
+        settings
       );
     }
     catch (error) {
