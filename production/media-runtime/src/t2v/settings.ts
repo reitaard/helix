@@ -134,7 +134,6 @@ export const t2vSettingsSchema =
       z.number()
         .min(0.1)
         .max(2)
-        .multipleOf(0.1)
         .nullable(),
 
     sampler:
@@ -146,7 +145,6 @@ export const t2vSettingsSchema =
       z.number()
         .min(0)
         .max(100)
-        .multipleOf(0.1)
   });
 
 export type T2VSettings =
@@ -154,15 +152,15 @@ export type T2VSettings =
     typeof t2vSettingsSchema
   >;
 
-export interface ResolvedT2VSettings
-  extends Omit<
+export type ResolvedT2VSettings =
+  Omit<
     T2VSettings,
     "seed" |
     "seed2"
-  > {
-  seed: number;
-  seed2: number;
-}
+  > & {
+    seed: number;
+    seed2: number;
+  };
 
 export const DEFAULT_T2V_SETTINGS:
   T2VSettings = {
