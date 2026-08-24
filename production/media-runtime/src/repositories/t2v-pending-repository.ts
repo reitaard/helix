@@ -13,6 +13,9 @@ interface PendingRow {
     string |
     null;
 
+  settings_snapshot:
+    unknown;
+
   invalid_attempts:
     number;
 
@@ -36,6 +39,9 @@ export interface PendingT2V {
   prompt:
     string |
     null;
+
+  settingsSnapshot:
+    unknown;
 
   invalidAttempts:
     number;
@@ -62,6 +68,9 @@ function mapRow(
 
     prompt:
       row.prompt,
+
+    settingsSnapshot:
+      row.settings_snapshot,
 
     invalidAttempts:
       row.invalid_attempts,
@@ -101,6 +110,7 @@ export class T2VPendingRepository {
           chat_id,
           phase,
           prompt,
+          settings_snapshot,
           invalid_attempts,
           expires_at,
           created_at,
@@ -130,12 +140,14 @@ export class T2VPendingRepository {
           chat_id,
           phase,
           prompt,
+          settings_snapshot,
           invalid_attempts,
           expires_at
         )
       VALUES (
         $1,
         'awaiting_prompt',
+        NULL,
         NULL,
         0,
         $2
@@ -147,6 +159,9 @@ export class T2VPendingRepository {
           'awaiting_prompt',
 
         prompt =
+          NULL,
+
+        settings_snapshot =
           NULL,
 
         invalid_attempts =
@@ -168,6 +183,7 @@ export class T2VPendingRepository {
   async setPrompt(
     chatId: string,
     prompt: string,
+    settingsSnapshot: unknown,
     expiresAt: Date
   ): Promise<boolean> {
     const result =
@@ -183,11 +199,14 @@ export class T2VPendingRepository {
           prompt =
             $2,
 
+          settings_snapshot =
+            $3::jsonb,
+
           invalid_attempts =
             0,
 
           expires_at =
-            $3,
+            $4,
 
           updated_at =
             NOW()
@@ -200,6 +219,9 @@ export class T2VPendingRepository {
         [
           chatId,
           prompt,
+          JSON.stringify(
+            settingsSnapshot
+          ),
           expiresAt
         ]
       );
@@ -243,6 +265,7 @@ export class T2VPendingRepository {
           chat_id,
           phase,
           prompt,
+          settings_snapshot,
           invalid_attempts,
           expires_at,
           created_at,
