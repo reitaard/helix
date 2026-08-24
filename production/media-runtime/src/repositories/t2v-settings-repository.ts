@@ -1,0 +1,88 @@
+import type {
+  Pool
+} from "pg";
+
+import {
+  normalizeStoredT2VSettings
+} from "../t2v/settings.js";
+
+import type {
+  T2VSettings
+} from "../t2v/settings.js";
+
+interface SettingsRow {
+  settings: unknown;
+}
+
+export class T2VSettingsRepository {
+  constructor(
+    private readonly db:
+      Pool
+  ) {}
+
+  async get(
+    profileId: string,
+    tool: string
+  ): Promise<T2VSettings> {
+    const result =
+      await this.db.query<
+        SettingsRow
+      >(
+        `
+        SELECT
+          settings
+        FROM
+          production_profile_tool_settings
+        WHERE
+          profile_id = $1
+          AND tool = $2
+        `,
+        [
+          profileId,
+          tool
+        ]
+      );
+
+    return normalizeStoredT2VSettings(
+      result.rows[0]?.settings
+    );
+  }
+
+  async save(
+    profileId: string,
+    tool: string,
+    settings: T2VSettings
+  ) {
+    await this.db.query(
+      `
+      INSERT INTO
+        production_profile_tool_settings (
+          profile_id,
+          tool,
+          settings
+        )
+      VALUES (
+        $1,
+        $2,
+        $3::jsonb
+      )
+
+      ON CONFLICT (
+        profile_id,
+        tool
+      )
+      DO UPDATE SET
+        settings =
+          EXCLUDED.settings,
+
+        updated_at =
+          NOW()
+      `,
+      [
+        profileId,
+        tool,
+        JSON.stringify(settings)
+      ]
+    );
+  }
+}
