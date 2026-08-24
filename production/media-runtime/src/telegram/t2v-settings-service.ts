@@ -24,20 +24,34 @@ import {
   escapeHtml
 } from "./presentation.js";
 
+function normalizedKey(
+  raw: string
+) {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[\s._-]+/g, "");
+}
+
 function coreKey(
   raw: string
 ): T2VCoreSetting | null {
-  switch (
-    raw.trim().toLowerCase()
-  ) {
+  switch (normalizedKey(raw)) {
     case "asp":
+    case "aspect":
+      return "asp";
+
     case "qual":
+    case "quality":
+      return "qual";
+
     case "time":
+    case "duration":
+      return "time";
+
     case "enh":
-      return raw
-        .trim()
-        .toLowerCase() as
-        T2VCoreSetting;
+    case "enhance":
+      return "enh";
 
     default:
       return null;
@@ -47,22 +61,38 @@ function coreKey(
 function devKey(
   raw: string
 ): T2VDevSetting | null {
-  const value =
-    raw.trim().toLowerCase();
-
-  if (value === "seed1") {
-    return "seed";
-  }
-
-  switch (value) {
+  switch (normalizedKey(raw)) {
     case "fps":
+      return "fps";
+
     case "seed":
+    case "seed1":
+    case "stage1":
+    case "stage1seed":
+      return "seed";
+
     case "seed2":
+    case "stage2":
+    case "stage2seed":
+      return "seed2";
+
     case "neg":
+    case "negative":
+    case "negativeprompt":
+      return "neg";
+
     case "mp":
+    case "megapixel":
+    case "megapixels":
+      return "mp";
+
     case "samp":
+    case "sampler":
+      return "samp";
+
     case "cfg":
-      return value;
+    case "guidance":
+      return "cfg";
 
     default:
       return null;
@@ -190,13 +220,14 @@ export class TelegramT2VSettingsService {
   private aspectRow(
     settings: T2VSettings
   ) {
-    return settingRow(
-      "asp",
-      `Aspect : ⦗${escapeHtml(
+    return (
+      `<code>asp</code><b>.Aspect : ` +
+      `⦗${escapeHtml(
         settings.aspect
-      )}⦘</b> <b><i>(${escapeHtml(
+      )}⦘</b> ` +
+      `<b><i>(${escapeHtml(
         aspectLabel(settings)
-      )})</i></b><b>`
+      )})</i></b>`
     );
   }
 
@@ -318,35 +349,35 @@ export class TelegramT2VSettingsService {
     const settings =
       await this.profile.get();
 
-    const core =
-      this.coreRows(settings);
+    const rows = [
+      pageTitle(
+        "T2V / SETTINGS",
+        dev
+      ),
+      this.workerBlock(),
+      `▷ <b>CORE</b>`,
+      ...this.coreRows(settings)
+    ];
 
-    if (!dev) {
-      return (
-        `${pageTitle("T2V / SETTINGS")}\n\n` +
-        `${this.workerBlock()}\n\n` +
-        `▷ <b>CORE</b>\n` +
-        core.join("\n") +
-        `\n\n<i>Inspect</i> · ` +
-        `<code>/t2v set &lt;setting&gt;</code>`
+    if (dev) {
+      rows.push(
+        `▷ <b>ADVANCED</b>`,
+        ...this.advancedRows(
+          settings
+        )
       );
     }
 
-    return (
-      `${pageTitle(
-        "T2V / SETTINGS",
-        true
-      )}\n\n` +
-      `${this.workerBlock()}\n\n` +
-      `▷ <b>CORE</b>\n` +
-      core.join("\n") +
-      `\n\n▷ <b>ADVANCED</b>\n` +
-      this.advancedRows(
-        settings
-      ).join("\n") +
-      `\n\n<i>Inspect</i> · ` +
-      `<code>/t2v set -dev &lt;setting&gt;</code>`
+    rows.push(
+      `<i>Inspect</i> · ` +
+      `<code>/t2v set ${
+        dev
+          ? "-dev "
+          : ""
+      }&lt;setting&gt;</code>`
     );
+
+    return rows.join("\n");
   }
 
   private invalidSettingHtml(
@@ -371,7 +402,7 @@ export class TelegramT2VSettingsService {
       `${pageTitle(
         `${name}.T2V`,
         dev
-      )}\n\n` +
+      )}\n` +
       `${this.workerBlock()}\n`
     );
   }
@@ -424,10 +455,10 @@ export class TelegramT2VSettingsService {
           )}⦘</b> ` +
           `<b><i>(${escapeHtml(
             aspectLabel(settings)
-          )})</i></b>\n\n` +
+          )})</i></b>\n` +
           `<blockquote expandable>` +
           `<b><i>• options •</i></b>\n` +
-          `${options}</blockquote>\n\n` +
+          `${options}</blockquote>\n` +
           `<i>Set</i> · ` +
           `<code>/t2v set asp &lt;ratio&gt;</code>`
         );
@@ -464,9 +495,9 @@ export class TelegramT2VSettingsService {
           )}` +
           `<b>Quality : ${qualityChoices(
             settings
-          )}</b>\n\n` +
+          )}</b>\n` +
           `▷ <b>OPTIONS</b>\n` +
-          `${options}\n\n` +
+          `${options}\n` +
           `<i>Set</i> · ` +
           `<code>/t2v set qual &lt;value&gt;</code>`
         );
@@ -485,7 +516,7 @@ export class TelegramT2VSettingsService {
           `<b>Duration : (${settings.durationSeconds})s</b> ` +
           `<b><i>(Max=10s)</i></b>\n` +
           `<b>FPS : ${settings.fps}</b>\n` +
-          `<b>Frames : ${frames}</b>\n\n` +
+          `<b>Frames : ${frames}</b>\n` +
           `<i>Set</i> · ` +
           `<code>/t2v set time &lt;seconds&gt;</code>`
         );
@@ -503,7 +534,7 @@ export class TelegramT2VSettingsService {
           settings.enhance
             ? ""
             : ` <b><i>(default)</i></b>`
-        }\n\n` +
+        }\n` +
         `▷ <b>OPTIONS</b>\n` +
         `${selected(
           "ON",
@@ -511,7 +542,7 @@ export class TelegramT2VSettingsService {
         )} / ${selected(
           "OFF",
           !settings.enhance
-        )}\n\n` +
+        )}\n` +
         `<i>Set</i> · ` +
         `<code>/t2v set enh &lt;on|off&gt;</code>`
       );
@@ -534,7 +565,7 @@ export class TelegramT2VSettingsService {
         )}` +
         `<b>FPS : ${fpsChoices(
           settings
-        )}</b>\n\n` +
+        )}</b>\n` +
         `<i>Set</i> · ` +
         `<code>/t2v set -dev fps &lt;value&gt;</code>`
       );
@@ -564,7 +595,7 @@ export class TelegramT2VSettingsService {
         )}</b>\n` +
         `<b>Range</b> · ` +
         `<code>0-${Number.MAX_SAFE_INTEGER}</code>\n` +
-        `<b>Special</b> · <code>random</code>\n\n` +
+        `<b>Special</b> · <code>random</code>\n` +
         `<i>Set</i> · ` +
         `<code>/t2v set -dev ${key} &lt;value&gt;</code>`
       );
@@ -578,10 +609,10 @@ export class TelegramT2VSettingsService {
         )}` +
         `<b>Prompt ( − ) : ${escapeHtml(
           negativeState(settings)
-        )}</b>\n\n` +
+        )}</b>\n` +
         `<blockquote expandable>${escapeHtml(
           settings.negativePrompt
-        )}</blockquote>\n\n` +
+        )}</blockquote>\n` +
         `<i>Reset</i> · <code>default</code>\n` +
         `<i>Set</i> · ` +
         `<code>/t2v set -dev neg &lt;text&gt;</code>`
@@ -610,7 +641,7 @@ export class TelegramT2VSettingsService {
         )})</i></b>\n` +
         `<b>Range</b> · <code>0.1-2.0 MP</code>\n` +
         `<b>Step</b> · <code>0.1</code>\n` +
-        `<b>Auto</b> · <code>default</code>\n\n` +
+        `<b>Auto</b> · <code>default</code>\n` +
         `<i>Set</i> · ` +
         `<code>/t2v set -dev mp &lt;value&gt;</code>`
       );
@@ -623,17 +654,10 @@ export class TelegramT2VSettingsService {
 
       const optionLines =
         options.map(
-          option => {
-            const value =
-              `<code>${escapeHtml(
-                option
-              )}</code>`;
-
-            return option ===
-              settings.sampler
-              ? `<u>${value}</u>`
-              : value;
-          }
+          option =>
+            `<code>${escapeHtml(
+              option
+            )}</code>`
         ).join("\n");
 
       return (
@@ -643,10 +667,10 @@ export class TelegramT2VSettingsService {
         )}` +
         `<b>Sampler : ${escapeHtml(
           settings.sampler
-        )}</b>\n\n` +
+        )}</b>\n` +
         `<blockquote expandable>` +
         `<b><i>• options •</i></b>\n` +
-        `${optionLines}</blockquote>\n\n` +
+        `${optionLines}</blockquote>\n` +
         `<i>Set</i> · ` +
         `<code>/t2v set -dev samp &lt;value&gt;</code>`
       );
@@ -660,7 +684,7 @@ export class TelegramT2VSettingsService {
       `<b>Guidance : ${settings.cfg.toFixed(1)}</b>\n` +
       `<b>Range</b> · <code>0-100</code>\n` +
       `<b>Step</b> · <code>0.1</code>\n` +
-      `<b>Applies</b> · Stage1 + Stage2 · Video + Audio\n\n` +
+      `<b>Applies</b> · Stage1 + Stage2 · Video + Audio\n` +
       `<i>Set</i> · ` +
       `<code>/t2v set -dev cfg &lt;value&gt;</code>`
     );
@@ -778,7 +802,7 @@ export class TelegramT2VSettingsService {
       }
 
       return (
-        `${row}\n\n` +
+        `${row}\n` +
         `<b>[ SAVED ]</b>`
       );
     }
@@ -790,7 +814,7 @@ export class TelegramT2VSettingsService {
 
       return (
         `<b>Invalid value.</b>\n` +
-        `<i>${escapeHtml(message)}</i>\n\n` +
+        `<i>${escapeHtml(message)}</i>\n` +
         `<i>Inspect</i> · ` +
         `<code>/t2v set ${dev ? "-dev " : ""}${escapeHtml(rawKey)}</code>`
       );
