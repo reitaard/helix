@@ -65,9 +65,9 @@ function title(
   value: string
 ) {
   return (
-    `<b><i>• <u>${
-      escapeHtml(value)
-    }</u> •</i></b>`
+    `<b>[ ${escapeHtml(
+      value
+    )} ]</b>`
   );
 }
 
@@ -714,13 +714,13 @@ export class TelegramCommandService {
           escapeHtml(value.name)
         }</b>`,
 
-        `<b>State</b> · <code>${
+        `<b>State</b> · ${
           escapeHtml(
             displayWorkerState(
               value.state
             )
           )
-        }</code> · <i>${
+        } · <i>${
           value.latencyMs
         } ms</i>`,
 
@@ -833,13 +833,13 @@ export class TelegramCommandService {
 
       if (deviceName) {
         system.push(
-          `<b>GPU</b> · <code>${
+          `<b>GPU</b> · ${
             escapeHtml(
               compactGpuName(
                 deviceName
               )
             )
-          }</code>`
+          }`
         );
       }
 
@@ -911,13 +911,13 @@ export class TelegramCommandService {
     if (system.length > 0) {
       lines.push(
         "",
-        "<b><i>[System]</i></b>",
+        "<b><i>• System •</i></b>",
         ...system
       );
     }
 
     return (
-      `${title("STATUS")}\n` +
+      `${title("STATUS")}\n\n` +
       `<blockquote expandable>${
         lines.join("\n")
       }</blockquote>`
@@ -1022,12 +1022,12 @@ export class TelegramCommandService {
 
     if (jobs.length === 0) {
       return (
-        `${title("JOBS")}\n` +
+        `${title("JOBS")}\n\n` +
         `<i>No jobs yet.</i>`
       );
     }
 
-    const lines =
+    const blocks =
       jobs.map(
         job => {
           const runtime =
@@ -1037,22 +1037,25 @@ export class TelegramCommandService {
             );
 
           return (
-            `<b>ID:</b> <code>${
-              escapeHtml(job.id)
-            }</code> · ` +
-            `<b>[${
-              escapeHtml(job.status)
-            }]</b> · ` +
-            `<i>${
-              escapeHtml(runtime)
-            }</i>`
+            `<blockquote>` +
+            `<b>ID:</b> ${escapeHtml(
+              job.id
+            )} ·\n` +
+            `<b><i>Status</i></b> <b>·</b> ` +
+            `<b>[${escapeHtml(
+              job.status
+            )}]</b> <b>in</b> ` +
+            `<i>${escapeHtml(
+              runtime
+            )}</i>` +
+            `</blockquote>`
           );
         }
       );
 
     return (
-      `${title("JOBS")}\n` +
-      lines.join("\n")
+      `${title("JOBS")}\n\n` +
+      blocks.join("\n\n")
     );
   }
 
