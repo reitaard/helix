@@ -7,7 +7,7 @@ The goal is to keep the dedicated ComfyUI GPU worker reliable while workflow exp
 ## Current path
 
 ```text
-caller / n8n
+caller / n8n / Telegram
     ↓
 helix-runtime :8787
     ↓
@@ -38,7 +38,7 @@ VRAM: 8188 MiB
 ComfyUI: 0.33.0
 Python: 3.12.11
 PyTorch: 2.10.0+cu130
-validated capability: video.i2v
+validated capabilities: video.i2v, video.t2v
 max concurrent GPU jobs: 1
 ```
 
@@ -85,7 +85,7 @@ validate LTX/custom nodes/models
 change the Helix production revision pin only after validation
 ```
 
-`helix-runtime` now reports upstream drift through `/status` by comparing the configured pinned revision with official `Comfy-Org/ComfyUI` `master`. This is informational only and never mutates the worker.
+`helix-runtime` reports upstream drift through `/status` by comparing the configured pinned revision with official `Comfy-Org/ComfyUI` `master`. This is informational only and never mutates the worker.
 
 ## Live diagnostics
 
@@ -101,6 +101,8 @@ Comfy `/system_stats` is the source of the live backend/system data displayed by
 Windows Task Manager shared-GPU-memory usage is not exposed by Comfy `/system_stats`, so Helix does not invent or estimate a shared-memory value.
 
 The current Telegram presentation maps internal `cold_ready` to the operator-friendly state `Idle` while preserving the internal state model.
+
+A transient WebSocket events-probe timeout is advisory. Runtime reachability, queue access and capability inspection determine whether the worker is execution-ready.
 
 ## Completed foundation
 
@@ -137,7 +139,10 @@ The current Telegram presentation maps internal `cold_ready` to the operator-fri
 - delivery state exposed through the media-job API;
 - maximum five Telegram delivery attempts;
 - permanent malformed-artifact failures stop without retrying forever;
-- read-only Telegram `/status`, `/queue`, `/help` operator commands.
+- Telegram diagnostics/debug/operator commands;
+- durable confirmed Telegram cancellation;
+- durable confirmed native LTX 2.5 T2V submission;
+- tool-aware Telegram artifact captions.
 
 ## Proven generations
 
@@ -160,7 +165,19 @@ job_e2a4a9efff7a47b8b70cd41c068073ac
   -> video/LTX-2.5_i2v_00005_.mp4
 ```
 
-The C6 run started `2026-08-22T09:37:16.915Z` and finished `2026-08-22T09:46:04.486Z`.
+Native LTX 2.5 T2V production run:
+
+```text
+job_b270eea4177746d881c0c96d0f2f4b35
+  -> video.t2v
+  -> succeeded
+  -> video/LTX_2.5_t2v_00001_.mp4
+  -> 1280×704 / 5.0s / audio present
+  -> Telegram delivered in 1 attempt
+  -> 4m 10s runtime
+```
+
+The T2V run proved the complete Telegram intent -> durable Helix job -> native LTX generation -> reconciliation -> original-file Telegram delivery path.
 
 ## Execution/recovery model
 
@@ -199,7 +216,7 @@ ffprobe
     ↓
 Telegram sendDocument
     ├── original MP4 file
-    └── expandable metadata caption
+    └── metadata caption
     ↓
 durable document message ID
     ↓
@@ -220,13 +237,65 @@ attempt 5 failure -> terminal failed
 
 Malformed artifact metadata is treated as a permanent delivery error immediately. A terminal delivery failure remains visible as `status = failed` with `nextAttemptAt = null` and is not claimed again.
 
-## Input state: defer semantic expansion
+## Current T2V input state
 
-The existing semantic image override remains useful, but actual `/upload/image` staging and broader workflow bindings are postponed while the LTX graphs are still being optimized.
+Telegram `/t2v` now provides a guarded native LTX 2.5 T2V path:
 
-Future I2V graphs may expose more prompt, Prompt Relay, sampler, Director, or temporal controls, and a T2V workflow will have a different input surface.
+```text
+/t2v
+  ↓
+awaiting prompt
+  ↓
+prompt preview
+  ↓
+yes / no
+  ↓ yes
+video.t2v submission
+```
 
-Keep raw Comfy API workflow submission available and avoid hard-coding an unstable large input schema. When workflow families stabilize, add semantic bindings around the chosen graphs rather than temporary node layouts.
+Pending prompt/confirmation state is durable in `operator_pending_t2v`. No GPU job exists until the operator confirms `yes`.
+
+The deployment-managed workflow lives at:
+
+```text
+/opt/helix-runtime/workflows/video_ltx2_5_t2v.api.json
+```
+
+It is intentionally not frozen into Git yet.
+
+The first semantic binding changes only the positive prompt at `405:376.inputs.value`. Helix verifies that prompt enhancement at `405:383` remains disabled before submission.
+
+Current fixed baseline:
+
+```text
+aspect:      16:9
+resolution:  0.9 MP selector baseline
+fps:         24
+duration:    5 seconds
+enhance:     off
+negative:    workflow-defined
+sampler:     workflow-defined
+models:      workflow-defined
+```
+
+The next Production task is to add a small durable T2V settings layer without exposing raw Comfy node IDs. The initial semantic surface should concentrate on:
+
+```text
+aspect
+quality / resolution preset
+duration
+prompt enhancement
+```
+
+FPS remains fixed at 24 for the initial settings surface. Seed, negative prompt, sampler/scheduler/model controls remain internal/advanced until experiments prove that they deserve stable user-facing semantics.
+
+## Input state: keep semantic expansion narrow
+
+The existing semantic image override remains useful, but actual `/upload/image` staging and broader I2V workflow bindings remain postponed while the LTX graphs are still being optimized.
+
+Future I2V graphs may expose more prompt, Prompt Relay, sampler, Director, or temporal controls. Keep raw Comfy API workflow submission available and avoid hard-coding an unstable large input schema.
+
+When workflow families stabilize, add semantic bindings around the chosen graphs rather than temporary node layouts.
 
 ## C6 workflow note
 
@@ -269,25 +338,26 @@ Permanent delivery failure handling   DONE
 Telegram runtime diagnostics          DONE
 Live RAM/VRAM reporting               DONE
 Read-only Comfy update awareness      DONE
+Native LTX 2.5 T2V path               DONE
+T2V pre-submit confirmation           DONE
 
+T2V settings contract                 NEXT
 Worker retention cleanup              DEFERRED
 Image upload / staging                DEFERRED
-Prompt / relay / sampler bindings     DEFERRED
-T2V semantic bindings                 DEFERRED
+Broader I2V prompt/relay/sampler       DEFERRED
 Persistent WS tracking                OPTIONAL LATER
-Write-capable Telegram operations     NOT IN CURRENT CHECKPOINT
 Freeze workflow package               ONLY AFTER BASELINE IS CHOSEN
 ```
 
 ## Current pause point
 
-The workflow-independent runtime and read-only operator checkpoint is complete enough to pause.
+The workflow-independent runtime, Telegram operational checkpoint, and first native T2V production loop are proven.
+
+The next Production task is the T2V settings contract and workflow binder. Keep it small and semantic: map operator concepts to vetted workflow controls without making Comfy node IDs part of the public interface.
 
 Worker-output retention remains deferred rather than adding a worker-side deletion service just for cleanup. VPS temporary copies are already removed after every delivery attempt.
 
 One operational validation remains pending: the Windows scheduled task has been started successfully by hand, but a real reboot -> automatic ComfyUI worker startup has not yet been proven.
-
-Return to Comfy/LTX workflow work next: continue I2V optimization, add the simple native LTX 2.5 T2V graph, and discover the final useful controls before defining a semantic Helix contract.
 
 ## Operational rules
 
@@ -301,4 +371,4 @@ Return to Comfy/LTX workflow work next: continue I2V optimization, add the simpl
 - Do not let n8n own low-level Comfy polling/tracking.
 - Do not store Telegram tokens or other secrets in Git.
 - Do not package/freeze experimental LTX workflows yet.
-- Do not force semantic input work while the workflow control surface is still changing.
+- Keep operator-facing T2V settings semantic; raw node IDs stay inside the Production workflow binder.
