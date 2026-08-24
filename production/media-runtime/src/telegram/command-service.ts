@@ -34,7 +34,6 @@ import {
   ComfyUpdateChecker
 } from "../workers/comfy-update-checker.js";
 
-
 interface TelegramUpdate {
   update_id: number;
 
@@ -648,6 +647,7 @@ export class TelegramCommandService {
       `<code>/errors</code> <b>-</b> <b>Recent failures</b>\n` +
       `<code>/events &lt;id&gt;</code> <b>-</b> <b>Job events</b>\n` +
       `<code>/t2v</code> <b>-</b> <b>Generate video</b>\n` +
+      `<code>/t2v settings</code> <b>-</b> <b>T2V settings</b>\n` +
       `<code>/cancel &lt;id&gt;</code> <b>-</b> <b>Cancel job</b>`
     );
   }
@@ -1417,8 +1417,7 @@ export class TelegramCommandService {
           answer === "no"
         ) {
           await this.sendHtml(
-            `${title("CONFIRM")}
-` +
+            `${title("CONFIRM")}\n` +
             `<b><i>No confirmation is pending.</i></b>`
           );
         }
@@ -1507,7 +1506,10 @@ export class TelegramCommandService {
 
         case "/t2v":
           await this.sendHtml(
-            await this.t2v.begin()
+            await this.t2v
+              .handleCommand(
+                args
+              )
           );
           break;
 
