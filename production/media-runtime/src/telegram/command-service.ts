@@ -1040,7 +1040,7 @@ export class TelegramCommandService {
             `<blockquote>` +
             `<b>ID:</b> ${escapeHtml(
               job.id
-            )} ·\n` +
+            )}\n` +
             `<b><i>Status</i></b> <b>·</b> ` +
             `<b>[${escapeHtml(
               job.status
