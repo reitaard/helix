@@ -39,6 +39,10 @@ import {
 } from "./t2v-settings-service.js";
 
 import {
+  TelegramT2VResetService
+} from "./t2v-reset-service.js";
+
+import {
   escapeHtml,
   title
 } from "./presentation.js";
@@ -75,6 +79,9 @@ export class TelegramT2VService {
 
     private readonly settingsUi:
       TelegramT2VSettingsService,
+
+    private readonly reset:
+      TelegramT2VResetService,
 
     private readonly promptSeconds =
       300,
@@ -178,6 +185,29 @@ export class TelegramT2VService {
         ?.toLowerCase() ??
       "";
 
+    if (mode === "reset") {
+      if (args.length === 1) {
+        return this.reset.begin(
+          false
+        );
+      }
+
+      if (
+        args.length === 2 &&
+        args[1]?.toLowerCase() ===
+          "-dev"
+      ) {
+        return this.reset.begin(
+          true
+        );
+      }
+
+      return (
+        `<b>Usage</b> · ` +
+        `<code>/t2v reset [-dev]</code>`
+      );
+    }
+
     if (
       mode === "settings" ||
       mode === "s"
@@ -246,10 +276,12 @@ export class TelegramT2VService {
 
   private async sweepExpiry() {
     try {
-      await this.pending
-        .expireDue(
+      await Promise.all([
+        this.pending.expireDue(
           this.chatId
-        );
+        ),
+        this.reset.expireDue()
+      ]);
     }
     catch (error) {
       console.error(
@@ -307,6 +339,12 @@ export class TelegramT2VService {
   }
 
   async hasPending() {
+    if (
+      await this.reset.hasPending()
+    ) {
+      return true;
+    }
+
     await this.pending
       .expireDue(
         this.chatId
@@ -320,10 +358,13 @@ export class TelegramT2VService {
   }
 
   async abandonPendingForCommand() {
-    await this.pending
-      .remove(
+    await Promise.all([
+      this.pending.remove(
         this.chatId
-      );
+      ),
+      this.reset
+        .abandonPendingForCommand()
+    ]);
   }
 
   private async workflowFor(
@@ -364,6 +405,16 @@ export class TelegramT2VService {
     string |
     null
   > {
+    const resetResponse =
+      await this.reset
+        .handlePlainText(
+          text
+        );
+
+    if (resetResponse !== null) {
+      return resetResponse;
+    }
+
     const answer =
       text
         .trim();
