@@ -8,6 +8,7 @@ interface MediaJobRow {
   status: string;
 
   worker_id: string | null;
+  profile_id: string | null;
   adapter: string | null;
 
   backend_job_id:
@@ -33,6 +34,7 @@ export interface MediaJob {
   status: string;
 
   workerId: string | null;
+  profileId: string | null;
   adapter: string | null;
 
   backendJobId:
@@ -62,6 +64,9 @@ function mapJob(
 
     workerId:
       row.worker_id,
+
+    profileId:
+      row.profile_id,
 
     adapter:
       row.adapter,
@@ -147,6 +152,7 @@ export class JobRepository {
           tool,
           status,
           worker_id,
+          profile_id,
           adapter,
           backend_job_id,
           idempotency_key,
@@ -184,6 +190,7 @@ export class JobRepository {
           tool,
           status,
           worker_id,
+          profile_id,
           adapter,
           backend_job_id,
           idempotency_key,
@@ -213,6 +220,7 @@ export class JobRepository {
       id: string;
       tool: string;
       workerId: string;
+      profileId: string;
       adapter: string;
 
       idempotencyKey:
@@ -236,6 +244,7 @@ export class JobRepository {
           tool,
           status,
           worker_id,
+          profile_id,
           adapter,
           idempotency_key,
           request
@@ -247,13 +256,15 @@ export class JobRepository {
           $3,
           $4,
           $5,
-          $6::jsonb
+          $6,
+          $7::jsonb
         )
         `,
         [
           input.id,
           input.tool,
           input.workerId,
+          input.profileId,
           input.adapter,
           input.idempotencyKey,
           JSON.stringify(
@@ -469,6 +480,7 @@ export class JobRepository {
           tool,
           status,
           worker_id,
+          profile_id,
           adapter,
           backend_job_id,
           idempotency_key,
@@ -505,6 +517,7 @@ export class JobRepository {
           tool,
           status,
           worker_id,
+          profile_id,
           adapter,
           backend_job_id,
           idempotency_key,
@@ -542,6 +555,7 @@ export class JobRepository {
           tool,
           status,
           worker_id,
+          profile_id,
           adapter,
           backend_job_id,
           idempotency_key,

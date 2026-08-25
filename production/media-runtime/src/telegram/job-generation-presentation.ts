@@ -85,12 +85,9 @@ export function renderJobGeneration(
   const generation =
     asRecord(root?.generation);
 
-  if (
-    readString(
-      generation,
-      "kind"
-    ) !== "t2v"
-  ) {
+  const kind = readString(generation, "kind");
+
+  if (kind !== "t2v" && kind !== "t2i") {
     return null;
   }
 
@@ -106,6 +103,18 @@ export function renderJobGeneration(
   const lines: string[] = [
     "<b><i>• generation •</i></b>"
   ];
+
+  if (kind === "t2i") {
+    const model = readString(generation, "model");
+    const aspect = readString(settings, "aspect");
+    const seed = readNumber(settings, "seed");
+    const profileId = readString(generation, "profileId");
+    if (model) lines.push(`<b>Model</b> · <b>${escapeHtml(model)}</b>`);
+    if (profileId) lines.push(`<b>Profile</b> · <code>${escapeHtml(profileId)}</code>`);
+    if (aspect) lines.push(`<b>Aspect</b> · <b>⦗${escapeHtml(aspect)}⦘</b>`);
+    if (seed !== null) lines.push(`<b>Seed</b> · <code>${seed}</code>`);
+    return `<blockquote expandable>${lines.join("\n")}</blockquote>`;
+  }
 
   const model =
     readString(

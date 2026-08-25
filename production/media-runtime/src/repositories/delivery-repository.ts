@@ -30,6 +30,9 @@ interface DeliveryRow {
   worker_id:
     string | null;
 
+  profile_id:
+    string | null;
+
   tool:
     string;
 
@@ -64,6 +67,9 @@ export interface ClaimedDelivery {
 
   workerId:
     string;
+
+  profileId:
+    string | null;
 
   tool:
     string;
@@ -300,6 +306,7 @@ export class DeliveryRepository {
             c.metadata_message_id,
             c.document_message_id,
             j.worker_id,
+            j.profile_id,
             j.tool,
             j.started_at,
             j.finished_at
@@ -351,6 +358,9 @@ export class DeliveryRepository {
 
         workerId:
           row.worker_id,
+
+        profileId:
+          row.profile_id,
 
         tool:
           row.tool,

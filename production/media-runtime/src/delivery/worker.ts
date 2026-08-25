@@ -235,14 +235,10 @@ export class DeliveryWorker {
               ? `${media.width}×${media.height}`
               : "Unknown";
 
-          const video =
-            `${resolution} · ` +
-            `${formatDuration(
-              media.durationSeconds
-            )} · ` +
-            `${formatBytes(
-              media.sizeBytes
-            )}`;
+          const mediaMetadata =
+            delivery.tool === "image.t2i"
+              ? { kind: "image" as const, value: `${resolution} · ${formatBytes(media.sizeBytes)}` }
+              : { kind: "video" as const, value: `${resolution} · ${formatDuration(media.durationSeconds)} · ${formatBytes(media.sizeBytes)}`, audio: media.audioPresent ? "Present" : "Absent" };
 
           const worker =
             this.workers.get(
@@ -250,8 +246,9 @@ export class DeliveryWorker {
             );
 
           const workerName =
-            worker?.name ??
-            delivery.workerId;
+            (delivery.profileId
+              ? this.workers.getProfile(delivery.workerId, delivery.profileId)?.displayName
+              : null) ?? worker?.name ?? delivery.workerId;
 
           const document =
             await this.telegram
@@ -272,12 +269,7 @@ export class DeliveryWorker {
                       delivery.finishedAt
                     ),
 
-                  video,
-
-                  audio:
-                    media.audioPresent
-                      ? "Present"
-                      : "Absent",
+                  media: mediaMetadata,
 
                   tool:
                     delivery.tool,

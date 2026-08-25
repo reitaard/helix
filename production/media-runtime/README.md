@@ -487,3 +487,27 @@ When Production workflow work resumes, the next T2V task is not another raw-work
 - Do not store Telegram tokens or other secrets in Git.
 - Do not freeze/package experimental LTX workflows until a stable baseline is chosen.
 - Do not expose raw node IDs as the long-term T2V settings contract.
+
+## Production profiles and experimental T2I foundation
+
+`helix-rtx4060-01` remains the single physical Comfy worker: one endpoint, one
+Comfy adapter, one queue, one RTX 4060, and `maxConcurrentGpuJobs: 1`. Production
+profiles are logical identities on that worker, not additional workers:
+
+```text
+nolan      -> Christopher Nolan -> video.t2v, video.i2v -> LTX (validated)
+leibovitz  -> Annie Leibovitz   -> image.t2i            -> FLUX.2 (unvalidated)
+```
+
+Jobs now persist both `worker_id` and `profile_id`. Existing video jobs are
+backfilled to `nolan`; callers that omit `profileId` remain compatible when a
+single profile supplies the requested tool. `image.t2i` is accepted only as a
+raw-workflow API capability with normal profile resolution; there is no runtime
+FLUX binder or production validation claim.
+
+The `t2i/` domain persists only semantic `aspect` and `seed` defaults for
+`leibovitz/image.t2i`. Durable pending and reset repositories plus Telegram
+presentation services exist as a disabled foundation. `/t2i` is deliberately
+not registered or advertised until a locally validated FLUX API workflow is
+provided. Original artifact delivery remains `sendDocument`; future image
+captions omit video-only duration/audio fields.

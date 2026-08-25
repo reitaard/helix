@@ -137,7 +137,7 @@ for (
   await workerRepository
     .upsertWorker({
       id: worker.id,
-      profile: worker.profile,
+      profile: "comfy",
       adapter: worker.adapter
     });
 }
@@ -152,6 +152,14 @@ const workers =
     registry,
     workerRepository
   );
+
+const physicalWorker =
+  config.workers[0] ?? null;
+
+const nolanProfile =
+  physicalWorker?.productionProfiles.find(
+    profile => profile.id === "nolan"
+  ) ?? null;
 
 const jobRepository =
   new JobRepository(db);
@@ -196,18 +204,18 @@ const t2vModeService =
   );
 
 const t2vProfileService =
-  config.workers[0]
+  physicalWorker
     ? new T2VProfileService(
         t2vSettingsRepository,
-        config.workers[0].endpoint
+        physicalWorker.endpoint
       )
     : null;
 
 const telegramT2VModeService =
-  config.workers[0]
+  nolanProfile
     ? new TelegramT2VModeService(
         t2vModeService,
-        config.workers[0].name
+        nolanProfile.displayName
       )
     : null;
 
@@ -220,11 +228,12 @@ const telegramT2VSettingsService =
 
 const telegramT2VResetService =
   config.telegram &&
-  config.workers[0] &&
+  physicalWorker &&
+  nolanProfile &&
   t2vProfileService
     ? new TelegramT2VResetService(
         config.telegram.chatId,
-        config.workers[0].name,
+        nolanProfile.displayName,
         t2vProfileService,
         t2vSettingsRepository,
         t2vResetPendingRepository
@@ -246,28 +255,30 @@ const jobs =
 
 const telegramCancelService =
   config.telegram &&
-  config.workers[0]
+  physicalWorker &&
+  nolanProfile
     ? new TelegramCancelService(
         config.telegram.chatId,
         operatorActionRepository,
         jobRepository,
         jobs,
-        config.workers[0].id,
-        config.workers[0].name
+        physicalWorker.id,
+        nolanProfile.displayName
       )
     : null;
 
 const telegramT2VService =
   config.telegram &&
-  config.workers[0] &&
+  physicalWorker &&
+  nolanProfile &&
   t2vProfileService &&
   telegramT2VModeService &&
   telegramT2VSettingsService &&
   telegramT2VResetService
     ? new TelegramT2VService(
         config.telegram.chatId,
-        config.workers[0].id,
-        config.workers[0].name,
+        physicalWorker.id,
+        nolanProfile.displayName,
         config.t2vWorkflowPath,
         jobs,
         t2vPendingRepository,
@@ -305,21 +316,21 @@ const deliveryWorker =
     : null;
 
 const comfyUpdateChecker =
-  config.workers[0]
+  physicalWorker
     ? new ComfyUpdateChecker(
-        config.workers[0]
+        physicalWorker
           .revision
       )
     : null;
 
 const telegramAlertService =
   config.telegram &&
-  config.workers[0]
+  physicalWorker
     ? new TelegramAlertService(
         config.telegram.botToken,
         config.telegram.chatId,
-        config.workers[0].id,
-        config.workers[0].name,
+        physicalWorker.id,
+        physicalWorker.name,
         operatorAlertRepository,
         registry
       )
@@ -327,14 +338,14 @@ const telegramAlertService =
 
 const telegramCommandService =
   config.telegram &&
-  config.workers[0] &&
+  physicalWorker &&
   comfyUpdateChecker &&
   telegramCancelService &&
   telegramT2VService
     ? new TelegramCommandService(
         config.telegram.botToken,
         config.telegram.chatId,
-        config.workers[0].id,
+        physicalWorker.id,
         comfyUpdateChecker,
         db,
         registry,

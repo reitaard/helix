@@ -1,5 +1,25 @@
 export type WorkerAdapter = "comfy";
 
+export interface ProductionProfileDefinition {
+  id: string;
+  displayName: string;
+  capabilities: string[];
+  modelFamilies: Record<string, {
+    available: string[];
+    validated: string[];
+  }>;
+}
+
+export interface WorkerDefinition {
+  id: string;
+  name: string;
+  revision: string;
+  adapter: WorkerAdapter;
+  endpoint: string;
+  productionProfiles: ProductionProfileDefinition[];
+  maxConcurrentGpuJobs: number;
+}
+
 export type WorkerState =
   | "offline"
   | "starting"
@@ -7,28 +27,6 @@ export type WorkerState =
   | "ready"
   | "busy"
   | "degraded";
-
-export interface WorkerDefinition {
-  id: string;
-  name: string;
-  profile: string;
-  revision: string;
-
-  adapter: WorkerAdapter;
-  endpoint: string;
-
-  capabilities: string[];
-
-  modelFamilies: Record<
-    string,
-    {
-      available: string[];
-      validated: string[];
-    }
-  >;
-
-  maxConcurrentGpuJobs: number;
-}
 
 export interface WorkerChecks {
   systemStats: boolean;
@@ -41,25 +39,11 @@ export interface WorkerHealth {
   workerId: string;
   profile: string;
   state: WorkerState;
-
   checks: WorkerChecks;
-
   latencyMs: number;
-
-  comfy?: {
-    version?: string;
-    python?: string;
-    pytorch?: string;
-  };
-
+  comfy?: { version?: string; python?: string; pytorch?: string; };
   device?: unknown;
-
-  queue?: {
-    running: number;
-    pending: number;
-  };
-
+  queue?: { running: number; pending: number; };
   nodeClassCount?: number;
-
   errors: string[];
 }

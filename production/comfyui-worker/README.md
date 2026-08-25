@@ -372,3 +372,13 @@ One operational validation remains pending: the Windows scheduled task has been 
 - Do not store Telegram tokens or other secrets in Git.
 - Do not package/freeze experimental LTX workflows yet.
 - Keep operator-facing T2V settings semantic; raw node IDs stay inside the Production workflow binder.
+
+## Logical Production Profiles
+
+`helix-rtx4060-01` is one physical RTX 4060/ComfyUI worker and remains limited
+to one concurrent GPU job. Helix maps logical profiles onto that same endpoint:
+`nolan` (Christopher Nolan, validated LTX video) and `leibovitz` (Annie
+Leibovitz, future FLUX.2 Klein 4B Distilled image generation). Leibovitz does
+not have a separate GPU, Comfy instance, queue, or validation claim. No FLUX
+workflow binding is installed until a locally exported and benchmarked API
+workflow is supplied.
