@@ -36,37 +36,6 @@ function escapeHtml(
     .replaceAll(">", "&gt;");
 }
 
-function completedTimeHtml(
-  value: string | null
-) {
-  if (!value) {
-    return "Unknown";
-  }
-
-  const milliseconds =
-    new Date(value).getTime();
-
-  if (
-    !Number.isFinite(
-      milliseconds
-    )
-  ) {
-    return escapeHtml(value);
-  }
-
-  const unix =
-    Math.floor(
-      milliseconds / 1000
-    );
-
-  return (
-    `<tg-time unix="${unix}" ` +
-    `format="dt">` +
-    `Completed` +
-    `</tg-time>`
-  );
-}
-
 function parseMessageResult(
   body: unknown,
   operation: string
@@ -223,11 +192,49 @@ export class TelegramDelivery {
     ].join("\n");
   }
 
-  async sendDocument(
+  async sendHtml(
+    html: string
+  ): Promise<TelegramMessageResult> {
+    const response =
+      await fetch(
+        this.endpoint(
+          "sendMessage"
+        ),
+        {
+          method: "POST",
+          headers: {
+            "content-type":
+              "application/json"
+          },
+          body:
+            JSON.stringify({
+              chat_id:
+                this.chatId,
+              text: html,
+              parse_mode:
+                "HTML",
+              link_preview_options: {
+                is_disabled: true
+              }
+            }),
+          signal:
+            AbortSignal.timeout(
+              30_000
+            )
+        }
+      );
+
+    return parseMessageResult(
+      await response.json(),
+      "Telegram sendMessage"
+    );
+  }
+
+  async sendDocumentFile(
     input: {
       filePath: string;
       filename: string;
-      metadata: MetadataInput;
+      caption: string;
     }
   ): Promise<TelegramMessageResult> {
     const blob =
@@ -255,9 +262,7 @@ export class TelegramDelivery {
 
     form.set(
       "caption",
-      this.metadataHtml(
-        input.metadata
-      )
+      input.caption
     );
 
     form.set(
@@ -286,12 +291,28 @@ export class TelegramDelivery {
         }
       );
 
-    const body =
-      await response.json();
-
     return parseMessageResult(
-      body,
+      await response.json(),
       "Telegram sendDocument"
     );
+  }
+
+  async sendDocument(
+    input: {
+      filePath: string;
+      filename: string;
+      metadata: MetadataInput;
+    }
+  ): Promise<TelegramMessageResult> {
+    return this.sendDocumentFile({
+      filePath:
+        input.filePath,
+      filename:
+        input.filename,
+      caption:
+        this.metadataHtml(
+          input.metadata
+        )
+    });
   }
 }
