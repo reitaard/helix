@@ -31,6 +31,9 @@ export interface CreateMediaJobInput {
     image?: string;
   };
 
+  generation?:
+    Record<string, unknown>;
+
   idempotencyKey:
     string | null;
 }
@@ -270,6 +273,13 @@ export class JobService {
 
           inputs:
             input.inputs,
+
+          ...(input.generation
+            ? {
+                generation:
+                  input.generation
+              }
+            : {}),
 
           workflow
         }

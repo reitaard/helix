@@ -1,0 +1,61 @@
+{
+  "version": "aspect-v1",
+  "contractCommit": "128671c",
+  "contract": {
+    "operation": "interpretAspect(text)",
+    "supportedValues": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"],
+    "unmatchedValue": null
+  },
+  "cases": [
+    {"id":"exact-001","category":"exact","text":"Set the aspect ratio to 1:1.","expected":{"matched":true,"value":"1:1"}},
+    {"id":"exact-002","category":"exact","text":"Use 2:3 for the video.","expected":{"matched":true,"value":"2:3"}},
+    {"id":"exact-003","category":"exact","text":"Make the aspect 3:2.","expected":{"matched":true,"value":"3:2"}},
+    {"id":"exact-004","category":"exact","text":"Set format to 3:4.","expected":{"matched":true,"value":"3:4"}},
+    {"id":"exact-005","category":"exact","text":"Use a 4:3 frame.","expected":{"matched":true,"value":"4:3"}},
+    {"id":"exact-006","category":"exact","text":"Set the video to 9:16.","expected":{"matched":true,"value":"9:16"}},
+    {"id":"exact-007","category":"exact","text":"Use 16:9 aspect ratio.","expected":{"matched":true,"value":"16:9"}},
+    {"id":"exact-008","category":"exact","text":"Make it 21:9 ultrawide.","expected":{"matched":true,"value":"21:9"}},
+
+    {"id":"vertical-001","category":"vertical_portrait","text":"Make this one vertical.","expected":{"matched":true,"value":"9:16"}},
+    {"id":"vertical-002","category":"vertical_portrait","text":"Use portrait video format.","expected":{"matched":true,"value":"9:16"}},
+    {"id":"vertical-003","category":"vertical_portrait","text":"I need a portrait-oriented video.","expected":{"matched":true,"value":"9:16"}},
+    {"id":"vertical-004","category":"vertical_portrait","text":"Switch the frame to vertical.","expected":{"matched":true,"value":"9:16"}},
+
+    {"id":"landscape-001","category":"landscape_widescreen","text":"Make it landscape.","expected":{"matched":true,"value":"16:9"}},
+    {"id":"landscape-002","category":"landscape_widescreen","text":"Use widescreen for this video.","expected":{"matched":true,"value":"16:9"}},
+    {"id":"landscape-003","category":"landscape_widescreen","text":"Set a landscape video format.","expected":{"matched":true,"value":"16:9"}},
+    {"id":"landscape-004","category":"landscape_widescreen","text":"Switch the output to widescreen.","expected":{"matched":true,"value":"16:9"}},
+
+    {"id":"square-001","category":"square_ultrawide","text":"I want a square video.","expected":{"matched":true,"value":"1:1"}},
+    {"id":"square-002","category":"square_ultrawide","text":"Make the aspect square.","expected":{"matched":true,"value":"1:1"}},
+    {"id":"ultrawide-001","category":"square_ultrawide","text":"Make it ultrawide.","expected":{"matched":true,"value":"21:9"}},
+    {"id":"ultrawide-002","category":"square_ultrawide","text":"Use a cinematic-wide video format.","expected":{"matched":true,"value":"21:9"}},
+
+    {"id":"correction-001","category":"correction_negation","text":"Use landscape; no, make it vertical instead.","expected":{"matched":true,"value":"9:16"}},
+    {"id":"correction-002","category":"correction_negation","text":"Make it 9:16. Scratch that and use 16:9.","expected":{"matched":true,"value":"16:9"}},
+    {"id":"correction-003","category":"correction_negation","text":"Use square—actually, make it ultrawide.","expected":{"matched":true,"value":"21:9"}},
+    {"id":"negation-001","category":"correction_negation","text":"Not vertical—use widescreen.","expected":{"matched":true,"value":"16:9"}},
+    {"id":"negation-002","category":"correction_negation","text":"Do not use portrait; set the aspect to 3:2.","expected":{"matched":true,"value":"3:2"}},
+    {"id":"negation-003","category":"correction_negation","text":"Do not make it widescreen.","expected":{"matched":false,"value":null}},
+
+    {"id":"distractor-001","category":"creative_distractor","text":"Cinematic portrait of a singer under warm stage lights.","expected":{"matched":false,"value":null}},
+    {"id":"distractor-002","category":"creative_distractor","text":"A tall portrait-format billboard appears in the background.","expected":{"matched":false,"value":null}},
+    {"id":"distractor-003","category":"creative_distractor","text":"A widescreen television flickers inside the room.","expected":{"matched":false,"value":null}},
+    {"id":"distractor-004","category":"creative_distractor","text":"A square table sits in the center of the office.","expected":{"matched":false,"value":null}},
+    {"id":"distractor-005","category":"creative_distractor","text":"The portrait hangs beside an ultrawide monitor.","expected":{"matched":false,"value":null}},
+    {"id":"distractor-006","category":"creative_distractor","text":"A 16:9 monitor glows behind the actor.","expected":{"matched":false,"value":null}},
+    {"id":"distractor-007","category":"creative_distractor","text":"Film a vertical tower reflected in a lake.","expected":{"matched":false,"value":null}},
+    {"id":"distractor-008","category":"creative_distractor","text":"The landscape opens onto a mountain valley.","expected":{"matched":false,"value":null}},
+
+    {"id":"conflict-001","category":"conflict","text":"Make it vertical and widescreen.","expected":{"matched":false,"value":null}},
+    {"id":"conflict-002","category":"conflict","text":"Use both 1:1 and 21:9.","expected":{"matched":false,"value":null}},
+    {"id":"conflict-003","category":"conflict","text":"Make it portrait video and landscape video.","expected":{"matched":false,"value":null}},
+    {"id":"conflict-004","category":"conflict","text":"Set the aspect ratio to 3:4 and 4:3.","expected":{"matched":false,"value":null}},
+
+    {"id":"unsupported-001","category":"unsupported","text":"Set the aspect ratio to 4:5.","expected":{"matched":false,"value":null}},
+    {"id":"unsupported-002","category":"unsupported","text":"Make it 2.39:1.","expected":{"matched":false,"value":null}},
+    {"id":"unsupported-003","category":"unsupported","text":"Use an IMAX frame.","expected":{"matched":false,"value":null}},
+    {"id":"unsupported-004","category":"unsupported","text":"Make it a bit wider.","expected":{"matched":false,"value":null}},
+    {"id":"unsupported-005","category":"unsupported","text":"Use the phone screen ratio.","expected":{"matched":false,"value":null}}
+  ]
+}

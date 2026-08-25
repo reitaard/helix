@@ -11,9 +11,9 @@ export function title(
   value: string
 ) {
   return (
-    `<b><i>• <u>${escapeHtml(
+    `<b>[ ${escapeHtml(
       value
-    )}</u> •</i></b>`
+    )} ]</b>`
   );
 }
 

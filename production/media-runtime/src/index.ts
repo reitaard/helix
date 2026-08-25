@@ -51,6 +51,22 @@ import {
 } from "./repositories/t2v-pending-repository.js";
 
 import {
+  T2VResetPendingRepository
+} from "./repositories/t2v-reset-pending-repository.js";
+
+import {
+  T2VSettingsRepository
+} from "./repositories/t2v-settings-repository.js";
+
+import {
+  T2VModeService
+} from "./t2v/mode-service.js";
+
+import {
+  T2VProfileService
+} from "./t2v/profile-service.js";
+
+import {
   DeliveryWorker
 } from "./delivery/worker.js";
 
@@ -73,6 +89,18 @@ import {
 import {
   TelegramT2VService
 } from "./telegram/t2v-service.js";
+
+import {
+  TelegramT2VModeService
+} from "./telegram/t2v-mode-service.js";
+
+import {
+  TelegramT2VSettingsService
+} from "./telegram/t2v-settings-service.js";
+
+import {
+  TelegramT2VResetService
+} from "./telegram/t2v-reset-service.js";
 
 import {
   TelegramAlertService
@@ -152,6 +180,57 @@ const t2vPendingRepository =
     db
   );
 
+const t2vResetPendingRepository =
+  new T2VResetPendingRepository(
+    db
+  );
+
+const t2vSettingsRepository =
+  new T2VSettingsRepository(
+    db
+  );
+
+const t2vModeService =
+  new T2VModeService(
+    t2vSettingsRepository
+  );
+
+const t2vProfileService =
+  config.workers[0]
+    ? new T2VProfileService(
+        t2vSettingsRepository,
+        config.workers[0].endpoint
+      )
+    : null;
+
+const telegramT2VModeService =
+  config.workers[0]
+    ? new TelegramT2VModeService(
+        t2vModeService,
+        config.workers[0].name
+      )
+    : null;
+
+const telegramT2VSettingsService =
+  t2vProfileService
+    ? new TelegramT2VSettingsService(
+        t2vProfileService
+      )
+    : null;
+
+const telegramT2VResetService =
+  config.telegram &&
+  config.workers[0] &&
+  t2vProfileService
+    ? new TelegramT2VResetService(
+        config.telegram.chatId,
+        config.workers[0].name,
+        t2vProfileService,
+        t2vSettingsRepository,
+        t2vResetPendingRepository
+      )
+    : null;
+
 const telegramDebugService =
   new TelegramDebugService(
     jobRepository,
@@ -180,14 +259,23 @@ const telegramCancelService =
 
 const telegramT2VService =
   config.telegram &&
-  config.workers[0]
+  config.workers[0] &&
+  t2vProfileService &&
+  telegramT2VModeService &&
+  telegramT2VSettingsService &&
+  telegramT2VResetService
     ? new TelegramT2VService(
         config.telegram.chatId,
         config.workers[0].id,
         config.workers[0].name,
         config.t2vWorkflowPath,
         jobs,
-        t2vPendingRepository
+        t2vPendingRepository,
+        t2vProfileService,
+        t2vModeService,
+        telegramT2VModeService,
+        telegramT2VSettingsService,
+        telegramT2VResetService
       )
     : null;
 

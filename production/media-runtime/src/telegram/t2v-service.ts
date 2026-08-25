@@ -11,15 +11,74 @@ import {
 } from "../repositories/t2v-pending-repository.js";
 
 import {
+  T2VModeService
+} from "../t2v/mode-service.js";
+
+import {
+  T2V_MODE_VERSION,
+  displayT2VMode,
+  normalizeT2VMode
+} from "../t2v/mode.js";
+
+import type {
+  T2VMode
+} from "../t2v/mode.js";
+
+import {
+  T2VProfileService
+} from "../t2v/profile-service.js";
+
+import {
+  bindT2VWorkflow
+} from "../t2v/workflow-binder.js";
+
+import type {
+  T2VWorkflow
+} from "../t2v/workflow-binder.js";
+
+import {
+  displayQuality,
+  effectiveMegapixels,
+  hasDevOverrides,
+  normalizeStoredT2VSettings,
+  resolveT2VSettings
+} from "../t2v/settings.js";
+
+import type {
+  ResolvedT2VSettings
+} from "../t2v/settings.js";
+
+import {
+  TelegramT2VModeService
+} from "./t2v-mode-service.js";
+
+import {
+  TelegramT2VSettingsService
+} from "./t2v-settings-service.js";
+
+import {
+  TelegramT2VResetService
+} from "./t2v-reset-service.js";
+
+import {
   escapeHtml,
   title
 } from "./presentation.js";
 
-type Workflow =
-  Record<
-    string,
-    Record<string, unknown>
-  >;
+function asRecord(
+  value: unknown
+): Record<string, unknown> | null {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    return null;
+  }
+
+  return value as
+    Record<string, unknown>;
+}
 
 export class TelegramT2VService {
   private timer:
@@ -48,6 +107,21 @@ export class TelegramT2VService {
     private readonly pending:
       T2VPendingRepository,
 
+    private readonly profile:
+      T2VProfileService,
+
+    private readonly modes:
+      T2VModeService,
+
+    private readonly modeUi:
+      TelegramT2VModeService,
+
+    private readonly settingsUi:
+      TelegramT2VSettingsService,
+
+    private readonly reset:
+      TelegramT2VResetService,
+
     private readonly promptSeconds =
       300,
 
@@ -69,8 +143,22 @@ export class TelegramT2VService {
   }
 
   private confirmationHtml(
-    prompt: string
+    prompt: string,
+    settings:
+      ResolvedT2VSettings,
+    devProfile: boolean,
+    mode: T2VMode
   ) {
+    const quality =
+      settings.megapixelsOverride ===
+      null
+        ? displayQuality(
+            settings.quality
+          )
+        : `Custom · ${effectiveMegapixels(
+            settings
+          ).toFixed(1)} MP`;
+
     return (
       `${title("T2V")}\n` +
 
@@ -80,8 +168,28 @@ export class TelegramT2VService {
       )}</blockquote>\n` +
 
       `<b>Model</b> · <b>LTX 2.5</b>\n` +
-      `<b>Duration</b> · <b><i>5s</i></b>\n` +
-      `<b>Aspect</b> · <b>16:9</b>\n` +
+      `<b>Mode</b> · <b>${escapeHtml(
+        displayT2VMode(mode)
+      )}</b>\n` +
+      `<b>Aspect</b> · <b>${escapeHtml(
+        settings.aspect
+      )}</b>\n` +
+      `<b>Quality</b> · <b>${escapeHtml(
+        quality
+      )}</b>\n` +
+      `<b>Duration</b> · <b><i>${
+        settings.durationSeconds
+      }s</i></b>\n` +
+      `<b>Enhance</b> · <b>[${
+        settings.enhance
+          ? "ON"
+          : "OFF"
+      }]</b>\n` +
+      (
+        devProfile
+          ? `<b>Access</b> · <b>[DEV]</b>\n`
+          : ""
+      ) +
       `<b>Worker</b> · <b>${escapeHtml(
         this.workerName
       )}</b>\n\n` +
@@ -96,12 +204,147 @@ export class TelegramT2VService {
     );
   }
 
+  private settingsUsageHtml() {
+    return (
+      `${title("T2V SETTINGS")}\n\n` +
+      `<b>Open</b>\n` +
+      `<code>/t2v settings</code>\n` +
+      `<code>/t2v s</code>\n` +
+      `<code>/t2v set</code>\n\n` +
+      `<b>Change</b>\n` +
+      `<code>/t2v set &lt;setting&gt; &lt;value&gt;</code>`
+    );
+  }
+
+  async handleCommand(
+    args: string[]
+  ) {
+    if (args.length === 0) {
+      return this.begin();
+    }
+
+    const mode =
+      args[0]
+        ?.toLowerCase() ??
+      "";
+
+    if (
+      mode === "mode" ||
+      mode === "m"
+    ) {
+      if (args.length === 1) {
+        return this.modeUi.panel();
+      }
+
+      if (args.length === 2) {
+        return this.modeUi.set(
+          args[1] ?? ""
+        );
+      }
+
+      return (
+        `<b>Usage</b> · ` +
+        `<code>/t2v mode &lt;manual|fast|quality&gt;</code>`
+      );
+    }
+
+    if (mode === "reset") {
+      if (args.length === 1) {
+        return this.reset.begin(
+          false
+        );
+      }
+
+      if (
+        args.length === 2 &&
+        args[1]?.toLowerCase() ===
+          "-dev"
+      ) {
+        return this.reset.begin(
+          true
+        );
+      }
+
+      return (
+        `<b>Usage</b> · ` +
+        `<code>/t2v reset [-dev]</code>`
+      );
+    }
+
+    if (
+      mode === "settings" ||
+      mode === "s"
+    ) {
+      if (args.length === 1) {
+        return this.settingsUi
+          .panel(false);
+      }
+
+      if (
+        args.length === 2 &&
+        args[1]?.toLowerCase() ===
+          "-dev"
+      ) {
+        return this.settingsUi
+          .panel(true);
+      }
+
+      return this.settingsUsageHtml();
+    }
+
+    if (mode !== "set") {
+      return this.settingsUsageHtml();
+    }
+
+    let index = 1;
+    let dev = false;
+
+    if (
+      args[index]?.toLowerCase() ===
+      "-dev"
+    ) {
+      dev = true;
+      index += 1;
+    }
+
+    const setting =
+      args[index];
+
+    if (!setting) {
+      return this.settingsUi
+        .panel(dev);
+    }
+
+    const value =
+      args
+        .slice(index + 1)
+        .join(" ")
+        .trim();
+
+    if (!value) {
+      return this.settingsUi
+        .help(
+          setting,
+          dev
+        );
+    }
+
+    return this.settingsUi
+      .set(
+        setting,
+        value,
+        dev
+      );
+  }
+
   private async sweepExpiry() {
     try {
-      await this.pending
-        .expireDue(
+      await Promise.all([
+        this.pending.expireDue(
           this.chatId
-        );
+        ),
+        this.reset.expireDue()
+      ]);
     }
     catch (error) {
       console.error(
@@ -159,6 +402,12 @@ export class TelegramT2VService {
   }
 
   async hasPending() {
+    if (
+      await this.reset.hasPending()
+    ) {
+      return true;
+    }
+
     await this.pending
       .expireDue(
         this.chatId
@@ -172,15 +421,20 @@ export class TelegramT2VService {
   }
 
   async abandonPendingForCommand() {
-    await this.pending
-      .remove(
+    await Promise.all([
+      this.pending.remove(
         this.chatId
-      );
+      ),
+      this.reset
+        .abandonPendingForCommand()
+    ]);
   }
 
   private async workflowFor(
-    prompt: string
-  ): Promise<Workflow> {
+    prompt: string,
+    settings:
+      ResolvedT2VSettings
+  ): Promise<T2VWorkflow> {
     const raw =
       await readFile(
         this.workflowPath,
@@ -201,64 +455,77 @@ export class TelegramT2VService {
       );
     }
 
-    const workflow =
-      structuredClone(
-        parsed
-      ) as Workflow;
+    return bindT2VWorkflow(
+      parsed as T2VWorkflow,
+      prompt,
+      settings
+    );
+  }
 
-    const promptNode =
-      workflow["405:376"];
+  private async currentEffective() {
+    const base =
+      await this.profile.get();
 
-    if (
-      !promptNode ||
-      promptNode.class_type !==
-        "PrimitiveStringMultiline"
-    ) {
-      throw new Error(
-        "T2V prompt node 405:376 is missing or changed"
+    const modeState =
+      await this.modes.resolve(
+        base
       );
+
+    return {
+      base,
+      mode:
+        modeState.mode,
+      version:
+        modeState.version,
+      settings:
+        resolveT2VSettings(
+          modeState.settings
+        )
+    };
+  }
+
+  private async pendingGeneration(
+    snapshot: unknown
+  ) {
+    const record =
+      asRecord(snapshot);
+
+    const nested =
+      asRecord(record?.settings);
+
+    if (nested) {
+      return {
+        mode:
+          normalizeT2VMode(
+            record?.mode
+          ),
+        version:
+          typeof record?.modeVersion ===
+            "number"
+            ? record.modeVersion
+            : T2V_MODE_VERSION,
+        settings:
+          normalizeStoredT2VSettings(
+            nested
+          ) as ResolvedT2VSettings
+      };
     }
 
-    const inputs =
-      promptNode.inputs;
+    const current =
+      await this.currentEffective();
 
-    if (
-      inputs === null ||
-      typeof inputs !== "object" ||
-      Array.isArray(inputs)
-    ) {
-      throw new Error(
-        "T2V prompt node inputs are invalid"
-      );
-    }
-
-    (
-      inputs as
-        Record<string, unknown>
-    ).value =
-      prompt;
-
-    const enhanceNode =
-      workflow["405:383"];
-
-    const enhanceInputs =
-      enhanceNode?.inputs;
-
-    if (
-      enhanceInputs === null ||
-      typeof enhanceInputs !== "object" ||
-      Array.isArray(enhanceInputs) ||
-      (
-        enhanceInputs as
-          Record<string, unknown>
-      ).value !== false
-    ) {
-      throw new Error(
-        "T2V template prompt-enhance state changed"
-      );
-    }
-
-    return workflow;
+    return {
+      mode:
+        current.mode,
+      version:
+        current.version,
+      settings:
+        snapshot
+          ? normalizeStoredT2VSettings(
+              snapshot
+            ) as ResolvedT2VSettings
+          : current.settings
+    };
   }
 
   async handlePlainText(
@@ -267,6 +534,16 @@ export class TelegramT2VService {
     string |
     null
   > {
+    const resetResponse =
+      await this.reset
+        .handlePlainText(
+          text
+        );
+
+    if (resetResponse !== null) {
+      return resetResponse;
+    }
+
     const answer =
       text
         .trim();
@@ -316,11 +593,22 @@ export class TelegramT2VService {
         );
       }
 
+      const effective =
+        await this.currentEffective();
+
       const stored =
         await this.pending
           .setPrompt(
             this.chatId,
             answer,
+            {
+              mode:
+                effective.mode,
+              modeVersion:
+                effective.version,
+              settings:
+                effective.settings
+            },
             new Date(
               Date.now() +
               this.confirmSeconds *
@@ -333,7 +621,12 @@ export class TelegramT2VService {
       }
 
       return this.confirmationHtml(
-        answer
+        answer,
+        effective.settings,
+        hasDevOverrides(
+          effective.base
+        ),
+        effective.mode
       );
     }
 
@@ -367,6 +660,14 @@ export class TelegramT2VService {
       const prompt =
         state.prompt;
 
+      const generation =
+        await this.pendingGeneration(
+          state.settingsSnapshot
+        );
+
+      const settings =
+        generation.settings;
+
       await this.pending
         .remove(
           this.chatId
@@ -374,7 +675,8 @@ export class TelegramT2VService {
 
       const workflow =
         await this.workflowFor(
-          prompt
+          prompt,
+          settings
         );
 
       const job =
@@ -388,6 +690,48 @@ export class TelegramT2VService {
           workflow,
 
           inputs: {},
+
+          generation: {
+            kind: "t2v",
+            model: "LTX 2.5",
+            mode:
+              generation.mode,
+            modeVersion:
+              generation.version,
+            prompt,
+            settings: {
+              aspect:
+                settings.aspect,
+              quality:
+                settings.quality,
+              megapixels:
+                effectiveMegapixels(
+                  settings
+                ),
+              megapixelsOverride:
+                settings.megapixelsOverride,
+              durationSeconds:
+                settings.durationSeconds,
+              frames:
+                settings.durationSeconds *
+                settings.fps +
+                1,
+              enhance:
+                settings.enhance,
+              fps:
+                settings.fps,
+              seed:
+                settings.seed,
+              seed2:
+                settings.seed2,
+              negativePrompt:
+                settings.negativePrompt,
+              sampler:
+                settings.sampler,
+              cfg:
+                settings.cfg
+            }
+          },
 
           idempotencyKey:
             null

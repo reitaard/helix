@@ -23,6 +23,10 @@ import {
 } from "./cancel-service.js";
 
 import {
+  renderJobGeneration
+} from "./job-generation-presentation.js";
+
+import {
   TelegramT2VService
 } from "./t2v-service.js";
 
@@ -33,7 +37,6 @@ import {
 import {
   ComfyUpdateChecker
 } from "../workers/comfy-update-checker.js";
-
 
 interface TelegramUpdate {
   update_id: number;
@@ -66,9 +69,9 @@ function title(
   value: string
 ) {
   return (
-    `<b><i>• <u>${
-      escapeHtml(value)
-    }</u> •</i></b>`
+    `<b>[ ${escapeHtml(
+      value
+    )} ]</b>`
   );
 }
 
@@ -648,6 +651,7 @@ export class TelegramCommandService {
       `<code>/errors</code> <b>-</b> <b>Recent failures</b>\n` +
       `<code>/events &lt;id&gt;</code> <b>-</b> <b>Job events</b>\n` +
       `<code>/t2v</code> <b>-</b> <b>Generate video</b>\n` +
+      `<code>/t2v settings</code> <b>-</b> <b>T2V settings</b>\n` +
       `<code>/cancel &lt;id&gt;</code> <b>-</b> <b>Cancel job</b>`
     );
   }
@@ -714,13 +718,13 @@ export class TelegramCommandService {
           escapeHtml(value.name)
         }</b>`,
 
-        `<b>State</b> · <code>${
+        `<b>State</b> · ${
           escapeHtml(
             displayWorkerState(
               value.state
             )
           )
-        }</code> · <i>${
+        } · <i>${
           value.latencyMs
         } ms</i>`,
 
@@ -833,13 +837,13 @@ export class TelegramCommandService {
 
       if (deviceName) {
         system.push(
-          `<b>GPU</b> · <code>${
+          `<b>GPU</b> · ${
             escapeHtml(
               compactGpuName(
                 deviceName
               )
             )
-          }</code>`
+          }`
         );
       }
 
@@ -911,7 +915,7 @@ export class TelegramCommandService {
     if (system.length > 0) {
       lines.push(
         "",
-        "<b><i>[System]</i></b>",
+        "<b><i>• System •</i></b>",
         ...system
       );
     }
@@ -1027,7 +1031,7 @@ export class TelegramCommandService {
       );
     }
 
-    const lines =
+    const blocks =
       jobs.map(
         job => {
           const runtime =
@@ -1037,22 +1041,25 @@ export class TelegramCommandService {
             );
 
           return (
-            `<b>ID:</b> <code>${
-              escapeHtml(job.id)
-            }</code> · ` +
-            `<b>[${
-              escapeHtml(job.status)
-            }]</b> · ` +
-            `<i>${
-              escapeHtml(runtime)
-            }</i>`
+            `<blockquote>` +
+            `<b>ID:</b> ${escapeHtml(
+              job.id
+            )}\n` +
+            `<b><i>Status</i></b> <b>·</b> ` +
+            `<b>[${escapeHtml(
+              job.status
+            )}]</b> <b>in</b> ` +
+            `<i>${escapeHtml(
+              runtime
+            )}</i>` +
+            `</blockquote>`
           );
         }
       );
 
     return (
       `${title("JOBS")}\n` +
-      lines.join("\n")
+      blocks.join("\n")
     );
   }
 
@@ -1163,8 +1170,24 @@ export class TelegramCommandService {
       }</i>`
     ];
 
+    const details =
+      `<blockquote>${
+        lines.join("\n")
+      }</blockquote>`;
+
+    lines.length = 0;
+    lines.push(details);
+
+    const generation =
+      renderJobGeneration(
+        job.request
+      );
+
+    if (generation) {
+      lines.push(generation);
+    }
+
     lines.push(
-      "",
       "<b><i>[Outbox]</i></b>"
     );
 
@@ -1417,8 +1440,7 @@ export class TelegramCommandService {
           answer === "no"
         ) {
           await this.sendHtml(
-            `${title("CONFIRM")}
-` +
+            `${title("CONFIRM")}\n` +
             `<b><i>No confirmation is pending.</i></b>`
           );
         }
@@ -1507,7 +1529,10 @@ export class TelegramCommandService {
 
         case "/t2v":
           await this.sendHtml(
-            await this.t2v.begin()
+            await this.t2v
+              .handleCommand(
+                args
+              )
           );
           break;
 
