@@ -226,6 +226,14 @@ export class WorkerRegistry {
       ?.queueSummary() ?? null;
   }
 
+  async history(
+    id: string,
+    maxItems = 20
+  ) {
+    return this.adapters.get(id)
+      ?.history(maxItems) ?? null;
+  }
+
   async submit(
     id: string,
     workflow: Record<string, unknown>
