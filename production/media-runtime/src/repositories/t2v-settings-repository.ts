@@ -3,6 +3,14 @@ import type {
 } from "pg";
 
 import {
+  normalizeT2VMode
+} from "../t2v/mode.js";
+
+import type {
+  T2VMode
+} from "../t2v/mode.js";
+
+import {
   normalizeStoredT2VSettings
 } from "../t2v/settings.js";
 
@@ -12,6 +20,10 @@ import type {
 
 interface SettingsRow {
   settings: unknown;
+}
+
+interface ModeRow {
+  generation_mode: unknown;
 }
 
 export class T2VSettingsRepository {
@@ -45,6 +57,35 @@ export class T2VSettingsRepository {
 
     return normalizeStoredT2VSettings(
       result.rows[0]?.settings
+    );
+  }
+
+  async getMode(
+    profileId: string,
+    tool: string
+  ): Promise<T2VMode> {
+    const result =
+      await this.db.query<
+        ModeRow
+      >(
+        `
+        SELECT
+          generation_mode
+        FROM
+          production_profile_tool_settings
+        WHERE
+          profile_id = $1
+          AND tool = $2
+        `,
+        [
+          profileId,
+          tool
+        ]
+      );
+
+    return normalizeT2VMode(
+      result.rows[0]
+        ?.generation_mode
     );
   }
 
@@ -84,5 +125,38 @@ export class T2VSettingsRepository {
         JSON.stringify(settings)
       ]
     );
+  }
+
+  async setMode(
+    profileId: string,
+    tool: string,
+    mode: T2VMode
+  ) {
+    const result =
+      await this.db.query(
+        `
+        UPDATE
+          production_profile_tool_settings
+        SET
+          generation_mode = $3,
+          updated_at = NOW()
+        WHERE
+          profile_id = $1
+          AND tool = $2
+        `,
+        [
+          profileId,
+          tool,
+          mode
+        ]
+      );
+
+    if (
+      (result.rowCount ?? 0) === 0
+    ) {
+      throw new Error(
+        "T2V settings row is missing"
+      );
+    }
   }
 }

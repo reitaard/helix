@@ -11,6 +11,18 @@ import {
 } from "../repositories/t2v-pending-repository.js";
 
 import {
+  T2VModeService
+} from "../t2v/mode-service.js";
+
+import {
+  displayT2VMode
+} from "../t2v/mode.js";
+
+import type {
+  T2VMode
+} from "../t2v/mode.js";
+
+import {
   T2VProfileService
 } from "../t2v/profile-service.js";
 
@@ -33,6 +45,10 @@ import {
 import type {
   ResolvedT2VSettings
 } from "../t2v/settings.js";
+
+import {
+  TelegramT2VModeService
+} from "./t2v-mode-service.js";
 
 import {
   TelegramT2VSettingsService
@@ -77,6 +93,12 @@ export class TelegramT2VService {
     private readonly profile:
       T2VProfileService,
 
+    private readonly modes:
+      T2VModeService,
+
+    private readonly modeUi:
+      TelegramT2VModeService,
+
     private readonly settingsUi:
       TelegramT2VSettingsService,
 
@@ -107,7 +129,8 @@ export class TelegramT2VService {
     prompt: string,
     settings:
       ResolvedT2VSettings,
-    devProfile: boolean
+    devProfile: boolean,
+    mode: T2VMode
   ) {
     const quality =
       settings.megapixelsOverride ===
@@ -128,6 +151,9 @@ export class TelegramT2VService {
       )}</blockquote>\n` +
 
       `<b>Model</b> · <b>LTX 2.5</b>\n` +
+      `<b>Mode</b> · <b>${escapeHtml(
+        displayT2VMode(mode)
+      )}</b>\n` +
       `<b>Aspect</b> · <b>${escapeHtml(
         settings.aspect
       )}</b>\n` +
@@ -184,6 +210,26 @@ export class TelegramT2VService {
       args[0]
         ?.toLowerCase() ??
       "";
+
+    if (
+      mode === "mode" ||
+      mode === "m"
+    ) {
+      if (args.length === 1) {
+        return this.modeUi.panel();
+      }
+
+      if (args.length === 2) {
+        return this.modeUi.set(
+          args[1] ?? ""
+        );
+      }
+
+      return (
+        `<b>Usage</b> · ` +
+        `<code>/t2v mode &lt;manual|fast|quality&gt;</code>`
+      );
+    }
 
     if (mode === "reset") {
       if (args.length === 1) {
@@ -399,6 +445,26 @@ export class TelegramT2VService {
     );
   }
 
+  private async currentEffective() {
+    const base =
+      await this.profile.get();
+
+    const modeState =
+      await this.modes.resolve(
+        base
+      );
+
+    return {
+      base,
+      mode:
+        modeState.mode,
+      settings:
+        resolveT2VSettings(
+          modeState.settings
+        )
+    };
+  }
+
   async handlePlainText(
     text: string
   ): Promise<
@@ -464,20 +530,15 @@ export class TelegramT2VService {
         );
       }
 
-      const profileSettings =
-        await this.profile.get();
-
-      const resolvedSettings =
-        resolveT2VSettings(
-          profileSettings
-        );
+      const effective =
+        await this.currentEffective();
 
       const stored =
         await this.pending
           .setPrompt(
             this.chatId,
             answer,
-            resolvedSettings,
+            effective.settings,
             new Date(
               Date.now() +
               this.confirmSeconds *
@@ -491,10 +552,11 @@ export class TelegramT2VService {
 
       return this.confirmationHtml(
         answer,
-        resolvedSettings,
+        effective.settings,
         hasDevOverrides(
-          profileSettings
-        )
+          effective.base
+        ),
+        effective.mode
       );
     }
 
@@ -533,9 +595,9 @@ export class TelegramT2VService {
           ? normalizeStoredT2VSettings(
               state.settingsSnapshot
             ) as ResolvedT2VSettings
-          : resolveT2VSettings(
-              await this.profile.get()
-            );
+          : (
+              await this.currentEffective()
+            ).settings;
 
       await this.pending
         .remove(
