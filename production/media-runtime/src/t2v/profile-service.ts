@@ -108,7 +108,8 @@ export class T2VProfileService {
 
   async setCore(
     key: T2VCoreSetting,
-    rawValue: string
+    rawValue: string,
+    dev = false
   ) {
     const current =
       await this.get();
@@ -171,10 +172,13 @@ export class T2VProfileService {
         candidate === null ||
         !Number.isInteger(candidate) ||
         candidate < 1 ||
-        candidate > 10
+        candidate > Number.MAX_SAFE_INTEGER ||
+        (!dev && candidate > 10)
       ) {
         throw new Error(
-          "Duration must be an integer from 1 to 10 seconds"
+          dev
+            ? "Duration must be a positive whole number"
+            : "Duration must be an integer from 1 to 10 seconds"
         );
       }
 

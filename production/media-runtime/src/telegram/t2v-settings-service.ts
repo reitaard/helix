@@ -46,6 +46,7 @@ function coreKey(
     case "quality":
       return "qual";
 
+    case "t":
     case "time":
     case "duration":
       return "time";
@@ -316,7 +317,7 @@ export class TelegramT2VSettingsService {
     return (
       `time<b>.Duration : ` +
       `(${settings.durationSeconds})s</b> ` +
-      `<b><i>(Max=10s)</i></b>`
+      `<b><i>(${settings.durationSeconds > 10 ? "Override" : "Max=10s"})</i></b>`
     );
   }
 
@@ -558,7 +559,7 @@ export class TelegramT2VSettingsService {
       return (
         `${this.detailHeader("DURATION", dev)}` +
         `${quoteBlock([
-          `<b>Duration : (${settings.durationSeconds})s</b> <b><i>(Max=10s)</i></b>`,
+          `<b>Duration : (${settings.durationSeconds})s</b> <b><i>(${settings.durationSeconds > 10 ? "Override" : "Max=10s"})</i></b>`,
           `<b>FPS : ${settings.fps}</b>`,
           `<b>Frames : ${frames}</b>`
         ])}\n` +
@@ -775,7 +776,13 @@ export class TelegramT2VSettingsService {
 
       case "time":
         return (
-          `<b>[ Duration : (${settings.durationSeconds})s ]</b>`
+          `<b>[ Duration : (${settings.durationSeconds})s` +
+          (
+            settings.durationSeconds > 10
+              ? ` <i>(Override)</i>`
+              : ""
+          ) +
+          ` ]</b>`
         );
 
       case "enh":
@@ -870,7 +877,8 @@ export class TelegramT2VSettingsService {
         const settings =
           await this.profile.setCore(
             resolved.key,
-            rawValue
+            rawValue,
+            dev
           );
 
         return this.savedCoreHtml(

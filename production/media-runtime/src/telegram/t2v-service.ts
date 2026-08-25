@@ -182,9 +182,16 @@ export class TelegramT2VService {
       `<b>Quality</b> · <b>${escapeHtml(
         quality
       )}</b>\n` +
-      `<b>Duration</b> · <b><i>${
+      `<b>Duration</b> · <b><i>(${
         settings.durationSeconds
-      }s</i></b>\n` +
+      })s</i></b>` +
+      (
+        devProfile &&
+        settings.durationSeconds > 10
+          ? ` <b><i>(Override)</i></b>`
+          : ""
+      ) +
+      `\n` +
       `<b>Enhance</b> · <b>[${
         settings.enhance
           ? "ON"

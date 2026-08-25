@@ -108,7 +108,7 @@ export const t2vSettingsSchema =
       z.number()
         .int()
         .min(1)
-        .max(10),
+        .max(Number.MAX_SAFE_INTEGER),
 
     enhance:
       z.boolean(),
@@ -275,6 +275,7 @@ export function hasDevOverrides(
   settings: T2VSettings
 ) {
   return (
+    settings.durationSeconds > 10 ||
     settings.fps !==
       DEFAULT_T2V_SETTINGS.fps ||
     settings.seed !==
