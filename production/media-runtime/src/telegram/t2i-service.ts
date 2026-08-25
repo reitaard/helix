@@ -38,7 +38,7 @@ import type {
 
 import {
   escapeHtml,
-  title
+  profileTitle
 } from "./presentation.js";
 
 import {
@@ -100,7 +100,7 @@ export class TelegramT2IService {
   private confirmationHtml(prompt: string, settings: ResolvedT2ISettings) {
     const image = dimensionsForT2IAspect(settings.aspect);
     return (
-      `${title("TEXT 2 IMAGE")}\n` +
+      `${profileTitle("Text2Image")}\n` +
       `<b>Prompt</b>\n<blockquote expandable>${escapeHtml(prompt)}</blockquote>\n` +
       `<b>Model</b> · <b>${T2I_MODEL}</b>\n` +
       `<b>Aspect</b> · <b>${escapeHtml(settings.aspect)}</b>\n` +
@@ -128,7 +128,7 @@ export class TelegramT2IService {
 
   async begin() {
     await this.pending.beginPrompt(this.chatId, new Date(Date.now() + this.promptSeconds * 1000));
-    return `${title("TEXT 2 IMAGE")}\n<b><i>Send the generation prompt.</i></b>`;
+    return `${profileTitle("Text2Image")}\n<b><i>Send the generation prompt.</i></b>`;
   }
 
   async hasPending() {

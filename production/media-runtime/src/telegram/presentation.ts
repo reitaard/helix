@@ -17,6 +17,19 @@ export function title(
   );
 }
 
+export function profileTitle(
+  profile: string,
+  section?: string
+) {
+  return (
+    `<b>[</b> ` +
+    `<b><i>${escapeHtml(profile)}</i></b>` +
+    (section
+      ? ` <b>/ ${escapeHtml(section)} ]</b>`
+      : ` <b>]</b>`)
+  );
+}
+
 export function shortJobId(
   value: string
 ) {

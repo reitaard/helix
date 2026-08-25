@@ -21,7 +21,8 @@ import type {
 } from "../t2v/profile-service.js";
 
 import {
-  escapeHtml
+  escapeHtml,
+  profileTitle
 } from "./presentation.js";
 
 function normalizedKey(
@@ -141,7 +142,7 @@ function pageTitle(
   dev = false
 ) {
   return (
-    `<b>[ ${escapeHtml(value)} ]</b>` +
+    profileTitle("Text2Video", value) +
     (
       dev
         ? ` (<b><i>dev</i></b>)`
@@ -431,7 +432,7 @@ export class TelegramT2VSettingsService {
 
     return (
       `${pageTitle(
-        "T2V / SETTINGS",
+        "SETTINGS",
         dev
       )}\n` +
       `${this.workerBlock()}\n` +
@@ -466,7 +467,7 @@ export class TelegramT2VSettingsService {
   ) {
     return (
       `${pageTitle(
-        `${name}.T2V`,
+        name,
         dev
       )}\n` +
       `${this.workerBlock()}\n`

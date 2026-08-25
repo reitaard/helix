@@ -13,7 +13,8 @@ import {
 } from "../t2v/settings.js";
 
 import {
-  escapeHtml
+  escapeHtml,
+  profileTitle
 } from "./presentation.js";
 
 function selected(
@@ -62,7 +63,7 @@ export class TelegramT2VModeService {
       ).join("\n");
 
     return (
-      `<b>[ T2V / MODE ]</b>\n` +
+      `${profileTitle("Text2Video", "MODE")}\n` +
       `${this.workerBlock()}\n` +
       `<b>Current : ${escapeHtml(
         displayT2VMode(mode)

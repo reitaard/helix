@@ -62,7 +62,7 @@ import {
 
 import {
   escapeHtml,
-  title
+  profileTitle
 } from "./presentation.js";
 
 function isDevFlag(
@@ -165,7 +165,7 @@ export class TelegramT2VService {
           ).toFixed(1)} MP`;
 
     return (
-      `${title("TEXT 2 VIDEO")}\n` +
+      `${profileTitle("Text2Video")}\n` +
 
       `<b>Prompt</b>\n` +
       `<blockquote expandable>${escapeHtml(
@@ -210,7 +210,7 @@ export class TelegramT2VService {
 
   private settingsUsageHtml() {
     return (
-      `${title("T2V SETTINGS")}\n` +
+      `${profileTitle("Text2Video", "SETTINGS")}\n` +
       `<b>Open</b>\n` +
       `<code>/t2v settings</code>\n` +
       `<code>/t2v s</code>\n` +
@@ -413,7 +413,7 @@ export class TelegramT2VService {
       );
 
     return (
-      `${title("TEXT 2 VIDEO")}\n` +
+      `${profileTitle("Text2Video")}\n` +
       `<b><i>Send the generation prompt.</i></b>`
     );
   }

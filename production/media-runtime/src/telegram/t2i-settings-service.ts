@@ -12,7 +12,8 @@ import {
 } from "../t2i/profile-service.js";
 
 import {
-  escapeHtml
+  escapeHtml,
+  profileTitle
 } from "./presentation.js";
 
 function resolveKey(raw: string) {
@@ -52,7 +53,7 @@ export class TelegramT2ISettingsService {
     const settings = await this.profile.get();
 
     return (
-      `<b>[ T2I / SETTINGS ]</b>\n` +
+      `${profileTitle("Text2Image", "SETTINGS")}\n` +
       `${this.workerBlock()}\n` +
       `<blockquote><b><i>• core •</i></b>\n` +
       `asp<b>.Aspect : ⦗${escapeHtml(settings.aspect)}⦘</b> ` +
@@ -70,7 +71,7 @@ export class TelegramT2ISettingsService {
 
     if (key === "asp") {
       return (
-        `<b>[ ASPECT.T2I ]</b>\n` +
+        `${profileTitle("Text2Image", "ASPECT")}\n` +
         `${this.workerBlock()}\n` +
         `<b>Aspect : ⦗${escapeHtml(settings.aspect)}⦘</b>\n` +
         `<blockquote expandable><b><i>• options •</i></b>\n` +
@@ -80,7 +81,7 @@ export class TelegramT2ISettingsService {
     }
 
     return (
-      `<b>[ SEED.T2I ]</b>\n` +
+      `${profileTitle("Text2Image", "SEED")}\n` +
       `${this.workerBlock()}\n` +
       `<blockquote><b>Seed : ${escapeHtml(seedValue(settings.seed))}</b>\n` +
       `<b>Range</b> · <code>0-${Number.MAX_SAFE_INTEGER}</code>\n` +

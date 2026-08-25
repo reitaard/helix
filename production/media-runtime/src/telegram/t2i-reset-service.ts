@@ -17,6 +17,10 @@ import {
   T2IProfileService
 } from "../t2i/profile-service.js";
 
+import {
+  profileTitle
+} from "./presentation.js";
+
 export class TelegramT2IResetService {
   constructor(
     private readonly chatId: string,
@@ -42,7 +46,7 @@ export class TelegramT2IResetService {
     );
 
     return (
-      `<b>[ T2I / RESET ]</b>\n` +
+      `${profileTitle("Text2Image", "RESET")}\n` +
       `<b><i>Reset these settings? Type</i></b> ` +
       `<b>[</b> <code>yes</code> <b>/</b> <code>no</code> <b>]</b>`
     );

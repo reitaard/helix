@@ -25,7 +25,8 @@ import type {
 } from "../t2v/settings.js";
 
 import {
-  escapeHtml
+  escapeHtml,
+  profileTitle
 } from "./presentation.js";
 
 type ResetScope =
@@ -36,7 +37,7 @@ function pageTitle(
   dev: boolean
 ) {
   return (
-    `<b>[ T2V / RESET ]</b>` +
+    profileTitle("Text2Video", "RESET") +
     (
       dev
         ? ` (<b><i>dev</i></b>)`
