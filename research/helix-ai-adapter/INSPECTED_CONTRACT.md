@@ -2,9 +2,11 @@
 
 **Inspected:** 2026-08-25
 
-**Repository branch at inspection:** `research/qwen-production-settings`, created from `feature/t2v-settings`
+**Repository branch at inspection:** `research/qwen-production-settings`, merged with the latest `feature/t2v-settings`
 
-**Source commit:** `128671c` (`Merge current Helix research docs into T2V settings branch`)
+**Upstream Production source commit:** `9523428` (`docs: replace auto plan with explicit T2V modes`)
+
+**Research merge commit:** `0f5f1a0`
 
 This file is the source map for the benchmark. If Production settings source changes, re-inspect it and update this document before trusting benchmark conclusions.
 
@@ -13,14 +15,45 @@ This file is the source map for the benchmark. If Production settings source cha
 | Concern | Source |
 |---|---|
 | Types, defaults, limits, supported values | `production/media-runtime/src/t2v/settings.ts` |
+| Explicit generation modes and deterministic patches | `production/media-runtime/src/t2v/mode.ts` |
+| Persisted mode resolution | `production/media-runtime/src/t2v/mode-service.ts` |
 | Deterministic core/dev setting mutations | `production/media-runtime/src/t2v/profile-service.ts` |
 | Mapping stable settings onto vetted Comfy nodes | `production/media-runtime/src/t2v/workflow-binder.ts` |
 | Durable profile/tool settings | `production/media-runtime/src/repositories/t2v-settings-repository.ts` |
 | Settings migration and initial row | `production/media-runtime/migrations/0007_t2v_profile_settings.sql` |
-| Telegram command/UI surface | `production/media-runtime/src/telegram/t2v-settings-service.ts` |
+| Telegram settings command/UI surface | `production/media-runtime/src/telegram/t2v-settings-service.ts` |
+| Telegram mode command/UI surface | `production/media-runtime/src/telegram/t2v-mode-service.ts` |
 | Prompt capture, settings snapshot, confirmation, submission | `production/media-runtime/src/telegram/t2v-service.ts` |
 | Durable pending snapshot | `production/media-runtime/src/repositories/t2v-pending-repository.ts` |
 | Project-level commitment | `docs/DECISIONS.md` — “T2V settings must be Helix semantics, not raw Comfy node controls” |
+
+## Explicit T2V modes
+
+The updated Production branch replaces the earlier automatic-plan idea with three explicit, persisted operator modes:
+
+```text
+manual
+fast
+quality
+```
+
+Mode behavior is deterministic:
+
+```text
+manual  -> preserve stored settings without a mode patch
+fast    -> quality=standard, durationSeconds=5, fps=24, megapixelsOverride=null
+quality -> quality=high, durationSeconds=8, fps=24, megapixelsOverride=null
+```
+
+The selected mode is stored in `production_profile_tool_settings.generation_mode`, defaults to `manual`, and is constrained by the database. At prompt capture, Helix resolves the selected mode over base settings and snapshots the resulting effective settings before confirmation.
+
+Mode selection and free-form settings interpretation are different candidate tasks. Baseline V1 continues to test only core settings deltas. A future mode benchmark must use its own fixture and tiny contract, for example:
+
+```json
+{"mode":"manual|fast|quality|none"}
+```
+
+Do not silently add mode inference to the V1 settings benchmark because that would change two variables and invalidate comparison with its recorded baseline.
 
 ## Existing core settings
 
