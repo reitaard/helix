@@ -34,6 +34,10 @@ const CRC_TABLE = (() => {
   return table;
 })();
 
+const ZIP_FLAGS =
+  0x0008 | // data descriptor
+  0x0800;  // UTF-8 filenames
+
 function updateCrc(
   crc: number,
   chunk: Buffer
@@ -86,7 +90,7 @@ function localHeader(
 
   buffer.writeUInt32LE(0x04034b50, 0);
   buffer.writeUInt16LE(20, 4);
-  buffer.writeUInt16LE(0x0008, 6);
+  buffer.writeUInt16LE(ZIP_FLAGS, 6);
   buffer.writeUInt16LE(0, 8);
   buffer.writeUInt16LE(stamp.time, 10);
   buffer.writeUInt16LE(stamp.date, 12);
@@ -129,7 +133,7 @@ function centralHeader(
   buffer.writeUInt32LE(0x02014b50, 0);
   buffer.writeUInt16LE(20, 4);
   buffer.writeUInt16LE(20, 6);
-  buffer.writeUInt16LE(0x0008, 8);
+  buffer.writeUInt16LE(ZIP_FLAGS, 8);
   buffer.writeUInt16LE(0, 10);
   buffer.writeUInt16LE(stamp.time, 12);
   buffer.writeUInt16LE(stamp.date, 14);
