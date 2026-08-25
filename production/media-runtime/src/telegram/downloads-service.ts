@@ -44,6 +44,10 @@ import {
   title
 } from "./presentation.js";
 
+const DOWNLOAD_PAGE_SIZE = 20;
+const DOWNLOAD_HISTORY_LIMIT = 100;
+const MAX_DETAIL_FILES = 8;
+
 interface SourceContext {
   source: string;
   tool: string | null;
@@ -69,6 +73,26 @@ function cleanReference(
   return value
     .trim()
     .replace(/\.+$/, "");
+}
+
+function parsePage(
+  value: string | undefined
+) {
+  if (
+    !value ||
+    !/^\d+$/.test(value)
+  ) {
+    return null;
+  }
+
+  const page = Number(value);
+
+  return (
+    Number.isSafeInteger(page) &&
+    page >= 1
+  )
+    ? page
+    : null;
 }
 
 function safeFilename(
@@ -118,7 +142,10 @@ function artifactSummary(
   item: ComfyHistoryItem
 ) {
   if (item.artifacts.length === 1) {
-    return safeFilename(item.artifacts[0]!.filename);
+    return clip(
+      safeFilename(item.artifacts[0]!.filename),
+      96
+    );
   }
 
   return `${item.artifacts.length} files`;
@@ -197,7 +224,10 @@ export class TelegramDownloadsService {
       };
     }
 
-    const items = await this.history(100);
+    const items =
+      await this.history(
+        DOWNLOAD_HISTORY_LIMIT
+      );
     const lower = clean.toLowerCase();
     const matches = items.filter(
       item =>
@@ -224,10 +254,23 @@ export class TelegramDownloadsService {
     };
   }
 
-  async listHtml() {
+  private usageHtml() {
+    return (
+      `${title("DOWNLOAD")}\n` +
+      `<b>List</b> · <code>/dl</code>\n` +
+      `<b>Page</b> · <code>/dl p &lt;page&gt;</code>\n` +
+      `<b>Inspect</b> · <code>/dl i &lt;id&gt;</code>\n` +
+      `<b>Get</b> · <code>/dl g &lt;id&gt;</code>`
+    );
+  }
+
+  async listHtml(
+    page = 1
+  ) {
     const items =
-      (await this.history(20))
-        .slice(0, 5);
+      await this.history(
+        DOWNLOAD_HISTORY_LIMIT
+      );
 
     if (items.length === 0) {
       return (
@@ -236,9 +279,36 @@ export class TelegramDownloadsService {
       );
     }
 
+    const totalPages =
+      Math.max(
+        1,
+        Math.ceil(
+          items.length /
+          DOWNLOAD_PAGE_SIZE
+        )
+      );
+
+    if (page > totalPages) {
+      return (
+        `${title("DOWNLOADS")}\n` +
+        `<i>Page not found.</i>\n` +
+        `<b>Available</b> · <code>1-${totalPages}</code>`
+      );
+    }
+
+    const start =
+      (page - 1) *
+      DOWNLOAD_PAGE_SIZE;
+    const pageItems =
+      items.slice(
+        start,
+        start +
+        DOWNLOAD_PAGE_SIZE
+      );
+
     const blocks =
       await Promise.all(
-        items.map(async item => {
+        pageItems.map(async item => {
           const context =
             await this.source(
               item.promptId
@@ -263,10 +333,35 @@ export class TelegramDownloadsService {
         })
       );
 
+    const footer = [
+      `<b>Page</b> · <b>${page}/${totalPages}</b> · <b>${pageItems.length}</b> <i>shown</i>`,
+      `<i>Inspect</i> · <code>/dl i &lt;id&gt;</code>`
+    ];
+
+    const navigation: string[] = [];
+
+    if (page > 1) {
+      navigation.push(
+        `<i>Prev</i> · <code>/dl p ${page - 1}</code>`
+      );
+    }
+
+    if (page < totalPages) {
+      navigation.push(
+        `<i>Next</i> · <code>/dl p ${page + 1}</code>`
+      );
+    }
+
+    if (navigation.length > 0) {
+      footer.push(
+        navigation.join(" · ")
+      );
+    }
+
     return (
       `${title("DOWNLOADS")}\n` +
       blocks.join("\n") +
-      `\n<i>Inspect</i> · <code>/dl &lt;id&gt;</code>`
+      `\n${footer.join("\n")}`
     );
   }
 
@@ -275,7 +370,22 @@ export class TelegramDownloadsService {
     context: SourceContext,
     inspection: ComfyWorkflowInspection
   ) {
+    const shownFiles =
+      item.artifacts.slice(
+        0,
+        MAX_DETAIL_FILES
+      );
+    const hiddenFiles =
+      Math.max(
+        0,
+        item.artifacts.length -
+        shownFiles.length
+      );
+
     const detailLines = [
+      `<b>ID</b> · <code>${escapeHtml(item.promptId.slice(0, 6))}</code>`,
+      `<b>Source</b> · <b>${escapeHtml(context.source)}</b>`,
+      `<b>Files</b> · <b>${item.artifacts.length}</b>`,
       `<b><i>• details •</i></b>`,
       `<b>Workflow</b> · <i>${escapeHtml(inspection.workflow)}</i>`,
       ...(context.tool
@@ -293,10 +403,13 @@ export class TelegramDownloadsService {
         detail =>
           `<b>${escapeHtml(detail.label)}</b> · ${escapeHtml(clip(detail.value, detail.label === "Negative" ? 500 : 300))}`
       ),
-      ...item.artifacts.map(
+      ...shownFiles.map(
         (artifact, index) =>
-          `<b>File ${index + 1}</b> · <code>${escapeHtml(safeFilename(artifact.filename))}</code>`
+          `<b>File ${index + 1}</b> · <code>${escapeHtml(clip(safeFilename(artifact.filename), 120))}</code>`
       ),
+      ...(hiddenFiles > 0
+        ? [`<b>More</b> · <i>+${hiddenFiles} files</i>`]
+        : []),
       ...(item.completedAt
         ? [`<b>Completed</b> · <i>${escapeHtml(formatEventTimestamp(item.completedAt))}</i>`]
         : []),
@@ -320,15 +433,12 @@ export class TelegramDownloadsService {
 
     return (
       `${title("DOWNLOAD")}\n` +
-      `<b>ID</b> · <code>${escapeHtml(item.promptId.slice(0, 6))}</code>\n` +
-      `<b>Source</b> · <b>${escapeHtml(context.source)}</b>\n` +
-      `<b>Files</b> · <b>${item.artifacts.length}</b>\n` +
       this.detailsHtml(
         item,
         context,
         inspection
       ) +
-      `\n<i>Get</i> · <code>/dl ${escapeHtml(item.promptId.slice(0, 6))} get</code>`
+      `\n<i>Get</i> · <code>/dl g ${escapeHtml(item.promptId.slice(0, 6))}</code>`
     );
   }
 
@@ -539,47 +649,101 @@ export class TelegramDownloadsService {
     return true;
   }
 
-  async handleCommand(
-    args: string[]
-  ): Promise<string | null> {
-    if (args.length === 0) {
-      return this.listHtml();
-    }
-
-    const resolved =
-      await this.resolve(args[0] ?? "");
-
-    if (resolved.kind === "invalid") {
-      return (
-        `${title("DOWNLOAD")}\n` +
-        `<b>Usage</b> · <code>/dl &lt;id&gt; [get]</code>`
-      );
-    }
-
-    if (resolved.kind === "missing") {
+  private resolutionErrorHtml(
+    kind: "invalid" | "missing" | "ambiguous"
+  ) {
+    if (kind === "missing") {
       return (
         `${title("DOWNLOAD")}\n` +
         `<i>Artifact history entry not found.</i>`
       );
     }
 
-    if (resolved.kind === "ambiguous") {
+    if (kind === "ambiguous") {
       return (
         `${title("DOWNLOAD")}\n` +
         `<i>Prefix is ambiguous. Use more characters.</i>`
       );
     }
 
-    if (args.length === 1) {
+    return this.usageHtml();
+  }
+
+  async handleCommand(
+    args: string[]
+  ): Promise<string | null> {
+    if (args.length === 0) {
+      return this.listHtml(1);
+    }
+
+    const action =
+      args[0]?.toLowerCase();
+
+    if (
+      action === "p" ||
+      action === "page"
+    ) {
+      if (args.length !== 2) {
+        return this.usageHtml();
+      }
+
+      const page =
+        parsePage(args[1]);
+
+      if (page === null) {
+        return (
+          `${title("DOWNLOADS")}\n` +
+          `<i>Page must be a positive integer.</i>\n` +
+          `<i>Use</i> · <code>/dl p &lt;page&gt;</code>`
+        );
+      }
+
+      return this.listHtml(page);
+    }
+
+    if (
+      action === "i" ||
+      action === "inspect"
+    ) {
+      if (args.length !== 2) {
+        return this.usageHtml();
+      }
+
+      const resolved =
+        await this.resolve(
+          args[1] ?? ""
+        );
+
+      if (resolved.kind !== "resolved") {
+        return this.resolutionErrorHtml(
+          resolved.kind
+        );
+      }
+
       return this.inspectHtml(
         resolved.item
       );
     }
 
     if (
-      args.length === 2 &&
-      args[1]?.toLowerCase() === "get"
+      action === "g" ||
+      action === "get"
     ) {
+      if (args.length !== 2) {
+        return this.usageHtml();
+      }
+
+      const resolved =
+        await this.resolve(
+          args[1] ?? ""
+        );
+
+      if (resolved.kind !== "resolved") {
+        return this.resolutionErrorHtml(
+          resolved.kind
+        );
+      }
+
       const started =
         this.startTransfer(
           resolved.item
@@ -595,9 +759,6 @@ export class TelegramDownloadsService {
       );
     }
 
-    return (
-      `${title("DOWNLOAD")}\n` +
-      `<b>Usage</b> · <code>/dl &lt;id&gt; [get]</code>`
-    );
+    return this.usageHtml();
   }
 }
