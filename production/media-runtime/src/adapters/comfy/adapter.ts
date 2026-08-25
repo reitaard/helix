@@ -140,6 +140,13 @@ export class ComfyAdapter
       );
   }
 
+  history(
+    maxItems = 20
+  ) {
+    return this.client
+      .history(maxItems);
+  }
+
   downloadArtifact(
     artifact: {
       filename: string;
