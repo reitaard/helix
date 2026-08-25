@@ -1,6 +1,6 @@
 # LTX Director
 
-This folder is the Helix Production workspace for evaluating and integrating LTX 2.5 generation, native T2V behavior, CGlide Director-style controls, Prompt Relay, and long-video continuation backends.
+This folder is the Helix Production workspace for evaluating and integrating LTX 2.5 generation, native T2V behavior, CGlide Director-style controls, Prompt Relay, reference-conditioning systems such as Licon MSR, and long-video continuation backends.
 
 It is **not** the Helix Director. Helix Director remains model/provider agnostic. This folder is about how Production compiles explicit generation intent into LTX/ComfyUI execution state.
 
@@ -14,10 +14,13 @@ The workstation has validated:
 - controlled 5 s / 8 s / 10 s native T2V prompt experiments;
 - native hard-cut multishot behavior from prose alone;
 - CGlide LTX Director 2.5 wiring inside the native LTX graph;
-- Prompt Relay with multiple temporal regions;
+- Kijai Prompt Relay running against native LTX 2.5 T2V with controlled temporal-region A/B tests;
+- Prompt Relay scene-progression benefit in a clean 15-second native-vs-Relay comparison;
 - appended image/keyframe guidance;
 - CGlide chunk writing, handoff PNGs, audio joining and final assembly;
 - official Lightricks `LTXVLoopingSampler` running locally over both LTX 2.5 stages.
+
+Licon LTX 2.5 MSR has been researched and has a concrete local test plan, but is **not yet locally validated**.
 
 ## Native T2V quality baseline
 
@@ -45,6 +48,63 @@ Important findings:
 - evaluation must separate prompt/benchmark adherence from whether the final video actually looks coherent and directed.
 
 See `NATIVE_T2V.md` for the full 5 s / 8 s / 10 s findings, prompt-design rules, audio observations, multishot behavior, Seedance reference context and the current native-vs-controlled test policy.
+
+## Prompt Relay checkpoint
+
+Kijai `ComfyUI-PromptRelay` is now locally validated with the native LTX 2.5 two-stage T2V graph.
+
+The important architectural conclusion is:
+
+```text
+Prompt Relay != hard timestamp switch
+Prompt Relay != object-state machine
+
+Prompt Relay = temporal semantic routing / scene progression control
+```
+
+Controlled tests established:
+
+- a motorcycle three-phase test showed modest reduction in temporal leakage where native LTX already understood the sequence well;
+- a walk -> stop/speak -> run test showed much stronger concentration of the middle semantic event and earlier ownership of the final run region;
+- a receive -> inspect/open -> discard envelope stress test showed that Relay does not solve fragile physical state/possession chains and can run out of region budget when too many sub-actions are packed into one segment;
+- a clean 15-second cafe scene showed the real Production value: native LTX introduced later story content very early, while Relay gave the opening beat more room and reduced future-event leakage without obvious loss of long-shot coherence.
+
+Current working role:
+
+```text
+simple focused short shot
+-> native LTX first
+
+longer shot with distinct semantic/narrative beats
+-> consider Prompt Relay
+
+strict physical-state causality
+-> Relay alone is insufficient
+```
+
+For Relay compilation, persistent world/subject/camera/ambience belongs in the global prompt and changing beat-specific semantics belong in local prompts. Frame allocation and `epsilon` remain backend details.
+
+See `PROMPT_RELAY.md` for exact tests, timing observations, workflow integration and Production policy.
+
+## Licon MSR research checkpoint
+
+Licon MSR V1 is a separate LTX 2.5 multi-reference control candidate.
+
+Conceptually:
+
+```text
+Prompt Relay
+-> WHAT happens WHEN
+
+Licon MSR
+-> WHO / WHAT referenced entities should remain visually consistent
+```
+
+The published LTX 2.5 system uses a dedicated MSR LoRA plus learned reference-slot embeddings and negative temporal reference positions. The current standalone ComfyUI plugin accepts up to five reference inputs (`pic1`..`pic4` + optional background) and documents a native two-stage LTX 2.5 integration where references are applied again after spatial latent upscale.
+
+MSR is promising for recurring characters, wardrobe, objects/vehicles and background continuity, but it has not yet earned a Helix Production role. It must first pass one-subject and two-subject local tests on the current worker.
+
+See `MSR_RESEARCH.md` for mechanism, plugin topology, model placement and the test plan.
 
 ## Current quality baseline — native full-resolution I2V
 
@@ -124,8 +184,11 @@ rich native T2V single shot
 identity/detail-critical I2V short shot
 -> full-resolution native LTX is a validated candidate
 
-native prompt repeatedly drops/times a required beat poorly
--> test Director / Prompt Relay as the next control layer
+multiple distinct semantic/narrative beats within one generation
+-> Prompt Relay is a validated temporal-routing candidate
+
+reference-critical recurring character/object appearance
+-> Licon MSR is the next independent experiment; not yet validated
 
 long continuous extension
 -> Lightricks LoopingSampler
@@ -134,13 +197,15 @@ explicit timed direction
 -> compile Director intent into backend-compatible timing
 ```
 
-Do not add Director/Prompt Relay automatically to shot types that native LTX already executes well. The goal is the lightest reliable Production path, not the most complicated graph.
+Do not add Prompt Relay or future MSR references automatically to shot types that native LTX already executes well. The goal is the lightest reliable Production path, not the most complicated graph.
 
 This remains experimental Production policy, not a frozen Helix schema.
 
 ## Relevant notes
 
 - `NATIVE_T2V.md` — native 5/8/10-second T2V benchmark and quality findings;
+- `PROMPT_RELAY.md` — validated Kijai Relay A/Bs and scene-progression role;
+- `MSR_RESEARCH.md` — researched Licon LTX 2.5 MSR mechanism and local test plan;
 - `FULL_RES_NATIVE_I2V.md` — locally validated bare full-resolution motorcycle baseline;
 - `LONG_VIDEO_COMPARISON.md` — continuation tracks, failure analysis and test order;
 - `HYBRID_B_V1.md` — failed hybrid history and re-entry constraints;
@@ -153,17 +218,18 @@ This remains experimental Production policy, not a frozen Helix schema.
 
 The current ComfyUI graphs are execution prototypes, not the final agent-facing interface.
 
-Useful Production controls may eventually include global/timed prompts, duration/fps/dimensions, prompt enhancement, image keyframes and strengths, motion controls, retake/extension policy, seed and backend execution settings.
+Useful Production controls may eventually include global/timed prompts, duration/fps/dimensions, prompt enhancement, image/reference assets and strengths, motion controls, retake/extension policy, seed and backend execution settings.
 
-The native T2V tests also suggest that the eventual semantic interface should preserve distinctions between:
+The native T2V and Prompt Relay tests suggest that the eventual semantic interface should preserve distinctions between:
 
 ```text
 world state
 main action
 camera intent
-temporal plan
+temporal beats
 persistent state
 causal transition
+reference / continuity entities
 audio intent
 ```
 
