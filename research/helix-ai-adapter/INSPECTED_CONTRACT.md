@@ -4,9 +4,9 @@
 
 **Repository branch at inspection:** `research/qwen-production-settings`, merged with the latest `feature/t2v-settings`
 
-**Upstream Production source commit:** `9523428` (`docs: replace auto plan with explicit T2V modes`)
+**Upstream Production source commit:** `aeff8aa` (`Show durable T2V settings in job details`)
 
-**Research merge commit:** `0f5f1a0`
+**Research merge commit:** `6f8abd5`
 
 This file is the source map for the benchmark. If Production settings source changes, re-inspect it and update this document before trusting benchmark conclusions.
 
@@ -23,8 +23,11 @@ This file is the source map for the benchmark. If Production settings source cha
 | Settings migration and initial row | `production/media-runtime/migrations/0007_t2v_profile_settings.sql` |
 | Telegram settings command/UI surface | `production/media-runtime/src/telegram/t2v-settings-service.ts` |
 | Telegram mode command/UI surface | `production/media-runtime/src/telegram/t2v-mode-service.ts` |
-| Prompt capture, settings snapshot, confirmation, submission | `production/media-runtime/src/telegram/t2v-service.ts` |
+| Prompt capture, effective settings/mode snapshot, confirmation, submission | `production/media-runtime/src/telegram/t2v-service.ts` |
 | Durable pending snapshot | `production/media-runtime/src/repositories/t2v-pending-repository.ts` |
+| Durable semantic generation payload on media jobs | `production/media-runtime/src/jobs/service.ts` |
+| T2V job-generation rendering | `production/media-runtime/src/telegram/job-generation-presentation.ts` |
+| `/job` generation-detail hook | `production/media-runtime/src/telegram/command-service.ts` |
 | Project-level commitment | `docs/DECISIONS.md` — “T2V settings must be Helix semantics, not raw Comfy node controls” |
 
 ## Explicit T2V modes
@@ -139,9 +142,11 @@ They exist on the feature branch but are explicitly excluded from the public sem
 ## State and execution behavior
 
 - Settings are durable by `(profile_id, tool)` using profile `nolan` and tool `video.t2v`.
-- When a T2V prompt is captured, resolved settings are snapshotted into the durable pending action.
-- Confirmation shows the snapshotted aspect, quality, duration, and enhancement state.
+- When a T2V prompt is captured, the selected mode, mode version, and resolved effective settings are snapshotted into the durable pending action.
+- Confirmation shows the snapshotted mode, aspect, quality, duration, and enhancement state.
 - Only after deterministic `yes` confirmation does Helix bind the workflow and call `JobService.create()`.
+- New T2V jobs persist a semantic `generation` object inside the durable job request, including model, mode/version, prompt, effective core settings, and advanced execution values.
+- `/job <id>` renders that persisted generation snapshot. Historical jobs without the object remain compatible and simply omit the generation block.
 - `bindT2VWorkflow()` validates expected node IDs/class types before mutation.
 - The benchmark must not enter this execution path.
 
@@ -164,4 +169,4 @@ It may propose a typed delta. It does not:
 
 ## Important stale-document warning
 
-Some `main`-era Production documentation still describes T2V as prompt-only because the active source branch is the newer `feature/t2v-settings` work. For this research branch, executable source at commit `128671c` is authoritative for the current experimental settings contract. Project decisions remain authoritative for architectural boundaries.
+Some `main`-era Production documentation still describes T2V as prompt-only because the active source branch is the newer `feature/t2v-settings` work. For this research branch, executable Production source through commit `aeff8aa` is authoritative for the current experimental settings and durable-generation contract. Project decisions remain authoritative for architectural boundaries.
