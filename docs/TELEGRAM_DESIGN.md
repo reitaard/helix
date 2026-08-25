@@ -113,13 +113,19 @@ Do not add stray punctuation after an ID or quote block.
 ```text
 /t2v settings
 /t2v s
+/t2v s <setting> <value>
 /t2v set
+/t2v set <setting> <value>
 /t2v settings -dev
 /t2v set -dev <setting>
 /t2v set -dev <setting> <value>
+
+/t2v settings -d
+/t2v set -d <setting>
+/t2v set -d <setting> <value>
 ```
 
-Only `set` changes values. `s` opens the panel. Use exactly one dash in `-dev`.
+`s` opens the panel without a setting, or changes a setting when given `<setting> <value>`; `set` remains its full alias. Use exactly one dash; `-dev` and its short alias `-d` are both accepted.
 
 `-dev` is explicit per-command higher authority, not a persistent toggle. It can inspect/change Core and Advanced settings. An Advanced setting without `-dev` returns only:
 

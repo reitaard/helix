@@ -1022,28 +1022,32 @@ export class TelegramCommandService {
         );
       }
       else {
-        lines.push("");
+        const blocks =
+          active.value.map(
+            job => {
+              const since =
+                job.startedAt ??
+                job.createdAt;
 
-        for (
-          const job of
-          active.value
-        ) {
-          const since =
-            job.startedAt ??
-            job.createdAt;
-
-          lines.push(
-            `<code>${
-              escapeHtml(
-                shortJobId(job.id)
-              )
-            }</code> · ` +
-            `<b>[${escapeHtml(job.status)}]</b> · ` +
-            `<code>${escapeHtml(job.tool)}</code>\n` +
-            `<b>${escapeHtml(this.workers.profileDisplayName(job.workerId, job.profileId))}</b> · ` +
-            `<i>${escapeHtml(ageFrom(since))}</i>`
+              return (
+                `<blockquote>` +
+                `<code>${
+                  escapeHtml(
+                    shortJobId(job.id)
+                  )
+                }</code> · ` +
+                `<b>[${escapeHtml(job.status)}]</b>\n` +
+                `<code>${escapeHtml(job.tool)}</code> · ` +
+                `<b>${escapeHtml(this.workers.profileDisplayName(job.workerId, job.profileId))}</b> · ` +
+                `<i>${escapeHtml(ageFrom(since))}</i>` +
+                `</blockquote>`
+              );
+            }
           );
-        }
+
+        lines.push(
+          blocks.join("\n")
+        );
       }
     }
     else {
@@ -1080,10 +1084,20 @@ export class TelegramCommandService {
               job.finishedAt
             );
 
+          const finished =
+            job.finishedAt
+              ? formatTimestamp(job.finishedAt)
+                  .replace(",", " ·")
+              : null;
+
           return (
             `<blockquote>` +
             `<code>${escapeHtml(shortJobId(job.id))}</code> · ` +
-            `<b>[${escapeHtml(job.status)}]</b>\n` +
+            `<b>[${escapeHtml(job.status)}]</b>` +
+            (finished
+              ? ` <b><i>(${escapeHtml(finished)})</i></b>`
+              : "") +
+            `\n` +
             `<code>${escapeHtml(job.tool)}</code> · ` +
             `<b>${escapeHtml(this.workers.profileDisplayName(job.workerId, job.profileId))}</b> · ` +
             `<i>${escapeHtml(runtime)}</i>` +

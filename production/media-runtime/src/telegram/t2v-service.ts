@@ -65,6 +65,14 @@ import {
   title
 } from "./presentation.js";
 
+function isDevFlag(
+  value: string | undefined
+): boolean {
+  const normalized = value?.toLowerCase();
+
+  return normalized === "-d" || normalized === "-dev";
+}
+
 function asRecord(
   value: unknown
 ): Record<string, unknown> | null {
@@ -211,6 +219,7 @@ export class TelegramT2VService {
       `<code>/t2v s</code>\n` +
       `<code>/t2v set</code>\n` +
       `<b>Change</b>\n` +
+      `<code>/t2v s &lt;setting&gt; &lt;value&gt;</code>\n` +
       `<code>/t2v set &lt;setting&gt; &lt;value&gt;</code>`
     );
   }
@@ -256,8 +265,7 @@ export class TelegramT2VService {
 
       if (
         args.length === 2 &&
-        args[1]?.toLowerCase() ===
-          "-dev"
+        isDevFlag(args[1])
       ) {
         return this.reset.begin(
           true
@@ -266,14 +274,11 @@ export class TelegramT2VService {
 
       return (
         `<b>Usage</b> · ` +
-        `<code>/t2v reset [-dev]</code>`
+        `<code>/t2v reset [-dev|-d]</code>`
       );
     }
 
-    if (
-      mode === "settings" ||
-      mode === "s"
-    ) {
+    if (mode === "settings") {
       if (args.length === 1) {
         return this.settingsUi
           .panel(false);
@@ -281,8 +286,7 @@ export class TelegramT2VService {
 
       if (
         args.length === 2 &&
-        args[1]?.toLowerCase() ===
-          "-dev"
+        isDevFlag(args[1])
       ) {
         return this.settingsUi
           .panel(true);
@@ -291,7 +295,25 @@ export class TelegramT2VService {
       return this.settingsUsageHtml();
     }
 
-    if (mode !== "set") {
+    if (mode === "s") {
+      if (args.length === 1) {
+        return this.settingsUi
+          .panel(false);
+      }
+
+      if (
+        args.length === 2 &&
+        isDevFlag(args[1])
+      ) {
+        return this.settingsUi
+          .panel(true);
+      }
+    }
+
+    if (
+      mode !== "set" &&
+      mode !== "s"
+    ) {
       return this.settingsUsageHtml();
     }
 
@@ -299,8 +321,7 @@ export class TelegramT2VService {
     let dev = false;
 
     if (
-      args[index]?.toLowerCase() ===
-      "-dev"
+      isDevFlag(args[index])
     ) {
       dev = true;
       index += 1;
