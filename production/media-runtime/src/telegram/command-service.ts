@@ -949,9 +949,13 @@ export class TelegramCommandService {
       lines.push(
         "",
         "<b><i>• Production •</i></b>",
-        ...profiles.map(profile =>
-          `<b>${escapeHtml(profile.displayName)}</b> · <i>${profile.capabilities.map(escapeHtml).join(" · ")}</i>`
-        )
+        ...profiles.flatMap(profile => [
+          `<b>${escapeHtml(profile.displayName)}</b>`,
+          ...profile.capabilities.map(
+            capability =>
+              `└ <b><i>${escapeHtml(capability)}</i></b>`
+          )
+        ])
       );
     }
 
