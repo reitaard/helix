@@ -15,7 +15,9 @@ import {
 } from "../t2v/mode-service.js";
 
 import {
-  displayT2VMode
+  T2V_MODE_VERSION,
+  displayT2VMode,
+  normalizeT2VMode
 } from "../t2v/mode.js";
 
 import type {
@@ -62,6 +64,21 @@ import {
   escapeHtml,
   title
 } from "./presentation.js";
+
+function asRecord(
+  value: unknown
+): Record<string, unknown> | null {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    return null;
+  }
+
+  return value as
+    Record<string, unknown>;
+}
 
 export class TelegramT2VService {
   private timer:
@@ -170,7 +187,7 @@ export class TelegramT2VService {
       }]</b>\n` +
       (
         devProfile
-          ? `<b>Profile</b> · <b>[DEV]</b>\n`
+          ? `<b>Access</b> · <b>[DEV]</b>\n`
           : ""
       ) +
       `<b>Worker</b> · <b>${escapeHtml(
@@ -458,10 +475,56 @@ export class TelegramT2VService {
       base,
       mode:
         modeState.mode,
+      version:
+        modeState.version,
       settings:
         resolveT2VSettings(
           modeState.settings
         )
+    };
+  }
+
+  private async pendingGeneration(
+    snapshot: unknown
+  ) {
+    const record =
+      asRecord(snapshot);
+
+    const nested =
+      asRecord(record?.settings);
+
+    if (nested) {
+      return {
+        mode:
+          normalizeT2VMode(
+            record?.mode
+          ),
+        version:
+          typeof record?.modeVersion ===
+            "number"
+            ? record.modeVersion
+            : T2V_MODE_VERSION,
+        settings:
+          normalizeStoredT2VSettings(
+            nested
+          ) as ResolvedT2VSettings
+      };
+    }
+
+    const current =
+      await this.currentEffective();
+
+    return {
+      mode:
+        current.mode,
+      version:
+        current.version,
+      settings:
+        snapshot
+          ? normalizeStoredT2VSettings(
+              snapshot
+            ) as ResolvedT2VSettings
+          : current.settings
     };
   }
 
@@ -538,7 +601,14 @@ export class TelegramT2VService {
           .setPrompt(
             this.chatId,
             answer,
-            effective.settings,
+            {
+              mode:
+                effective.mode,
+              modeVersion:
+                effective.version,
+              settings:
+                effective.settings
+            },
             new Date(
               Date.now() +
               this.confirmSeconds *
@@ -590,14 +660,13 @@ export class TelegramT2VService {
       const prompt =
         state.prompt;
 
+      const generation =
+        await this.pendingGeneration(
+          state.settingsSnapshot
+        );
+
       const settings =
-        state.settingsSnapshot
-          ? normalizeStoredT2VSettings(
-              state.settingsSnapshot
-            ) as ResolvedT2VSettings
-          : (
-              await this.currentEffective()
-            ).settings;
+        generation.settings;
 
       await this.pending
         .remove(
@@ -621,6 +690,48 @@ export class TelegramT2VService {
           workflow,
 
           inputs: {},
+
+          generation: {
+            kind: "t2v",
+            model: "LTX 2.5",
+            mode:
+              generation.mode,
+            modeVersion:
+              generation.version,
+            prompt,
+            settings: {
+              aspect:
+                settings.aspect,
+              quality:
+                settings.quality,
+              megapixels:
+                effectiveMegapixels(
+                  settings
+                ),
+              megapixelsOverride:
+                settings.megapixelsOverride,
+              durationSeconds:
+                settings.durationSeconds,
+              frames:
+                settings.durationSeconds *
+                settings.fps +
+                1,
+              enhance:
+                settings.enhance,
+              fps:
+                settings.fps,
+              seed:
+                settings.seed,
+              seed2:
+                settings.seed2,
+              negativePrompt:
+                settings.negativePrompt,
+              sampler:
+                settings.sampler,
+              cfg:
+                settings.cfg
+            }
+          },
 
           idempotencyKey:
             null
