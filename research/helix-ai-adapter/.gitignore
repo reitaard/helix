@@ -1,0 +1,5 @@
+results/*.json
+results/*.jsonl
+results/*.txt
+!results/README.md
+__pycache__/
