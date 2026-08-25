@@ -43,7 +43,7 @@ export class TelegramT2IResetService {
 
     return (
       `<b>[ T2I / RESET ]</b>\n` +
-      `<b>Reset these settings?</b> <b><i>Type</i></b> ` +
+      `<b><i>Reset these settings? Type</i></b> ` +
       `<b>[</b> <code>yes</code> <b>/</b> <code>no</code> <b>]</b>`
     );
   }

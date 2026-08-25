@@ -293,8 +293,7 @@ export class TelegramCancelService {
     return (
       `${title("CANCEL")}\n` +
       `${this.jobHeader(job)}\n` +
-      `<b>Cancel this job?</b>  ` +
-      `<b><i>Type</i></b> ` +
+      `<b><i>Cancel this job? Type</i></b> ` +
       `<b>[</b> ` +
       `<code>yes</code> ` +
       `<b>/</b> ` +

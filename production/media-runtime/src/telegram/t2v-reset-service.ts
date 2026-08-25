@@ -317,8 +317,7 @@ export class TelegramT2VResetService {
         T2V_TOOL
       )}</i></b>\n` +
       `${blocks.join("\n")}\n` +
-      `<b>Reset these settings?</b> ` +
-      `<b><i>Type</i></b> ` +
+      `<b><i>Reset these settings? Type</i></b> ` +
       `<b>[</b> <code>yes</code> <b>/</b> <code>no</code> <b>]</b>`
     );
   }
