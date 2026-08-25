@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**Preparation / foundation, with a validated Production execution slice, a proven native LTX 2.5 T2V loop, controlled native T2V quality findings, persisted semantic T2V settings/reset, and an explicit generation Mode layer.**
+**Preparation / foundation, with a validated Production execution slice, a proven native LTX 2.5 T2V loop, controlled native T2V quality findings, completed Prompt Enhance and Prompt Relay research checkpoints, persisted semantic T2V settings/reset, and an explicit generation Mode layer.**
 
 The high-level Helix system division is established. Production execution is hardened enough to operate as a stable checkpoint while generation research continues independently and the project advances the main Helix brain path.
 
@@ -58,6 +58,22 @@ GPU: RTX 4060
 validated tools: video.i2v, video.t2v
 max GPU jobs: 1
 ```
+
+The active standalone ComfyUI installation is currently rooted at:
+
+```text
+C:\AI\ComfyUI-CLI
+```
+
+Heavy model assets are consolidated under:
+
+```text
+C:\AI\Models\LTX
+C:\AI\Models\WAN
+C:\AI\Models\FLUX
+```
+
+and exposed through the standalone runtime's `extra_model_paths.yaml`.
 
 The VPS-side runtime supports durable media jobs, restart recovery, artifact discovery/retrieval, bounded Telegram delivery, diagnostics, alerts, cancellation, confirmed T2V prompt capture, persisted T2V settings, durable reset confirmation, and selected T2V generation modes.
 
@@ -265,6 +281,81 @@ Full findings are recorded in `production/ltx-director/NATIVE_T2V.md`.
 
 Model-quality evaluation should use the native Comfy artifact or a verified original-file document path.
 
+## Prompt Enhance research checkpoint
+
+Prompt Enhance has been evaluated as a controlled preprocessing layer.
+
+Working conclusion:
+
+```text
+simple / under-specified user prompt
+-> Prompt Enhance can improve framing, POV interpretation and acting readability
+
+already well-directed Helix Production prompt
+-> Prompt Enhance can become a competing second director
+```
+
+For polished prompts it can over-direct camera behavior, compress/reweight chronology and still fail to repair low-level state or subtle ambience. The preferred Helix direction is therefore to internalize the useful enhancer prompting principles in the Helix-side prompt compiler while keeping **Prompt Enhance OFF** for final well-directed Production captions unless an explicit simple-input path is being tested.
+
+## Prompt Relay research checkpoint
+
+Kijai `ComfyUI-PromptRelay` is now installed and locally validated against native LTX 2.5 T2V.
+
+The decisive abstraction is:
+
+```text
+Prompt Relay
+= temporal semantic routing / scene progression
+
+not
+= hard timestamp switch
+= persistent object-state machine
+```
+
+Clean controlled A/B findings include:
+
+- motorcycle upright -> lean -> recover: native already strong; Relay reduced second-region leakage modestly;
+- walk -> stop/speak -> run: Relay concentrated the middle event and gave the final run region earlier/clearer semantic ownership;
+- receive -> inspect/open -> discard: Relay did not solve fragile possession/object-state continuity and failed to complete the final discard in the tested short region;
+- 15-second cafe narrative: native introduced the later man/approach beats very early, while Relay substantially preserved a longer opening wait and reduced future-event leakage while maintaining strong long-shot coherence.
+
+Current role:
+
+```text
+simple focused shot
+-> native LTX first
+
+one generation with distinct narrative / behavioral beats
+-> Prompt Relay is a validated option
+
+strict physical-state causality
+-> Relay alone is insufficient
+```
+
+Full findings are recorded in `production/ltx-director/PROMPT_RELAY.md`.
+
+## Licon MSR research checkpoint
+
+Licon MSR V1 for LTX 2.5 is the next independent control experiment.
+
+It is **researched but not yet locally validated**.
+
+The published system uses a dedicated multi-reference LoRA, learned reference-slot embeddings and distinct negative temporal positions so LTX can retrieve character/clothing/object/background reference details through its native attention path. The current standalone plugin supports up to five references and documents a two-stage integration that re-applies MSR references after spatial latent upscaling.
+
+Target capability:
+
+```text
+Prompt Relay
+-> WHEN semantic beats dominate
+
+Licon MSR
+-> WHO / WHAT referenced entities should remain visually consistent
+```
+
+Test order is one reference subject -> two-subject slot separation -> subject + object. Do not combine MSR with Prompt Relay until MSR is independently validated.
+
+Research and the local test plan are recorded in `production/ltx-director/MSR_RESEARCH.md`.
+
 ## Production workflow policy
 
 The runtime has a narrow semantic contract but must not become a raw mirror of the Comfy graph.
@@ -283,25 +374,45 @@ workflow binder
 helix-runtime execution
 ```
 
-Native LTX remains the first Production path for shots within its proven comfort zone. LTX Director/Prompt Relay should be introduced only when focused native prompting repeatedly fails required timing, state change, shot responsibility or structured progression.
+Native LTX remains the first Production path for shots within its proven comfort zone.
+
+Prompt Relay is now justified specifically for distinct semantic/narrative beats and scene progression where native LTX leaks later concepts across the timeline. It should not be used as a substitute for object-state or physics control.
+
+MSR remains an opt-in research candidate for reference-critical entities and must earn its role independently.
 
 ## Next Production phases
 
-### 1. Validate Manual / Fast / Quality
+### 1. Validate / calibrate Manual, Fast and Quality
 
 Use fixed prompts/seeds and native artifacts. Measure runtime, finished-video quality, motion/coherence, prompt adherence, action completion and audio behavior.
 
-### 2. Calibrate Mode definitions
+### 2. Licon MSR independent validation
 
-Change only values justified by repeated tests. Keep Mode definitions small and versionable. Do not let modes silently take ownership of creative/state controls without evidence.
+Install the dedicated LTX 2.5 MSR plugin and V1 LoRA, then run one-subject identity, two-subject separation and subject/object reference tests before combining it with temporal controls.
 
-### 3. Prompt Enhance ON/OFF evaluation
+### 3. Prompt compiler design
 
-Run controlled A/B tests with raw prompt and effective settings preserved.
+Translate the Prompt Enhance and Prompt Relay findings into a Helix-owned Production prompt compiler:
 
-### 4. Targeted Director / Prompt Relay retest
+```text
+persistent world / continuity state
++ focused audiovisual scene caption
++ optional temporal beats
++ optional reference entities
+```
 
-Test stronger control only against native failure classes that still matter: strict beat timing, persistent state changes, shot responsibility and structured multi-shot progression.
+Keep backend frame counts, masks, slot IDs and node wiring inside Production adapters.
+
+### 4. Combined-control experiments only after independent validation
+
+If MSR works independently, test:
+
+```text
+MSR references
++ Prompt Relay scene progression
+```
+
+with one change at a time and explicit attribution.
 
 ### 5. Production contract freeze
 
@@ -332,8 +443,9 @@ There is intentionally no Auto phase.
 - [x] Implement durable Core/full T2V reset.
 - [x] Implement explicit Manual/Fast/Quality generation Modes.
 - [ ] Validate/calibrate Fast and Quality with controlled benchmarks.
-- [ ] Run controlled Prompt Enhance ON/OFF evaluation.
-- [ ] Re-test LTX Director / Prompt Relay only against important native limitations.
+- [x] Run controlled Prompt Enhance ON/OFF evaluation.
+- [x] Validate Prompt Relay for temporal semantic routing / scene progression.
+- [ ] Validate Licon MSR independently for reference identity/continuity.
 - [ ] Validate real Windows reboot/AtStartup behavior for the ComfyUI worker.
 
 ## Next Helix brain phase
