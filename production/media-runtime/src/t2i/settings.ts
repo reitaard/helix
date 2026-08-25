@@ -11,11 +11,11 @@ export const T2I_WORKFLOW_VARIANT = "klein4b-distilled-fp8-v1";
 
 export const T2I_ASPECT_OPTIONS = [
   { ratio: "1:1", label: "Square", width: 1024, height: 1024 },
-  { ratio: "2:3", label: "Portrait Photo", width: 832, height: 1248 },
+  { ratio: "2:3", label: "Portrait", width: 832, height: 1248 },
   { ratio: "3:2", label: "Photo", width: 1248, height: 832 },
-  { ratio: "4:5", label: "Portrait", width: 896, height: 1120 },
+  { ratio: "4:5", label: "Post", width: 896, height: 1120 },
   { ratio: "5:4", label: "Landscape", width: 1120, height: 896 },
-  { ratio: "9:16", label: "Portrait Widescreen", width: 720, height: 1280 },
+  { ratio: "9:16", label: "Full Screen", width: 720, height: 1280 },
   { ratio: "16:9", label: "Widescreen", width: 1280, height: 720 }
 ] as const;
 
