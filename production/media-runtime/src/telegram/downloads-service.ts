@@ -22,8 +22,8 @@ import {
 } from "../adapters/comfy/history.js";
 
 import {
-  JobRepository
-} from "../repositories/job-repository.js";
+  ArtifactSourceRepository
+} from "../repositories/artifact-source-repository.js";
 
 import {
   WorkerRegistry
@@ -132,7 +132,7 @@ export class TelegramDownloadsService {
     private readonly workerId: string,
     private readonly spoolDir: string,
     private readonly workers: WorkerRegistry,
-    private readonly jobs: JobRepository,
+    private readonly sources: ArtifactSourceRepository,
     private readonly telegram: TelegramDelivery
   ) {}
 
@@ -158,7 +158,7 @@ export class TelegramDownloadsService {
     promptId: string
   ): Promise<SourceContext> {
     const job =
-      await this.jobs
+      await this.sources
         .findByBackendJobId(
           promptId
         );
