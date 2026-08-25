@@ -3,8 +3,11 @@ import type {
   ComfyQueue
 } from "./client.js";
 
+import {
+  collectComfyArtifacts
+} from "./history.js";
+
 import type {
-  AdapterArtifact,
   AdapterExecutionStatus
 } from "../../domain/media-adapter.js";
 
@@ -38,98 +41,6 @@ function queueContains(
   });
 }
 
-function collectValue(
-  value: unknown,
-  nodeId: string,
-  artifacts:
-    AdapterArtifact[]
-) {
-  if (
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value)
-  ) {
-    const record =
-      value as
-        Record<string, unknown>;
-
-    if (
-      typeof record.filename ===
-      "string"
-    ) {
-      artifacts.push({
-        filename:
-          record.filename,
-
-        subfolder:
-          typeof record.subfolder ===
-          "string"
-            ? record.subfolder
-            : "",
-
-        type:
-          typeof record.type ===
-          "string"
-            ? record.type
-            : "output",
-
-        nodeId
-      });
-    }
-
-    for (
-      const child of
-      Object.values(record)
-    ) {
-      collectValue(
-        child,
-        nodeId,
-        artifacts
-      );
-    }
-
-    return;
-  }
-
-  if (Array.isArray(value)) {
-    for (const child of value) {
-      collectValue(
-        child,
-        nodeId,
-        artifacts
-      );
-    }
-  }
-}
-
-function collectArtifacts(
-  outputs:
-    Record<string, unknown> |
-    undefined
-) {
-  const artifacts:
-    AdapterArtifact[] = [];
-
-  if (!outputs) {
-    return artifacts;
-  }
-
-  for (
-    const [
-      nodeId,
-      value
-    ] of Object.entries(outputs)
-  ) {
-    collectValue(
-      value,
-      nodeId,
-      artifacts
-    );
-  }
-
-  return artifacts;
-}
-
 export async function
 readComfyExecutionStatus(
   client: ComfyClient,
@@ -150,7 +61,7 @@ readComfyExecutionStatus(
 
   if (record) {
     const artifacts =
-      collectArtifacts(
+      collectComfyArtifacts(
         record.outputs
       );
 
