@@ -94,13 +94,13 @@ export class TelegramT2IService {
   }
 
   private noPendingHtml() {
-    return `${title("T2I")}\n<b><i>No T2I generation is pending.</i></b>`;
+    return `<b><i>No T2I generation is pending.</i></b>`;
   }
 
   private confirmationHtml(prompt: string, settings: ResolvedT2ISettings) {
     const image = dimensionsForT2IAspect(settings.aspect);
     return (
-      `${title("T2I")}\n` +
+      `${title("TEXT 2 IMAGE")}\n` +
       `<b>Prompt</b>\n<blockquote expandable>${escapeHtml(prompt)}</blockquote>\n` +
       `<b>Model</b> · <b>${T2I_MODEL}</b>\n` +
       `<b>Aspect</b> · <b>${escapeHtml(settings.aspect)}</b>\n` +
@@ -128,7 +128,7 @@ export class TelegramT2IService {
 
   async begin() {
     await this.pending.beginPrompt(this.chatId, new Date(Date.now() + this.promptSeconds * 1000));
-    return `${title("T2I")}\n<b><i>Send the generation prompt.</i></b>`;
+    return `${title("TEXT 2 IMAGE")}\n<b><i>Send the generation prompt.</i></b>`;
   }
 
   async hasPending() {
@@ -167,8 +167,8 @@ export class TelegramT2IService {
     if (!state) return lower === "yes" || lower === "no" ? this.noPendingHtml() : null;
 
     if (state.phase === "awaiting_prompt") {
-      if (!answer) return `${title("T2I")}\n<b><i>Prompt cannot be empty.</i></b>`;
-      if (answer.length > this.maxPromptLength) return `${title("T2I")}\n<b><i>Prompt is too long.</i></b>`;
+      if (!answer) return `<b><i>Prompt cannot be empty.</i></b>`;
+      if (answer.length > this.maxPromptLength) return `<b><i>Prompt is too long.</i></b>`;
       const settings = resolveT2ISettings(await this.profile.get());
       const stored = await this.pending.setPrompt(this.chatId, answer, settings, new Date(Date.now() + this.confirmSeconds * 1000));
       return stored ? this.confirmationHtml(answer, settings) : this.noPendingHtml();
@@ -180,7 +180,7 @@ export class TelegramT2IService {
     }
     if (lower === "no") {
       await this.pending.remove(this.chatId);
-      return `${title("T2I")}\n<b>Generation aborted.</b>\n<b><i>No job was submitted.</i></b>`;
+      return `<b>Generation aborted.</b>\n<b><i>No job was submitted.</i></b>`;
     }
     if (lower === "yes") {
       let settings: ResolvedT2ISettings;
@@ -191,7 +191,7 @@ export class TelegramT2IService {
       }
       catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return `${title("T2I")}\n<b>Workflow unavailable.</b>\n<blockquote>${escapeHtml(message)}</blockquote>`;
+        return `<b>Workflow unavailable.</b>\n<blockquote>${escapeHtml(message)}</blockquote>`;
       }
       const image = dimensionsForT2IAspect(settings.aspect);
       try {
@@ -207,19 +207,19 @@ export class TelegramT2IService {
             .digest("hex")}`
         });
         await this.pending.remove(this.chatId);
-        return `${title("T2I")}\n<b>ID</b> · <code>${escapeHtml(job.id)}</code>\n<b>Worker</b> · <b>${escapeHtml(this.workerName)}</b>\n<b>State</b> · <b>[${escapeHtml(job.status)}]</b>`;
+        return `<b>ID</b> · <code>${escapeHtml(job.id)}</code>\n<b>Worker</b> · <b>${escapeHtml(this.workerName)}</b>\n<b>State</b> · <b>[${escapeHtml(job.status)}]</b>`;
       }
       catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return `${title("T2I")}\n<b>Image job was not submitted.</b>\n<blockquote>${escapeHtml(message)}</blockquote>`;
+        return `<b>Image job was not submitted.</b>\n<blockquote>${escapeHtml(message)}</blockquote>`;
       }
     }
 
     const updated = await this.pending.incrementInvalid(this.chatId);
     if (!updated || updated.invalidAttempts >= this.maxInvalid) {
       await this.pending.remove(this.chatId);
-      return `${title("T2I")}\n<b>Generation aborted after 3 invalid responses.</b>\n<b><i>No job was submitted.</i></b>`;
+      return `<b>Generation aborted after 3 invalid responses.</b>\n<b><i>No job was submitted.</i></b>`;
     }
-    return `${title("T2I")}\n<b>Invalid response!</b>\n<b><i>Type</i></b> ‘<code>yes</code>’ <b><i>or</i></b> ‘<code>no</code>’ <b><i>(Attempt · ${updated.invalidAttempts}/${this.maxInvalid})</i></b>`;
+    return `<b>Invalid response!</b>\n<b><i>Type</i></b> ‘<code>yes</code>’ <b><i>or</i></b> ‘<code>no</code>’ <b><i>(Attempt · ${updated.invalidAttempts}/${this.maxInvalid})</i></b>`;
   }
 }

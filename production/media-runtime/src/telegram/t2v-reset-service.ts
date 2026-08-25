@@ -357,7 +357,7 @@ export class TelegramT2VResetService {
         this.chatId
       );
 
-      return `<b>Settings already at default.</b>`;
+      return `<b><i>Settings already at default.</i></b>`;
     }
 
     await this.pending.begin({
@@ -427,7 +427,7 @@ export class TelegramT2VResetService {
         this.chatId
       );
 
-      return `<b>Reset cancelled.</b>`;
+      return `<b><i>Reset cancelled.</i></b>`;
     }
 
     if (answer === "yes") {
@@ -447,8 +447,8 @@ export class TelegramT2VResetService {
       );
 
       return state.scope === "all"
-        ? `<b>[ ALL SETTINGS RESET ]</b>`
-        : `<b>[ CORE RESET ]</b>`;
+        ? `<b><i>All settings reset.</i></b>`
+        : `<b><i>Core settings reset.</i></b>`;
     }
 
     const updated =
@@ -469,9 +469,7 @@ export class TelegramT2VResetService {
         this.chatId
       );
 
-      return (
-        `<b>Reset aborted after 3 invalid responses.</b>`
-      );
+      return `<b><i>Reset aborted after 3 invalid responses.</i></b>`;
     }
 
     return (

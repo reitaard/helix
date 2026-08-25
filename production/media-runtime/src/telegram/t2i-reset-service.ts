@@ -32,7 +32,7 @@ export class TelegramT2IResetService {
       current.aspect === DEFAULT_T2I_SETTINGS.aspect &&
       current.seed === DEFAULT_T2I_SETTINGS.seed
     ) {
-      return `<b>Settings already at default.</b>`;
+      return `<b><i>Settings already at default.</i></b>`;
     }
 
     await this.pending.begin(
@@ -70,7 +70,7 @@ export class TelegramT2IResetService {
 
     if (answer === "no") {
       await this.pending.remove(this.chatId);
-      return `<b>Reset cancelled.</b>`;
+      return `<b><i>Reset cancelled.</i></b>`;
     }
 
     if (answer === "yes") {
@@ -80,13 +80,13 @@ export class TelegramT2IResetService {
         normalizeStoredT2ISettings(state.target_settings)
       );
       await this.pending.remove(this.chatId);
-      return `<b>[ T2I SETTINGS RESET ]</b>`;
+      return `<b><i>Settings reset.</i></b>`;
     }
 
     const updated = await this.pending.incrementInvalid(this.chatId);
     if (!updated || updated.invalid_attempts >= 3) {
       await this.pending.remove(this.chatId);
-      return `<b>Reset aborted after 3 invalid responses.</b>`;
+      return `<b><i>Reset aborted after 3 invalid responses.</i></b>`;
     }
 
     return (

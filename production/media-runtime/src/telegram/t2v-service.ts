@@ -144,10 +144,7 @@ export class TelegramT2VService {
   ) {}
 
   private noPendingHtml() {
-    return (
-      `${title("T2V")}\n` +
-      `<b><i>No T2V generation is pending.</i></b>`
-    );
+    return `<b><i>No T2V generation is pending.</i></b>`;
   }
 
   private confirmationHtml(
@@ -168,7 +165,7 @@ export class TelegramT2VService {
           ).toFixed(1)} MP`;
 
     return (
-      `${title("T2V")}\n` +
+      `${title("TEXT 2 VIDEO")}\n` +
 
       `<b>Prompt</b>\n` +
       `<blockquote expandable>${escapeHtml(
@@ -416,7 +413,7 @@ export class TelegramT2VService {
       );
 
     return (
-      `${title("T2V")}\n` +
+      `${title("TEXT 2 VIDEO")}\n` +
       `<b><i>Send the generation prompt.</i></b>`
     );
   }
@@ -597,20 +594,14 @@ export class TelegramT2VService {
       "awaiting_prompt"
     ) {
       if (!answer) {
-        return (
-          `${title("T2V")}\n` +
-          `<b><i>Prompt cannot be empty.</i></b>`
-        );
+        return `<b><i>Prompt cannot be empty.</i></b>`;
       }
 
       if (
         answer.length >
         this.maxPromptLength
       ) {
-        return (
-          `${title("T2V")}\n` +
-          `<b><i>Prompt is too long.</i></b>`
-        );
+        return `<b><i>Prompt is too long.</i></b>`;
       }
 
       const effective =
@@ -670,7 +661,6 @@ export class TelegramT2VService {
         );
 
       return (
-        `${title("T2V")}\n` +
         `<b>Generation aborted.</b>\n` +
         `<b><i>No job was submitted.</i></b>`
       );
@@ -760,8 +750,6 @@ export class TelegramT2VService {
         });
 
       return (
-        `${title("T2V")}\n` +
-
         `<b>ID</b> · ` +
         `<code>${escapeHtml(
           job.id
@@ -799,14 +787,12 @@ export class TelegramT2VService {
         );
 
       return (
-        `${title("T2V")}\n` +
         `<b>Generation aborted after 3 invalid responses.</b>\n` +
         `<b><i>No job was submitted.</i></b>`
       );
     }
 
     return (
-      `${title("T2V")}\n` +
       `<b>Invalid response!</b>\n` +
 
       `<b><i>Type</i></b> ` +

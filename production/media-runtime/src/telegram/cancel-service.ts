@@ -73,10 +73,7 @@ export class TelegramCancelService {
   ) {}
 
   private noPendingHtml() {
-    return (
-      `${title("CANCEL")}\n` +
-      `<b><i>No cancellation is pending.</i></b>`
-    );
+    return `<b><i>No cancellation is pending.</i></b>`;
   }
 
   private jobHeader(
@@ -211,7 +208,6 @@ export class TelegramCancelService {
       "invalid"
     ) {
       return (
-        `${title("CANCEL")}\n` +
         `<b>Usage</b> · ` +
         `<code>/cancel &lt;id&gt;</code>`
       );
@@ -221,10 +217,7 @@ export class TelegramCancelService {
       resolved.kind ===
       "not_found"
     ) {
-      return (
-        `${title("CANCEL")}\n` +
-        `<b><i>Job not found.</i></b>`
-      );
+      return `<b><i>Job not found.</i></b>`;
     }
 
     if (
@@ -232,7 +225,6 @@ export class TelegramCancelService {
       "ambiguous"
     ) {
       return (
-        `${title("CANCEL")}\n` +
         `<b><i>Prefix is ambiguous.</i></b>\n` +
         `<b><i>Use more characters.</i></b>`
       );
@@ -246,7 +238,6 @@ export class TelegramCancelService {
       "cancelled"
     ) {
       return (
-        `${title("CANCEL")}\n` +
         `${this.jobHeader(job)}\n` +
         `<b><i>Job is already cancelled.</i></b>`
       );
@@ -258,7 +249,6 @@ export class TelegramCancelService {
       )
     ) {
       return (
-        `${title("CANCEL")}\n` +
         `${this.jobHeader(job)}\n` +
         `<b><i>Job is already finished.</i></b>`
       );
@@ -284,10 +274,7 @@ export class TelegramCancelService {
         });
 
     if (!created) {
-      return (
-        `${title("CANCEL")}\n` +
-        `<b><i>Job not found.</i></b>`
-      );
+      return `<b><i>Job not found.</i></b>`;
     }
 
     return (
@@ -345,7 +332,6 @@ export class TelegramCancelService {
       );
 
       return (
-        `${title("CANCEL")}\n` +
         `<b>Cancellation aborted.</b>\n` +
         `<b><i>Job continues running.</i></b>`
       );
@@ -368,10 +354,7 @@ export class TelegramCancelService {
           );
 
       if (!result) {
-        return (
-          `${title("CANCEL")}\n` +
-          `<b><i>Job not found.</i></b>`
-        );
+        return `<b><i>Job not found.</i></b>`;
       }
 
       const current =
@@ -384,7 +367,7 @@ export class TelegramCancelService {
         current
       ) {
         return (
-          `${title("CANCELLED")}\n` +
+          `<b><i>Cancelled.</i></b>\n` +
           `${this.jobHeader(
             current
           )}`
@@ -397,7 +380,7 @@ export class TelegramCancelService {
         current
       ) {
         return (
-          `${title("CANCELLED")}\n` +
+          `<b><i>Cancelled.</i></b>\n` +
           `${this.jobHeader(
             current
           )}`
@@ -410,7 +393,6 @@ export class TelegramCancelService {
         )
       ) {
         return (
-          `${title("CANCEL")}\n` +
           `<b>Job</b> · ` +
           `<code>${escapeHtml(
             pending.jobId
@@ -426,7 +408,6 @@ export class TelegramCancelService {
       }
 
       return (
-        `${title("CANCEL")}\n` +
         `<b>Job</b> · ` +
         `<code>${escapeHtml(
           pending.jobId
@@ -468,14 +449,12 @@ export class TelegramCancelService {
       );
 
       return (
-        `${title("CANCEL")}\n` +
         `<b>Cancellation aborted after 3 invalid responses.</b>\n` +
         `<b><i>Job continues running.</i></b>`
       );
     }
 
     return (
-      `${title("CANCEL")}\n` +
       `<b>Invalid response!</b>\n` +
       `<b><i>Type</i></b> ` +
       `‘<code>yes</code>’ ` +
