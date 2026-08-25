@@ -26,7 +26,7 @@ T2V is no longer prompt-only. `Christopher Nolan / video.t2v` has a persisted se
 
 Native LTX 2.5 T2V has been benchmarked across controlled 5-second, 8-second and 10-second runs before adding Director/Prompt Relay controls. The current research result is to use focused native LTX first for shots inside its proven comfort zone and escalate to stronger Production controls only when timing, shot responsibility, state changes, or structured progression repeatedly fail.
 
-The next Production design phase is a **generation mode/preset layer** above the settings surface. Modes such as fast/quality/auto are not yet defined contracts; they will be calibrated from controlled runtime/quality tests rather than guessed from raw Comfy fields. Existing manual settings remain the underlying source of truth.
+The current Production mode layer is intentionally small: `manual`, `fast`, and `quality`. A mode overlays only proven execution settings and never rewrites the stored manual settings. There is no `auto` mode.
 
 The current generation research direction is **open/self-hosted first**. Runway is not part of the active Production plan. Seedance 2.0 is being used as a behavioral/quality reference rather than an active dependency.
 
