@@ -2,9 +2,9 @@
 
 ## Current phase
 
-**Preparation / foundation, with a validated Production execution slice, a narrow Telegram operator surface, a proven native LTX 2.5 T2V input/output loop, and a controlled native T2V quality baseline.**
+**Preparation / foundation, with a validated Production execution slice, a narrow Telegram operator surface, a proven native LTX 2.5 T2V input/output loop, a controlled native T2V quality baseline, and a persisted semantic T2V settings/reset layer.**
 
-The high-level Helix system division is established. Production execution is hardened enough to pause as a stable checkpoint while generation research continues independently and the project returns to the main Helix brain path.
+The high-level Helix system division is established. Production execution is hardened enough to operate as a stable checkpoint while generation research continues independently and the project advances the main Helix brain path.
 
 ## Primary system direction
 
@@ -39,6 +39,7 @@ helix-runtime :8787
     ├── TelegramAlertService
     ├── TelegramCancelService
     ├── TelegramT2VService
+    ├── T2V settings + reset services
     ├── OutboxRepository
     ↓
 ComfyAdapter / ComfyClient
@@ -86,11 +87,13 @@ The VPS-side runtime supports:
 - read-only pinned-Comfy revision comparison against upstream `master`;
 - durable operator alerts and debug views;
 - confirmed job cancellation;
-- durable T2V prompt capture and pre-submit confirmation.
+- durable T2V prompt capture and pre-submit confirmation;
+- persisted T2V Core/Advanced settings;
+- durable T2V Core/full reset confirmation.
 
 ## Telegram operator checkpoint
 
-Current advertised commands:
+Current advertised commands remain:
 
 ```text
 /status      diagnostics
@@ -121,30 +124,6 @@ Hidden aliases:
 
 The service accepts messages only from the configured Telegram chat ID. It does not expose restart, shell, package update, or arbitrary worker mutation actions.
 
-### Read-only inspection
-
-`/jobs` shows full durable job IDs. `/job` and `/events` accept full IDs or unique short prefixes and reject ambiguous prefixes.
-
-`/outbox` is presentation-only. It reads `media_deliveries` without claiming, retrying, resetting, or mutating delivery state. `DeliveryWorker` remains responsible for delivery execution.
-
-`/errors` shows the five most recent failed/timed-out generation jobs and terminal Outbox failures. Cancelled jobs are excluded.
-
-`/events <id>` shows the complete durable `media_job_events` timeline, newest first, with sequence numbers, Helix-local timestamps, and actual technical event names.
-
-### Operational alerts
-
-`TelegramAlertService` proactively sends alerts for:
-
-```text
-job.failed
-job.timed_out
-terminal delivery.failed
-worker offline
-worker recovered
-```
-
-Event-derived alerts are persisted in `operator_alerts`, deduplicated by durable keys, and delivered with bounded retry. Worker liveness alerts require consecutive observations and a cooldown.
-
 ### Safe cancellation
 
 `/cancel <id>` and hidden alias `/cc` use durable terminal-style confirmation:
@@ -170,7 +149,7 @@ Three invalid responses abort the request, a new slash command abandons pending 
   ↓
 awaiting_prompt
   ↓
-prompt preview
+prompt preview + resolved settings snapshot
   ↓
 awaiting_confirmation
   ↓ yes
@@ -179,41 +158,77 @@ video.t2v
 
 Pending T2V state is durable in `operator_pending_t2v`. The prompt window is five minutes and the confirmation window is 60 seconds. Three invalid confirmation responses abort. A new slash command abandons the pending T2V action. No media job exists until `yes` is confirmed.
 
-The current native LTX 2.5 T2V semantic surface is deliberately prompt-only. Helix mutates `405:376.inputs.value` and verifies that prompt enhancement at `405:383` remains disabled. The deployed runtime baseline remains fixed at 16:9 / 0.9 MP / 24 fps / 5 seconds until the T2V settings contract is explicitly designed. Experimental quality research has separately established 8 seconds as the strongest current general-purpose native test duration for richer single-shot scenes.
+The confirmed settings snapshot is used for submission so a later profile change cannot silently alter a generation that was already previewed.
 
-Worker state no longer treats a transient Comfy WebSocket-events timeout as execution failure by itself. Runtime, queue and capability checks determine execution readiness; event-socket failure remains visible as an advisory diagnostic.
+## T2V settings checkpoint
 
-## Proven Production runs
-
-Runtime-controlled LTX 2.5 I2V generation remains proven, including:
+The stable semantic T2V settings surface is now implemented for the Production profile/tool pair:
 
 ```text
-Helix job:    job_e2a4a9efff7a47b8b70cd41c068073ac
-Result:       succeeded
-Artifact:     video/LTX-2.5_i2v_00005_.mp4
+Christopher Nolan
+└── video.t2v
 ```
 
-The first native T2V production loop is also proven:
+Core authority:
 
 ```text
-Helix job:    job_b270eea4177746d881c0c96d0f2f4b35
-Tool:         video.t2v
-Result:       succeeded
-Runtime:      4m 10s
-Artifact:     video/LTX_2.5_t2v_00001_.mp4
-Video:        1280x704 · 5.0s
-Audio:        present
-Delivery:     Telegram, 1 attempt
-Worker:       Christopher Nolan
+asp   Aspect
+qual  Quality
+time  Duration
+enh   Prompt Enhance
 ```
 
-This proves Telegram intent -> Helix durable job -> native LTX 2.5 generation -> artifact reconciliation -> original-file Telegram delivery.
+Advanced authority requires explicit `-dev`:
 
-The durable pre-submit confirmation layer was added after the successful generation proof so future prompt entry does not immediately spend GPU time.
+```text
+fps    FPS
+seed   Stage 1 seed
+seed2  Stage 2 seed
+neg    Negative prompt
+mp     Megapixel override
+samp   Sampler
+cfg    Guidance
+```
+
+`-dev` is a superset authority and can also inspect/change Core controls. There is no persistent Dev toggle.
+
+Exact default/test baseline:
+
+```text
+Aspect       16:9
+Quality      Standard -> 0.9 MP effective
+Duration     5 s
+Enhance      OFF
+FPS          24
+Stage1 seed  558811532553686
+Stage2 seed  42
+Negative     pc game, console game, video game, cartoon, childish, ugly
+MP override  none / quality-derived
+Sampler      euler_ancestral
+Guidance     1.0
+```
+
+The baseline produces `1280x704` on the current workflow because resolution is derived from aspect + megapixels and snapped to the workflow's internal multiple-of-32 requirement.
+
+Migration `0007_t2v_profile_settings.sql` persists the profile settings. The workflow binder maps only the proven semantic controls into the vetted T2V graph; model files, sigmas, decoder tiling, bit depth and other template plumbing remain outside the user-facing settings contract.
+
+### Reset
+
+```text
+/t2v reset
+→ reset Core only
+
+/t2v reset -dev
+→ reset the full exposed T2V profile
+```
+
+Reset requires durable `yes/no` confirmation and shows only values that will actually change. The full reset includes the default negative prompt, both seeds, sampler and guidance, but does not rewrite workflow/template internals.
+
+Migration `0008_t2v_reset_confirmations.sql` persists reset intent/snapshots so a runtime restart does not create ambiguous state during the confirmation window.
 
 ## Native LTX 2.5 T2V research checkpoint
 
-A controlled native T2V benchmark has now been run across 5-second, 8-second and 10-second durations before adding Director or Prompt Relay.
+A controlled native T2V benchmark has been run across 5-second, 8-second and 10-second durations before adding Director or Prompt Relay.
 
 Validated native outputs:
 
@@ -224,64 +239,87 @@ Validated native outputs:
 native output: 1280x704
 ```
 
-The key findings are:
+Key findings:
 
 - native LTX already performs meaningful semantic temporal allocation, camera/action planning, native hard cuts and joint AV generation;
 - continuous vehicle/camera shots, motorcycle POV, focused human acting and performance/music scenes are strong native territory;
 - exact collision geometry, strict multi-object physical causality, exact reflection geometry, dense low-level sub-action tracking and guaranteed final-state completion remain unreliable;
-- 8 seconds currently gives the best balance for richer native single-shot research; 5 seconds remains useful for compact/high-motion ideas and 10 seconds should be used only when the scene genuinely contains enough evolving action;
+- 8 seconds currently gives the best balance for richer native single-shot research; 5 seconds remains useful for compact/high-motion ideas and is the exact default/test baseline;
+- 10 seconds should be used only when the scene genuinely contains enough evolving action;
 - longer duration can produce temporal dilation rather than more completed events;
 - natural overlapping causal language often produces better acting than rigid `ONLY AFTER X -> Y` sequencing;
 - explicit visual post-state wording can improve persistence, but clause-by-clause adherence and finished-video quality must be scored separately;
-- subtle ambience is less reliable than dominant sound sources such as engines, voice/music, or discrete impacts;
+- subtle ambience is less reliable than dominant sound sources;
 - a hard cut is not enough: multishot prompts work better when each shot has a distinct narrative/job function.
 
-The strongest quality-oriented native 8-second batch included:
+Full findings and prompt/control policy are recorded in `production/ltx-director/NATIVE_T2V.md`.
 
-```text
-sports-car coastal tracking -> strongest complete native result
-singer performance           -> strong audiovisual/performance result
-cafe acting/dialogue         -> excellent visual acting, weak subtle ambience
-motorcycle mountain POV      -> credible continuous T2V vehicle world
-train-station multishot      -> good visual edit, weak audio
-```
-
-Full findings and current prompt/control policy are recorded in `production/ltx-director/NATIVE_T2V.md`.
-
-One operational evaluation rule is now explicit: benchmark the native Comfy artifact, not a transformed preview. Earlier Telegram-delivered copies were observed with changed resolution/frame cadence compared with the native files, which is enough to contaminate quality comparison. The intended `sendDocument` original-file path must remain verified end-to-end.
+Model-quality evaluation should use the native Comfy artifact or a verified original-file document path. Transformed preview files can contaminate motion/detail comparison.
 
 ## Production workflow policy
 
-The runtime is intentionally not being expanded into a large semantic workflow API while generation graphs are still changing.
+The runtime now has a narrow semantic settings contract, but it still must not become a raw mirror of the Comfy graph.
 
 ```text
-raw Comfy API workflow
+vetted Comfy API workflow
+        ↓
+semantic profile settings
+        ↓
+optional future generation mode
+        ↓
+workflow binder
         ↓
 helix-runtime execution
-        ↓
-continue I2V / T2V workflow research in ComfyUI
-        ↓
-choose stable workflow families
-        ↓
-freeze/version those graphs
-        ↓
-add semantic Helix bindings around proven controls
 ```
 
 Native LTX should be tried first for shots within its proven comfort zone. LTX Director/Prompt Relay should be introduced when native prompting repeatedly fails required timing, shot responsibilities, state changes or structured progression rather than being added automatically to every shot.
 
-Still deferred:
+## Next Production phases
 
-- actual image upload/staging through `/upload/image`;
-- broad prompt/chunk-prompt bindings;
-- Prompt Relay/Director bindings;
-- broader T2V settings beyond the fixed prompt-only runtime baseline;
-- sampler/model tuning as stable user-facing semantics;
-- persistent WebSocket execution tracking;
-- worker output-retention deletion infrastructure;
-- broader Telegram mutation commands.
+### 1. Generation mode contract
 
-One operational validation remains pending: the Windows scheduled task has been started successfully by hand, but a real reboot -> automatic ComfyUI worker startup has not yet been proven.
+Design a named mode/preset layer above the existing settings profile. There is no mode system today.
+
+Candidate labels such as `fast`, `quality`, `baseline/default` and `auto` are not yet locked. Define first:
+
+- mode persistence vs per-generation selection;
+- which settings a mode controls;
+- override precedence between a mode and explicit settings;
+- confirmation/reset behavior;
+- versioning for experiment reproducibility.
+
+Manual/custom settings must remain available.
+
+### 2. Controlled mode calibration
+
+Benchmark candidate bundles with fixed prompts/seeds and native artifacts. Measure runtime, finished-video quality, motion/coherence, prompt adherence, audio behavior and action completion.
+
+Do not assume `8 s = quality` or `5 s = fast`; the existing duration findings are evidence about temporal behavior, not a finished mode definition.
+
+### 3. Explicit named modes
+
+Keep only modes that prove a repeatable production tradeoff. Avoid creating many cosmetic presets.
+
+### 4. Auto resolver
+
+`auto` should resolve semantic scene requirements to a proven mode/settings bundle. Start deterministic. Later an AI semantic adapter may assist, but it should not directly mutate workflow node plumbing.
+
+### 5. Prompt Enhance ON/OFF evaluation
+
+Run controlled A/B tests after the settings/mode foundation is stable. Preserve the raw prompt and resolved settings for comparison.
+
+### 6. Targeted Director / Prompt Relay retest
+
+Test stronger control only against native failure classes that remain important: strict beat timing, persistent state change, shot responsibility, structured multi-shot progression and similar requirements.
+
+### 7. Production contract freeze
+
+When native T2V, modes and targeted control layers are understood:
+
+- freeze/version the stable workflow family;
+- document semantic bindings/defaults;
+- expose the same Production contract to Telegram, n8n and later Helix Director callers;
+- keep node IDs/backend details behind the Production binder/adapter.
 
 ## Preparation checklist
 
@@ -301,7 +339,9 @@ One operational validation remains pending: the Windows scheduled task has been 
 - [x] Validate a simple native LTX 2.5 T2V workflow and Telegram production loop.
 - [x] Add durable T2V pre-submit confirmation.
 - [x] Establish native 5/8/10-second T2V quality findings before Director/Prompt Relay retesting.
-- [ ] Design the stable T2V settings contract using the native findings.
+- [x] Implement the stable Core/Advanced T2V settings contract.
+- [x] Implement durable Core/full T2V reset confirmation.
+- [ ] Design and benchmark generation modes/presets.
 - [ ] Run controlled Prompt Enhance ON/OFF evaluation.
 - [ ] Re-test LTX Director / Prompt Relay only against native limitations that need stronger control.
 - [ ] Validate real Windows reboot/AtStartup behavior for the ComfyUI worker.
@@ -310,7 +350,7 @@ One operational validation remains pending: the Windows scheduled task has been 
 
 **Niche Intelligence design.**
 
-The next phase should define:
+The Production work above remains a parallel execution/research track. The brain phase should define:
 
 1. what exactly a `Niche` means in Helix;
 2. which platform observations enter the Intelligence system;
