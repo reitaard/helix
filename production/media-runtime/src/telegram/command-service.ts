@@ -23,6 +23,10 @@ import {
 } from "./cancel-service.js";
 
 import {
+  renderJobGeneration
+} from "./job-generation-presentation.js";
+
+import {
   TelegramT2VService
 } from "./t2v-service.js";
 
@@ -1165,6 +1169,18 @@ export class TelegramCommandService {
         )
       }</i>`
     ];
+
+    const generation =
+      renderJobGeneration(
+        job.request
+      );
+
+    if (generation) {
+      lines.push(
+        "",
+        generation
+      );
+    }
 
     lines.push(
       "",
