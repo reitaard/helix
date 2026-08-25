@@ -279,7 +279,6 @@ export class TelegramT2VSettingsService {
 
   private workerBlock() {
     return (
-      `<b>Worker</b> <b>&gt;</b> ` +
       `<b>${escapeHtml(
         this.workerName
       )}</b>\n` +

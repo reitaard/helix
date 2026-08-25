@@ -39,7 +39,6 @@ export class TelegramT2VModeService {
 
   private workerBlock() {
     return (
-      `<b>Worker</b> <b>&gt;</b> ` +
       `<b>${escapeHtml(
         this.workerName
       )}</b>\n` +

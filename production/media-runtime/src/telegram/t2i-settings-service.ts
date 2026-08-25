@@ -43,7 +43,7 @@ export class TelegramT2ISettingsService {
 
   private workerBlock() {
     return (
-      `<b>Worker</b> <b>&gt;</b> <b>${escapeHtml(this.workerName)}</b>\n` +
+      `<b>${escapeHtml(this.workerName)}</b>\n` +
       `└ <b><i>${T2I_TOOL}</i></b>`
     );
   }

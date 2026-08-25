@@ -310,7 +310,7 @@ export class TelegramT2VResetService {
 
     return (
       `${pageTitle(dev)}\n` +
-      `<b>Worker</b> <b>&gt;</b> <b>${escapeHtml(
+      `<b>${escapeHtml(
         this.workerName
       )}</b>\n` +
       `└ <b><i>${escapeHtml(
