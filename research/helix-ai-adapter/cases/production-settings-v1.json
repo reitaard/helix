@@ -1,0 +1,442 @@
+{
+  "version": "production-settings-v1",
+  "contractCommit": "128671c",
+  "defaultCurrentSettings": {
+    "aspect": "16:9",
+    "quality": "standard",
+    "durationSeconds": 5,
+    "enhance": false
+  },
+  "cases": [
+    {
+      "id": "direct-001",
+      "category": "direct",
+      "text": "Set the aspect ratio to 9:16.",
+      "expected": {"status":"ok","changes":{"aspect":"9:16"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "direct-002",
+      "category": "direct",
+      "text": "Use 1:1.",
+      "expected": {"status":"ok","changes":{"aspect":"1:1"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "direct-003",
+      "category": "direct",
+      "text": "Make the aspect 21:9.",
+      "expected": {"status":"ok","changes":{"aspect":"21:9"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "direct-004",
+      "category": "direct",
+      "text": "Set quality to low.",
+      "expected": {"status":"ok","changes":{"quality":"low"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "direct-005",
+      "category": "direct",
+      "text": "Use standard quality.",
+      "expected": {"status":"ok","changes":{"quality":"standard"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "direct-006",
+      "category": "direct",
+      "text": "Set quality to high.",
+      "expected": {"status":"ok","changes":{"quality":"high"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "direct-007",
+      "category": "direct",
+      "text": "Make it 8 seconds.",
+      "expected": {"status":"ok","changes":{"durationSeconds":8},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "direct-008",
+      "category": "direct",
+      "text": "Duration: 10 seconds.",
+      "expected": {"status":"ok","changes":{"durationSeconds":10},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "direct-009",
+      "category": "direct",
+      "text": "Turn prompt enhancement on.",
+      "expected": {"status":"ok","changes":{"enhance":true},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "direct-010",
+      "category": "direct",
+      "text": "Set prompt enhancement to off.",
+      "expected": {"status":"ok","changes":{"enhance":false},"conflictFields":[],"unhandledMeaning":false}
+    },
+
+    {
+      "id": "natural-001",
+      "category": "natural",
+      "text": "Make this one vertical.",
+      "expected": {"status":"ok","changes":{"aspect":"9:16"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "natural-002",
+      "category": "natural",
+      "text": "Use portrait video format.",
+      "expected": {"status":"ok","changes":{"aspect":"9:16"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "natural-003",
+      "category": "natural",
+      "text": "Keep it landscape widescreen.",
+      "expected": {"status":"ok","changes":{"aspect":"16:9"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "natural-004",
+      "category": "natural",
+      "text": "I want a square video.",
+      "expected": {"status":"ok","changes":{"aspect":"1:1"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "natural-005",
+      "category": "natural",
+      "text": "Make it ultrawide.",
+      "expected": {"status":"ok","changes":{"aspect":"21:9"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "natural-006",
+      "category": "natural",
+      "text": "Use the best quality preset.",
+      "expected": {"status":"ok","changes":{"quality":"high"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "natural-007",
+      "category": "natural",
+      "text": "Normal quality is fine.",
+      "expected": {"status":"ok","changes":{"quality":"standard"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "natural-008",
+      "category": "natural",
+      "text": "Use the lowest quality preset for this test.",
+      "expected": {"status":"ok","changes":{"quality":"low"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "natural-009",
+      "category": "natural",
+      "text": "You may improve the prompt before generation.",
+      "expected": {"status":"ok","changes":{"enhance":true},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "natural-010",
+      "category": "natural",
+      "text": "Leave my prompt exactly as written.",
+      "expected": {"status":"ok","changes":{"enhance":false},"conflictFields":[],"unhandledMeaning":false}
+    },
+
+    {
+      "id": "multi-001",
+      "category": "multi",
+      "text": "Vertical, 10 seconds, high quality, and do not enhance my prompt.",
+      "expected": {"status":"ok","changes":{"aspect":"9:16","quality":"high","durationSeconds":10,"enhance":false},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "multi-002",
+      "category": "multi",
+      "text": "Use 16:9 for 8 seconds with standard quality and enhancement on.",
+      "expected": {"status":"ok","changes":{"aspect":"16:9","quality":"standard","durationSeconds":8,"enhance":true},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "multi-003",
+      "category": "multi",
+      "text": "Square, five seconds, low quality.",
+      "expected": {"status":"ok","changes":{"aspect":"1:1","quality":"low","durationSeconds":5},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "multi-004",
+      "category": "multi",
+      "text": "Make a 3:4 video lasting 7 seconds and enhance the prompt.",
+      "expected": {"status":"ok","changes":{"aspect":"3:4","durationSeconds":7,"enhance":true},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "multi-005",
+      "category": "multi",
+      "text": "Highest quality, ultrawide, and six seconds.",
+      "expected": {"status":"ok","changes":{"aspect":"21:9","quality":"high","durationSeconds":6},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "multi-006",
+      "category": "multi",
+      "text": "Keep the prompt untouched; switch the video to portrait and make it 9 seconds.",
+      "expected": {"status":"ok","changes":{"aspect":"9:16","durationSeconds":9,"enhance":false},"conflictFields":[],"unhandledMeaning":false}
+    },
+
+    {
+      "id": "correction-001",
+      "category": "correction",
+      "text": "Make it 8 seconds—actually use 10 seconds.",
+      "expected": {"status":"ok","changes":{"durationSeconds":10},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "correction-002",
+      "category": "correction",
+      "text": "Use landscape; no, make it vertical instead.",
+      "expected": {"status":"ok","changes":{"aspect":"9:16"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "correction-003",
+      "category": "correction",
+      "text": "High quality—correction, standard quality is enough.",
+      "expected": {"status":"ok","changes":{"quality":"standard"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "correction-004",
+      "category": "correction",
+      "text": "Enhance the prompt. Actually, leave it unchanged.",
+      "expected": {"status":"ok","changes":{"enhance":false},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "correction-005",
+      "category": "correction",
+      "text": "Use 1:1 and 6 seconds—wait, keep 1:1 but make it 7 seconds.",
+      "expected": {"status":"ok","changes":{"aspect":"1:1","durationSeconds":7},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "correction-006",
+      "category": "correction",
+      "text": "Portrait at low quality; instead use portrait at high quality.",
+      "expected": {"status":"ok","changes":{"aspect":"9:16","quality":"high"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "correction-007",
+      "category": "correction",
+      "text": "Ten seconds with enhancement on—no, enhancement off, duration stays ten.",
+      "expected": {"status":"ok","changes":{"durationSeconds":10,"enhance":false},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "correction-008",
+      "category": "correction",
+      "text": "Make it 9:16. Scratch that and use 16:9.",
+      "expected": {"status":"ok","changes":{"aspect":"16:9"},"conflictFields":[],"unhandledMeaning":false}
+    },
+
+    {
+      "id": "negation-001",
+      "category": "negation",
+      "text": "Do not enhance the prompt.",
+      "expected": {"status":"ok","changes":{"enhance":false},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "negation-002",
+      "category": "negation",
+      "text": "Don't rewrite or improve what I wrote.",
+      "expected": {"status":"ok","changes":{"enhance":false},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "negation-003",
+      "category": "negation",
+      "text": "Use high quality, but don't turn enhancement on.",
+      "expected": {"status":"ok","changes":{"quality":"high","enhance":false},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "negation-004",
+      "category": "negation",
+      "text": "Not vertical—use widescreen.",
+      "expected": {"status":"ok","changes":{"aspect":"16:9"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "negation-005",
+      "category": "negation",
+      "text": "Do not use low quality; use standard.",
+      "expected": {"status":"ok","changes":{"quality":"standard"},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "negation-006",
+      "category": "negation",
+      "text": "Don't make it ten seconds. Set it to eight.",
+      "expected": {"status":"ok","changes":{"durationSeconds":8},"conflictFields":[],"unhandledMeaning":false}
+    },
+
+    {
+      "id": "relative-001",
+      "category": "relative",
+      "text": "Make it two seconds longer.",
+      "expected": {"status":"ok","changes":{"durationSeconds":7},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "relative-002",
+      "category": "relative",
+      "text": "Reduce the current duration by one second.",
+      "expected": {"status":"ok","changes":{"durationSeconds":4},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "relative-003",
+      "category": "relative",
+      "currentSettings": {"aspect":"9:16","quality":"low","durationSeconds":8,"enhance":true},
+      "text": "Make it one second longer and leave everything else alone.",
+      "expected": {"status":"ok","changes":{"durationSeconds":9},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "relative-004",
+      "category": "relative",
+      "currentSettings": {"aspect":"16:9","quality":"standard","durationSeconds":10,"enhance":false},
+      "text": "Make it one second longer.",
+      "expected": {"status":"unsupported","changes":{},"conflictFields":[],"unhandledMeaning":true}
+    },
+    {
+      "id": "relative-005",
+      "category": "relative",
+      "text": "Make it a little longer.",
+      "expected": {"status":"unsupported","changes":{},"conflictFields":[],"unhandledMeaning":true}
+    },
+    {
+      "id": "relative-006",
+      "category": "relative",
+      "text": "Keep the current aspect and enhancement, only switch to high quality.",
+      "expected": {"status":"ok","changes":{"quality":"high"},"conflictFields":[],"unhandledMeaning":false}
+    },
+
+    {
+      "id": "conflict-001",
+      "category": "conflict",
+      "text": "Make it vertical and widescreen.",
+      "expected": {"status":"conflict","changes":{},"conflictFields":["aspect"],"unhandledMeaning":false}
+    },
+    {
+      "id": "conflict-002",
+      "category": "conflict",
+      "text": "Use 5 seconds and 10 seconds.",
+      "expected": {"status":"conflict","changes":{},"conflictFields":["durationSeconds"],"unhandledMeaning":false}
+    },
+    {
+      "id": "conflict-003",
+      "category": "conflict",
+      "text": "Turn enhancement on and keep prompt enhancement off.",
+      "expected": {"status":"conflict","changes":{},"conflictFields":["enhance"],"unhandledMeaning":false}
+    },
+    {
+      "id": "conflict-004",
+      "category": "conflict",
+      "text": "Use both low and high quality.",
+      "expected": {"status":"conflict","changes":{},"conflictFields":["quality"],"unhandledMeaning":false}
+    },
+    {
+      "id": "conflict-005",
+      "category": "conflict",
+      "text": "Vertical and landscape, 8 seconds.",
+      "expected": {"status":"conflict","changes":{"durationSeconds":8},"conflictFields":["aspect"],"unhandledMeaning":false}
+    },
+    {
+      "id": "conflict-006",
+      "category": "conflict",
+      "text": "Use high quality and low quality, but definitely make it 9:16.",
+      "expected": {"status":"conflict","changes":{"aspect":"9:16"},"conflictFields":["quality"],"unhandledMeaning":false}
+    },
+
+    {
+      "id": "unsupported-001",
+      "category": "unsupported",
+      "text": "Make it 12 seconds.",
+      "expected": {"status":"unsupported","changes":{},"conflictFields":[],"unhandledMeaning":true}
+    },
+    {
+      "id": "unsupported-002",
+      "category": "unsupported",
+      "text": "Render this at 60 FPS.",
+      "expected": {"status":"unsupported","changes":{},"conflictFields":[],"unhandledMeaning":true}
+    },
+    {
+      "id": "unsupported-003",
+      "category": "unsupported",
+      "text": "Set CFG to 7.5.",
+      "expected": {"status":"unsupported","changes":{},"conflictFields":[],"unhandledMeaning":true}
+    },
+    {
+      "id": "unsupported-004",
+      "category": "unsupported",
+      "text": "Use seed 42 and the euler sampler.",
+      "expected": {"status":"unsupported","changes":{},"conflictFields":[],"unhandledMeaning":true}
+    },
+    {
+      "id": "unsupported-005",
+      "category": "unsupported",
+      "text": "Make it vertical and render at 60 FPS.",
+      "expected": {"status":"unsupported","changes":{"aspect":"9:16"},"conflictFields":[],"unhandledMeaning":true}
+    },
+    {
+      "id": "unsupported-006",
+      "category": "unsupported",
+      "text": "Set quality high and use a custom 1.7 megapixels.",
+      "expected": {"status":"unsupported","changes":{"quality":"high"},"conflictFields":[],"unhandledMeaning":true}
+    },
+    {
+      "id": "unsupported-007",
+      "category": "unsupported",
+      "text": "Make the camera orbit faster.",
+      "expected": {"status":"unsupported","changes":{},"conflictFields":[],"unhandledMeaning":true}
+    },
+    {
+      "id": "unsupported-008",
+      "category": "unsupported",
+      "text": "Use 4K resolution.",
+      "expected": {"status":"unsupported","changes":{},"conflictFields":[],"unhandledMeaning":true}
+    },
+
+    {
+      "id": "no-settings-001",
+      "category": "no_settings",
+      "text": "A red paper airplane floats through a dark futuristic library.",
+      "expected": {"status":"no_settings","changes":{},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "no-settings-002",
+      "category": "no_settings",
+      "text": "Cinematic portrait of a singer under warm stage lights.",
+      "expected": {"status":"no_settings","changes":{},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "no-settings-003",
+      "category": "no_settings",
+      "text": "The camera moves fast beside a motorcycle on a mountain road.",
+      "expected": {"status":"no_settings","changes":{},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "no-settings-004",
+      "category": "no_settings",
+      "text": "A tall portrait-format billboard appears in the background.",
+      "expected": {"status":"no_settings","changes":{},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "no-settings-005",
+      "category": "no_settings",
+      "text": "The actor whispers, then waits ten seconds before opening the door.",
+      "expected": {"status":"no_settings","changes":{},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "no-settings-006",
+      "category": "no_settings",
+      "text": "Use high-quality cinematic lighting and realistic skin detail.",
+      "expected": {"status":"no_settings","changes":{},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "no-settings-007",
+      "category": "no_settings",
+      "text": "The character turns left, not right, and looks at the window.",
+      "expected": {"status":"no_settings","changes":{},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "no-settings-008",
+      "category": "no_settings",
+      "text": "A widescreen television flickers inside the room.",
+      "expected": {"status":"no_settings","changes":{},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "no-settings-009",
+      "category": "no_settings",
+      "text": "Improve the emotional tension as the train approaches.",
+      "expected": {"status":"no_settings","changes":{},"conflictFields":[],"unhandledMeaning":false}
+    },
+    {
+      "id": "no-settings-010",
+      "category": "no_settings",
+      "text": "A square table sits in the center of the standard office.",
+      "expected": {"status":"no_settings","changes":{},"conflictFields":[],"unhandledMeaning":false}
+    }
+  ]
+}
