@@ -149,11 +149,23 @@ export class ComfyClient {
     );
   }
 
-  history() {
+  history(
+    maxItems = 20
+  ) {
+    const safeMaxItems =
+      Math.max(
+        1,
+        Math.min(
+          100,
+          Math.floor(maxItems)
+        )
+      );
+
     return this.getJson<
       ComfyHistory
     >(
-      "/history"
+      `/history?max_items=${safeMaxItems}`,
+      10000
     );
   }
 
