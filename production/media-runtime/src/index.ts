@@ -59,12 +59,28 @@ import {
 } from "./repositories/t2v-settings-repository.js";
 
 import {
+  T2IPendingRepository
+} from "./repositories/t2i-pending-repository.js";
+
+import {
+  T2IResetPendingRepository
+} from "./repositories/t2i-reset-pending-repository.js";
+
+import {
+  T2ISettingsRepository
+} from "./repositories/t2i-settings-repository.js";
+
+import {
   T2VModeService
 } from "./t2v/mode-service.js";
 
 import {
   T2VProfileService
 } from "./t2v/profile-service.js";
+
+import {
+  T2IProfileService
+} from "./t2i/profile-service.js";
 
 import {
   DeliveryWorker
@@ -89,6 +105,18 @@ import {
 import {
   TelegramT2VService
 } from "./telegram/t2v-service.js";
+
+import {
+  TelegramT2IService
+} from "./telegram/t2i-service.js";
+
+import {
+  TelegramT2ISettingsService
+} from "./telegram/t2i-settings-service.js";
+
+import {
+  TelegramT2IResetService
+} from "./telegram/t2i-reset-service.js";
 
 import {
   TelegramT2VModeService
@@ -161,6 +189,11 @@ const nolanProfile =
     profile => profile.id === "nolan"
   ) ?? null;
 
+const leibovitzProfile =
+  physicalWorker?.productionProfiles.find(
+    profile => profile.id === "leibovitz"
+  ) ?? null;
+
 const jobRepository =
   new JobRepository(db);
 
@@ -188,6 +221,15 @@ const t2vPendingRepository =
     db
   );
 
+const t2iPendingRepository =
+  new T2IPendingRepository(db);
+
+const t2iResetPendingRepository =
+  new T2IResetPendingRepository(db);
+
+const t2iSettingsRepository =
+  new T2ISettingsRepository(db);
+
 const t2vResetPendingRepository =
   new T2VResetPendingRepository(
     db
@@ -208,6 +250,29 @@ const t2vProfileService =
     ? new T2VProfileService(
         t2vSettingsRepository,
         physicalWorker.endpoint
+      )
+    : null;
+
+const t2iProfileService =
+  leibovitzProfile
+    ? new T2IProfileService(t2iSettingsRepository)
+    : null;
+
+const telegramT2ISettingsService =
+  t2iProfileService && leibovitzProfile
+    ? new TelegramT2ISettingsService(
+        t2iProfileService,
+        leibovitzProfile.displayName
+      )
+    : null;
+
+const telegramT2IResetService =
+  config.telegram && t2iProfileService
+    ? new TelegramT2IResetService(
+        config.telegram.chatId,
+        t2iProfileService,
+        t2iSettingsRepository,
+        t2iResetPendingRepository
       )
     : null;
 
@@ -244,7 +309,8 @@ const telegramT2VResetService =
 const telegramDebugService =
   new TelegramDebugService(
     jobRepository,
-    eventRepository
+    eventRepository,
+    registry
   );
 
 const jobs =
@@ -287,6 +353,26 @@ const telegramT2VService =
         telegramT2VModeService,
         telegramT2VSettingsService,
         telegramT2VResetService
+      )
+    : null;
+
+const telegramT2IService =
+  config.telegram &&
+  physicalWorker &&
+  leibovitzProfile &&
+  t2iProfileService &&
+  telegramT2ISettingsService &&
+  telegramT2IResetService
+    ? new TelegramT2IService(
+        config.telegram.chatId,
+        physicalWorker.id,
+        leibovitzProfile.displayName,
+        config.t2iWorkflowPath,
+        jobs,
+        t2iPendingRepository,
+        t2iProfileService,
+        telegramT2ISettingsService,
+        telegramT2IResetService
       )
     : null;
 
@@ -341,7 +427,8 @@ const telegramCommandService =
   physicalWorker &&
   comfyUpdateChecker &&
   telegramCancelService &&
-  telegramT2VService
+  telegramT2VService &&
+  telegramT2IService
     ? new TelegramCommandService(
         config.telegram.botToken,
         config.telegram.chatId,
@@ -354,7 +441,8 @@ const telegramCommandService =
         outboxRepository,
         telegramDebugService,
         telegramCancelService,
-        telegramT2VService
+        telegramT2VService,
+        telegramT2IService
       )
     : null;
 
@@ -377,6 +465,7 @@ async function shutdown(
   telegramAlertService?.stop();
   telegramCancelService?.stop();
   telegramT2VService?.stop();
+  telegramT2IService?.stop();
   telegramCommandService?.stop();
 
   await app.close();
@@ -414,6 +503,7 @@ try {
   telegramAlertService?.start();
   telegramCancelService?.start();
   telegramT2VService?.start();
+  telegramT2IService?.start();
   telegramCommandService?.start();
 }
 catch (error) {
@@ -423,6 +513,7 @@ catch (error) {
   deliveryWorker?.stop();
   telegramAlertService?.stop();
   telegramT2VService?.stop();
+  telegramT2IService?.stop();
   telegramCommandService?.stop();
 
   await db.end();

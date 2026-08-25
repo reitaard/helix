@@ -93,7 +93,7 @@ Media jobs:
 - `GET /v1/media/jobs/:jobId`
 - `POST /v1/media/jobs/:jobId/cancel`
 
-`POST /v1/media/jobs` accepts a Comfy API-format workflow and a media tool (`video.i2v` or `video.t2v`) and returns immediately after durable acceptance/submission. Long-running generation is asynchronous.
+`POST /v1/media/jobs` accepts a Comfy API-format workflow and a media tool (`video.i2v`, `video.t2v`, or `image.t2i`) and returns immediately after durable acceptance/submission. Long-running generation is asynchronous.
 
 `GET /v1/media/jobs/:jobId` returns compact job state plus durable delivery rows and does not echo the stored workflow request.
 
@@ -141,7 +141,7 @@ This avoids status flapping while preserving visibility into the event channel. 
 
 `TelegramCommandService` is a narrow operator surface inside `helix-runtime`. It uses Telegram `getUpdates` long polling and accepts messages only from the configured `HELIX_TELEGRAM_CHAT_ID`; other chats are ignored.
 
-Diagnostics and debugging remain read-only. The only write-capable media actions in this checkpoint are explicitly confirmed cancellation and explicitly confirmed native T2V generation.
+Diagnostics and debugging remain read-only. The only write-capable media actions in this checkpoint are explicitly confirmed cancellation, native T2V generation, and the single Distilled-FP8 T2I workflow integration.
 
 Current advertised commands:
 
@@ -499,15 +499,38 @@ nolan      -> Christopher Nolan -> video.t2v, video.i2v -> LTX (validated)
 leibovitz  -> Annie Leibovitz   -> image.t2i            -> FLUX.2 (unvalidated)
 ```
 
-Jobs now persist both `worker_id` and `profile_id`. Existing video jobs are
+Jobs persist both `worker_id` and `profile_id`. Existing video jobs are
 backfilled to `nolan`; callers that omit `profileId` remain compatible when a
-single profile supplies the requested tool. `image.t2i` is accepted only as a
-raw-workflow API capability with normal profile resolution; there is no runtime
-FLUX binder or production validation claim.
+single profile supplies the requested tool.
 
-The `t2i/` domain persists only semantic `aspect` and `seed` defaults for
-`leibovitz/image.t2i`. Durable pending and reset repositories plus Telegram
-presentation services exist as a disabled foundation. `/t2i` is deliberately
-not registered or advertised until a locally validated FLUX API workflow is
-provided. Original artifact delivery remains `sendDocument`; future image
-captions omit video-only duration/audio fields.
+## T2I Distilled FP8 integration
+
+`/t2i` is wired for Annie Leibovitz after migration/deployment. It has exactly
+these settings: `aspect` and `seed`; there are no image modes, model choices,
+or sampler/CFG/step controls.
+
+```text
+/t2i
+/t2i settings        /t2i s
+/t2i set asp <ratio>
+/t2i set seed <random|integer>
+/t2i reset
+```
+
+Set `HELIX_T2I_WORKFLOW_PATH` to the supplied API workflow. Its deployment
+default is:
+
+```text
+/app/workflows/image_flux2_klein_4b_distilled_fp8_t2i_v2.api.json
+```
+
+The runtime reads it only after a confirmed `yes`; compilation does not require
+the file. It validates and mutates only prompt, width, height, and a concrete
+seed. The provisional V1 dimensions are 1024×1024 (1:1), 832×1248 (2:3),
+1248×832 (3:2), 896×1120 (4:5), 1120×896 (5:4), 720×1280 (9:16), and 1280×720
+(16:9). The only initial variant is `klein4b-distilled-fp8-v1`, model identity
+`FLUX.2 Klein 4B Distilled FP8`; Base is reserved for later testing.
+
+Images use the generic artifact/delivery path and Telegram `sendDocument`, not
+`sendPhoto`; captions omit video duration/audio. `image.t2i` remains
+experimental and awaiting the first successful RTX 4060 Telegram smoke test.

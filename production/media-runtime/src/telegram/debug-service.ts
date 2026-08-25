@@ -6,6 +6,10 @@ import {
   JobRepository
 } from "../repositories/job-repository.js";
 
+import type {
+  WorkerRegistry
+} from "../workers/registry.js";
+
 import {
   resolveJobReference
 } from "./job-reference.js";
@@ -23,7 +27,10 @@ export class TelegramDebugService {
       JobRepository,
 
     private readonly events:
-      EventRepository
+      EventRepository,
+
+    private readonly workers:
+      WorkerRegistry
   ) {}
 
   async errorsHtml() {
@@ -56,6 +63,10 @@ export class TelegramDebugService {
             `<b>[${type} · ${escapeHtml(
               item.status
             )}]</b>\n` +
+
+            `<code>${escapeHtml(item.tool)}</code> · <b>${escapeHtml(
+              this.workers.profileDisplayName(item.workerId, item.profileId)
+            )}</b>\n` +
 
             `<blockquote><b><i>${escapeHtml(
               compactError(
@@ -125,6 +136,8 @@ export class TelegramDebugService {
         `<b>Job</b> · <code>${escapeHtml(
           resolved.job.id
         )}</code>\n` +
+        `<b>Tool</b> · <code>${escapeHtml(resolved.job.tool)}</code>\n` +
+        `<b>Worker</b> · <b>${escapeHtml(this.workers.profileDisplayName(resolved.job.workerId, resolved.job.profileId))}</b>\n` +
         `<b><i>No events recorded.</i></b>`
       );
     }
@@ -149,7 +162,8 @@ export class TelegramDebugService {
       `<b>Job</b> · <code>${escapeHtml(
         resolved.job.id
       )}</code>\n` +
-
+      `<b>Tool</b> · <code>${escapeHtml(resolved.job.tool)}</code>\n` +
+      `<b>Worker</b> · <b>${escapeHtml(this.workers.profileDisplayName(resolved.job.workerId, resolved.job.profileId))}</b>\n\n` +
       `<blockquote expandable>${timeline.join(
         "\n"
       )}</blockquote>`

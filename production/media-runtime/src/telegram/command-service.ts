@@ -31,6 +31,10 @@ import {
 } from "./t2v-service.js";
 
 import {
+  TelegramT2IService
+} from "./t2i-service.js";
+
+import {
   WorkerRegistry
 } from "../workers/registry.js";
 
@@ -468,7 +472,10 @@ export class TelegramCommandService {
       TelegramCancelService,
 
     private readonly t2v:
-      TelegramT2VService
+      TelegramT2VService,
+
+    private readonly t2i:
+      TelegramT2IService
   ) {}
 
   private endpoint(
@@ -652,6 +659,8 @@ export class TelegramCommandService {
       `<code>/events &lt;id&gt;</code> <b>-</b> <b>Job events</b>\n` +
       `<code>/t2v</code> <b>-</b> <b>Generate video</b>\n` +
       `<code>/t2v settings</code> <b>-</b> <b>T2V settings</b>\n` +
+      `<code>/t2i</code> <b>-</b> <b>Generate image</b>\n` +
+      `<code>/t2i settings</code> <b>-</b> <b>T2I settings</b>\n` +
       `<code>/cancel &lt;id&gt;</code> <b>-</b> <b>Cancel job</b>`
     );
   }
@@ -920,6 +929,17 @@ export class TelegramCommandService {
       );
     }
 
+    const profiles = this.workers.listProfiles(this.workerId) ?? [];
+    if (profiles.length > 0) {
+      lines.push(
+        "",
+        "<b><i>• Profiles •</i></b>",
+        ...profiles.map(profile =>
+          `<b>${escapeHtml(profile.displayName)}</b> · <i>${profile.capabilities.map(escapeHtml).join(" · ")}</i>`
+        )
+      );
+    }
+
     return (
       `${title("STATUS")}\n` +
       `<blockquote expandable>${
@@ -995,14 +1015,10 @@ export class TelegramCommandService {
                 shortJobId(job.id)
               )
             }</code> · ` +
-            `<b>[${
-              escapeHtml(job.status)
-            }]</b> · ` +
-            `<i>${
-              escapeHtml(
-                ageFrom(since)
-              )
-            }</i>`
+            `<b>[${escapeHtml(job.status)}]</b> · ` +
+            `<code>${escapeHtml(job.tool)}</code>\n` +
+            `<b>${escapeHtml(this.workers.profileDisplayName(job.workerId, job.profileId))}</b> · ` +
+            `<i>${escapeHtml(ageFrom(since))}</i>`
           );
         }
       }
@@ -1042,16 +1058,11 @@ export class TelegramCommandService {
 
           return (
             `<blockquote>` +
-            `<b>ID:</b> ${escapeHtml(
-              job.id
-            )}\n` +
-            `<b><i>Status</i></b> <b>·</b> ` +
-            `<b>[${escapeHtml(
-              job.status
-            )}]</b> <b>in</b> ` +
-            `<i>${escapeHtml(
-              runtime
-            )}</i>` +
+            `<code>${escapeHtml(shortJobId(job.id))}</code> · ` +
+            `<b>[${escapeHtml(job.status)}]</b>\n` +
+            `<code>${escapeHtml(job.tool)}</code> · ` +
+            `<b>${escapeHtml(this.workers.profileDisplayName(job.workerId, job.profileId))}</b> · ` +
+            `<i>${escapeHtml(runtime)}</i>` +
             `</blockquote>`
           );
         }
@@ -1293,6 +1304,11 @@ export class TelegramCommandService {
             item.provider
           );
 
+        const job = await this.jobs.get(item.jobId);
+        const context = job
+          ? `\n<code>${escapeHtml(job.tool)}</code> · <b>${escapeHtml(this.workers.profileDisplayName(job.workerId, job.profileId))}</b>`
+          : "";
+
         let line =
           `<code>${
             escapeHtml(
@@ -1306,7 +1322,7 @@ export class TelegramCommandService {
           }</b> · ` +
           `<b>${
             escapeHtml(item.state)
-          }</b>`;
+          }</b>` + context;
 
         if (item.attemptCount > 0) {
           line +=
@@ -1386,41 +1402,32 @@ export class TelegramCommandService {
 
     try {
       if (!text.startsWith("/")) {
-        if (
-          await this.cancel
-            .hasPending()
-        ) {
-          const response =
-            await this.cancel
-              .handlePlainText(
-                text
-              );
+        const pending = await Promise.all([
+          this.cancel.hasPending(),
+          this.t2v.hasPending(),
+          this.t2i.hasPending()
+        ]);
+        const owners = pending.filter(Boolean).length;
 
-          if (response) {
-            await this.sendHtml(
-              response
-            );
-          }
-
+        if (owners > 1) {
+          await Promise.all([
+            this.cancel.abandonPendingForCommand(),
+            this.t2v.abandonPendingForCommand(),
+            this.t2i.abandonPendingForCommand()
+          ]);
+          await this.sendHtml(
+            `${title("CONFIRM")}\n<b><i>Pending interaction state was ambiguous and has been cleared. Retry the command.</i></b>`
+          );
           return;
         }
 
-        if (
-          await this.t2v
-            .hasPending()
-        ) {
-          const response =
-            await this.t2v
-              .handlePlainText(
-                text
-              );
-
-          if (response) {
-            await this.sendHtml(
-              response
-            );
-          }
-
+        if (owners === 1) {
+          const response = pending[0]
+            ? await this.cancel.handlePlainText(text)
+            : pending[1]
+              ? await this.t2v.handlePlainText(text)
+              : await this.t2i.handlePlainText(text);
+          if (response) await this.sendHtml(response);
           return;
         }
 
@@ -1446,6 +1453,9 @@ export class TelegramCommandService {
         .abandonPendingForCommand();
 
       await this.t2v
+        .abandonPendingForCommand();
+
+      await this.t2i
         .abandonPendingForCommand();
 
       const parts =
@@ -1527,6 +1537,13 @@ export class TelegramCommandService {
               .handleCommand(
                 args
               )
+          );
+          break;
+
+        case "/t2i":
+          await this.sendHtml(
+            await this.t2i
+              .handleCommand(args)
           );
           break;
 

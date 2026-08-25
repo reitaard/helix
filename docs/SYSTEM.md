@@ -130,6 +130,17 @@ Collect observed platform and operational metrics, normalize them into `Performa
 5. develop Production separately and connect it to the brief/variant contract;
 6. then Distribution and full feedback automation.
 
+## Production execution checkpoint
+
+Production currently uses one physical `helix-rtx4060-01` RTX 4060 worker,
+one Comfy endpoint/adapter/queue, and one physical concurrent GPU job. `nolan`
+and `leibovitz` are logical Production Profiles on that worker, not separate
+execution infrastructure. The first image path is the experimental
+`image.t2i` Distilled-FP8 variant; Telegram exposes only semantic aspect and
+seed while the runtime binds the supplied workflow at prompt, dimensions, and
+concrete seed. FLUX validation is earned only by a real successful RTX 4060
+run, not by code integration.
+
 ## Principle
 
 Optimize the learning-and-decision system. Treat media-generation technology as replaceable execution infrastructure.

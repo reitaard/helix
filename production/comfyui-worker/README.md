@@ -379,6 +379,9 @@ One operational validation remains pending: the Windows scheduled task has been 
 to one concurrent GPU job. Helix maps logical profiles onto that same endpoint:
 `nolan` (Christopher Nolan, validated LTX video) and `leibovitz` (Annie
 Leibovitz, future FLUX.2 Klein 4B Distilled image generation). Leibovitz does
-not have a separate GPU, Comfy instance, queue, or validation claim. No FLUX
-workflow binding is installed until a locally exported and benchmarked API
-workflow is supplied.
+not have a separate GPU, Comfy instance, queue, or validation claim. The
+runtime expects the separately supplied Distilled FP8 API workflow at the
+configured `HELIX_T2I_WORKFLOW_PATH` (default
+`/app/workflows/image_flux2_klein_4b_distilled_fp8_t2i_v2.api.json`). The
+operator must install it, apply migration `0010`, deploy, and complete a real
+Telegram T2I generation before this model is considered validated.

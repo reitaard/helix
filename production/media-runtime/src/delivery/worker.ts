@@ -240,15 +240,11 @@ export class DeliveryWorker {
               ? { kind: "image" as const, value: `${resolution} · ${formatBytes(media.sizeBytes)}` }
               : { kind: "video" as const, value: `${resolution} · ${formatDuration(media.durationSeconds)} · ${formatBytes(media.sizeBytes)}`, audio: media.audioPresent ? "Present" : "Absent" };
 
-          const worker =
-            this.workers.get(
-              delivery.workerId
-            );
-
           const workerName =
-            (delivery.profileId
-              ? this.workers.getProfile(delivery.workerId, delivery.profileId)?.displayName
-              : null) ?? worker?.name ?? delivery.workerId;
+            this.workers.profileDisplayName(
+              delivery.workerId,
+              delivery.profileId
+            );
 
           const document =
             await this.telegram

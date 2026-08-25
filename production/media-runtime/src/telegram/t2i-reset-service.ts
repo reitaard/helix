@@ -48,8 +48,12 @@ export class TelegramT2IResetService {
     );
   }
 
+  async expireDue() {
+    return this.pending.expireDue(this.chatId);
+  }
+
   async hasPending() {
-    await this.pending.expireDue(this.chatId);
+    await this.expireDue();
     return (await this.pending.get(this.chatId)) !== null;
   }
 

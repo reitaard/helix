@@ -350,8 +350,11 @@ The intended research direction is platform-first rather than web-search-first: 
 adapter, and queue, with maximum concurrent GPU jobs fixed at one. `nolan`
 (Christopher Nolan) is its validated LTX `video.t2v` / `video.i2v` Production
 Profile. `leibovitz` (Annie Leibovitz) is a second logical Production Profile
-for future `image.t2i`, not a second worker. FLUX.2 Klein 4B Distilled remains
-experimental and unvalidated. The runtime now has profile-aware job identity,
-T2I aspect/seed persistence, and a disabled Telegram-flow foundation; it does
-not advertise `/t2i`, bind a workflow, select dimensions, or claim an image
-run until the vetted local FLUX API workflow is supplied.
+for `image.t2i`, not a second worker. FLUX.2 Klein 4B Distilled FP8 remains
+experimental and unvalidated. The runtime has profile-aware job identity and a
+wired `/t2i` confirmation flow for the separately supplied Distilled API
+workflow. `HELIX_T2I_WORKFLOW_PATH` defaults to
+`/app/workflows/image_flux2_klein_4b_distilled_fp8_t2i_v2.api.json`; migration
+`0010` plus deployment and the first real RTX 4060 Telegram generation remain
+required before validation can be claimed. V1 exposes only aspect/seed and
+binds only prompt, width, height, and concrete seed; Base/modes are deferred.

@@ -20,6 +20,9 @@ export interface JobEventView {
 
 interface ErrorRow {
   job_id: string;
+  tool: string;
+  worker_id: string | null;
+  profile_id: string | null;
 
   kind:
     | "job"
@@ -32,6 +35,9 @@ interface ErrorRow {
 
 export interface RecentErrorView {
   jobId: string;
+  tool: string;
+  workerId: string | null;
+  profileId: string | null;
 
   kind:
     | "job"
@@ -111,6 +117,9 @@ export class EventRepository {
         `
         SELECT
           job_id,
+          tool,
+          worker_id,
+          profile_id,
           kind,
           status,
           message,
@@ -118,6 +127,9 @@ export class EventRepository {
         FROM (
           SELECT
             e.job_id,
+            j.tool,
+            j.worker_id,
+            j.profile_id,
 
             'job'::text
               AS kind,
@@ -161,6 +173,9 @@ export class EventRepository {
 
           SELECT
             e.job_id,
+            j.tool,
+            j.worker_id,
+            j.profile_id,
 
             'outbox'::text
               AS kind,
@@ -180,6 +195,9 @@ export class EventRepository {
               AS occurred_at
 
           FROM media_job_events e
+
+          JOIN media_jobs j
+            ON j.id = e.job_id
 
           WHERE
             e.event_type =
@@ -207,6 +225,10 @@ export class EventRepository {
       row => ({
         jobId:
           row.job_id,
+
+        tool: row.tool,
+        workerId: row.worker_id,
+        profileId: row.profile_id,
 
         kind:
           row.kind,

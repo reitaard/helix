@@ -57,6 +57,13 @@ const envSchema = z.object({
         "/app/workflows/video_ltx2_5_t2v.api.json"
       ),
 
+  HELIX_T2I_WORKFLOW_PATH:
+    z.string()
+      .min(1)
+      .default(
+        "/app/workflows/image_flux2_klein_4b_distilled_fp8_t2i_v2.api.json"
+      ),
+
   HELIX_JOB_TIMEOUT_SECONDS:
     z.coerce
       .number()
@@ -107,6 +114,9 @@ export const config = {
 
   t2vWorkflowPath:
     env.HELIX_T2V_WORKFLOW_PATH,
+
+  t2iWorkflowPath:
+    env.HELIX_T2I_WORKFLOW_PATH,
 
   jobTimeoutMs:
     env.HELIX_JOB_TIMEOUT_SECONDS *

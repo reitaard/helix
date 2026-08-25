@@ -107,11 +107,12 @@ export function renderJobGeneration(
   if (kind === "t2i") {
     const model = readString(generation, "model");
     const aspect = readString(settings, "aspect");
+    const width = readNumber(settings, "width");
+    const height = readNumber(settings, "height");
     const seed = readNumber(settings, "seed");
-    const profileId = readString(generation, "profileId");
     if (model) lines.push(`<b>Model</b> · <b>${escapeHtml(model)}</b>`);
-    if (profileId) lines.push(`<b>Profile</b> · <code>${escapeHtml(profileId)}</code>`);
     if (aspect) lines.push(`<b>Aspect</b> · <b>⦗${escapeHtml(aspect)}⦘</b>`);
+    if (width !== null && height !== null) lines.push(`<b>Image</b> · <b>${width}×${height}</b>`);
     if (seed !== null) lines.push(`<b>Seed</b> · <code>${seed}</code>`);
     return `<blockquote expandable>${lines.join("\n")}</blockquote>`;
   }

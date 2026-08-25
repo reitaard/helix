@@ -68,6 +68,7 @@ export class T2IPendingRepository {
         settings_snapshot = NULL,
         invalid_attempts = 0,
         expires_at = EXCLUDED.expires_at,
+        created_at = NOW(),
         updated_at = NOW()
       `,
       [chatId, expiresAt]
