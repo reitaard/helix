@@ -1170,20 +1170,24 @@ export class TelegramCommandService {
       }</i>`
     ];
 
+    const details =
+      `<blockquote>${
+        lines.join("\n")
+      }</blockquote>`;
+
+    lines.length = 0;
+    lines.push(details);
+
     const generation =
       renderJobGeneration(
         job.request
       );
 
     if (generation) {
-      lines.push(
-        "",
-        generation
-      );
+      lines.push(generation);
     }
 
     lines.push(
-      "",
       "<b><i>[Outbox]</i></b>"
     );
 
