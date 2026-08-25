@@ -20,8 +20,14 @@ const envSchema = z.object({
     z.string()
       .min(1)
       .default(
-        "Christopher Nolan"
+        "Helix RTX 4060"
       ),
+
+  HELIX_NOLAN_DISPLAY_NAME:
+    z.string().min(1).default("Christopher Nolan"),
+
+  HELIX_LEIBOVITZ_DISPLAY_NAME:
+    z.string().min(1).default("Annie Leibovitz"),
 
   HELIX_WORKER_RTX4060_REVISION:
     z.string()
@@ -117,32 +123,30 @@ export const config = {
       revision:
         env.HELIX_WORKER_RTX4060_REVISION,
 
-      profile:
-        "comfy-video-ltx-stable",
-
       adapter:
         "comfy",
 
       endpoint:
         env.HELIX_WORKER_RTX4060_URL,
 
-      capabilities: [
-        "video.i2v",
-        "video.t2v"
-      ],
-
-      modelFamilies: {
-        ltx: {
-          available: [
-            "2.3",
-            "2.5"
-          ],
-
-          validated: [
-            "2.5"
-          ]
+      productionProfiles: [
+        {
+          id: "nolan",
+          displayName: env.HELIX_NOLAN_DISPLAY_NAME,
+          capabilities: ["video.i2v", "video.t2v"],
+          modelFamilies: {
+            ltx: { available: ["2.3", "2.5"], validated: ["2.5"] }
+          }
+        },
+        {
+          id: "leibovitz",
+          displayName: env.HELIX_LEIBOVITZ_DISPLAY_NAME,
+          capabilities: ["image.t2i"],
+          modelFamilies: {
+            flux2: { available: ["Klein 4B Distilled"], validated: [] }
+          }
         }
-      },
+      ],
 
       maxConcurrentGpuJobs: 1
     }

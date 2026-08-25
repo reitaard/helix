@@ -1,0 +1,45 @@
+{
+  "version": "shot-structure-v1",
+  "operation": "interpretShotStructure(text)",
+  "cases": [
+    {"id":"single-001","category":"single_explicit","input":{"text":"One continuous unbroken tracking shot follows the motorcycle along the mountain road."},"expected":{"structure":"single"}},
+    {"id":"single-002","category":"single_explicit","input":{"text":"A single uninterrupted take slowly pushes toward the singer."},"expected":{"structure":"single"}},
+    {"id":"single-003","category":"single_explicit","input":{"text":"No cuts. The camera orbits the car continuously from start to finish."},"expected":{"structure":"single"}},
+    {"id":"single-004","category":"single_explicit","input":{"text":"Keep everything in one continuous shot as she enters the cafe and sits down."},"expected":{"structure":"single"}},
+    {"id":"single-005","category":"single_explicit","input":{"text":"Use one static wide shot for the entire performance."},"expected":{"structure":"single"}},
+    {"id":"single-006","category":"single_explicit","input":{"text":"POV motorcycle ride in an unbroken take, with no edits or transitions."},"expected":{"structure":"single"}},
+    {"id":"single-007","category":"single_explicit","input":{"text":"The camera cranes down and then tracks beside him without cutting."},"expected":{"structure":"single"}},
+    {"id":"single-008","category":"single_explicit","input":{"text":"Maintain a continuous handheld take while the actor crosses all three rooms."},"expected":{"structure":"single"}},
+
+    {"id":"multi-001","category":"multi_explicit","input":{"text":"Shot one shows the arriving train. Hard cut to a close-up of her reaction."},"expected":{"structure":"multi"}},
+    {"id":"multi-002","category":"multi_explicit","input":{"text":"Begin with an aerial establishing shot, then cut to the driver inside the car."},"expected":{"structure":"multi"}},
+    {"id":"multi-003","category":"multi_explicit","input":{"text":"Two shots: first the empty stage, second the singer under a spotlight."},"expected":{"structure":"multi"}},
+    {"id":"multi-004","category":"multi_explicit","input":{"text":"A wide view of the station cuts to a tight insert of the ticket in his hand."},"expected":{"structure":"multi"}},
+    {"id":"multi-005","category":"multi_explicit","input":{"text":"Use a montage of the city waking up: streets, windows, trains, then the cafe."},"expected":{"structure":"multi"}},
+    {"id":"multi-006","category":"multi_explicit","input":{"text":"After the first shot ends, switch to a reverse angle for her reply."},"expected":{"structure":"multi"}},
+    {"id":"multi-007","category":"multi_explicit","input":{"text":"Cut between the drummer, guitarist, and cheering audience."},"expected":{"structure":"multi"}},
+    {"id":"multi-008","category":"multi_explicit","input":{"text":"Scene one is daytime at the coast; dissolve to the same location at night."},"expected":{"structure":"multi"}},
+
+    {"id":"unclear-001","category":"unclear_implicit","input":{"text":"A singer performs under warm stage lights while the camera moves closer."},"expected":{"structure":"unclear"}},
+    {"id":"unclear-002","category":"unclear_implicit","input":{"text":"A motorcycle speeds through the mountains and reaches a quiet village."},"expected":{"structure":"unclear"}},
+    {"id":"unclear-003","category":"unclear_implicit","input":{"text":"Show the station exterior and the woman waiting beside the platform."},"expected":{"structure":"unclear"}},
+    {"id":"unclear-004","category":"unclear_implicit","input":{"text":"The story moves from morning preparation to an evening celebration."},"expected":{"structure":"unclear"}},
+    {"id":"unclear-005","category":"unclear_implicit","input":{"text":"Cinematic portrait of a chef preparing dinner in a busy kitchen."},"expected":{"structure":"unclear"}},
+    {"id":"unclear-006","category":"unclear_implicit","input":{"text":"Track the athlete, reveal the crowd, and finish on the scoreboard."},"expected":{"structure":"unclear"}},
+    {"id":"unclear-007","category":"unclear_implicit","input":{"text":"A quiet cafe conversation followed by rain outside."},"expected":{"structure":"unclear"}},
+    {"id":"unclear-008","category":"unclear_implicit","input":{"text":"Make the sequence cinematic and energetic."},"expected":{"structure":"unclear"}},
+
+    {"id":"distractor-001","category":"creative_distractor","input":{"text":"A cut-glass vase sparkles on a table in one corner of the room."},"expected":{"structure":"unclear"}},
+    {"id":"distractor-002","category":"creative_distractor","input":{"text":"The unbroken horse runs past a single red barn."},"expected":{"structure":"unclear"}},
+    {"id":"distractor-003","category":"creative_distractor","input":{"text":"A montage poster hangs behind the actor."},"expected":{"structure":"unclear"}},
+    {"id":"distractor-004","category":"creative_distractor","input":{"text":"She takes a shot of espresso and cuts the cake."},"expected":{"structure":"unclear"}},
+
+    {"id":"correction-001","category":"correction_negation","input":{"text":"Make it one continuous take—actually, cut to a close-up after she opens the door."},"expected":{"structure":"multi"}},
+    {"id":"correction-002","category":"correction_negation","input":{"text":"Start with two shots. No, keep it as one uninterrupted tracking shot instead."},"expected":{"structure":"single"}},
+    {"id":"correction-003","category":"correction_negation","input":{"text":"Do not use a montage; one static shot only."},"expected":{"structure":"single"}},
+    {"id":"correction-004","category":"correction_negation","input":{"text":"No single continuous take; cut between three different camera angles."},"expected":{"structure":"multi"}},
+
+    {"id":"conflict-001","category":"conflict","input":{"text":"Use one uninterrupted shot and also hard cut to a separate close-up halfway through."},"expected":{"structure":"unclear"}},
+    {"id":"conflict-002","category":"conflict","input":{"text":"No cuts, but alternate between the interior and exterior camera angles."},"expected":{"structure":"unclear"}}
+  ]
+}

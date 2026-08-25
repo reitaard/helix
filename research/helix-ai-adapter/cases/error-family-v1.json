@@ -1,0 +1,46 @@
+{
+  "version": "error-family-v1",
+  "operation": "classifyRuntimeError(event)",
+  "cases": [
+    {"id":"worker-001","category":"worker_unreachable","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"Worker adapter unavailable"},"expected":{"family":"worker_unreachable"}},
+    {"id":"worker-002","category":"worker_unreachable","input":{"eventType":"delivery.failed","kind":"outbox","status":"failed","message":"Worker unavailable: helix-rtx4060-01"},"expected":{"family":"worker_unreachable"}},
+    {"id":"worker-003","category":"worker_unreachable","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"connect ECONNREFUSED 100.92.14.8:8188"},"expected":{"family":"worker_unreachable"}},
+    {"id":"worker-004","category":"worker_unreachable","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"Comfy request timed out while connecting to worker"},"expected":{"family":"worker_unreachable"}},
+    {"id":"worker-005","category":"worker_unreachable","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"fetch failed: ENETUNREACH"},"expected":{"family":"worker_unreachable"}},
+
+    {"id":"submit-001","category":"submission_rejected","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"Comfy /prompt did not return prompt_id"},"expected":{"family":"submission_rejected"}},
+    {"id":"submit-002","category":"submission_rejected","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"400: prompt validation failed: node 405:376 input value is invalid"},"expected":{"family":"submission_rejected"}},
+    {"id":"submit-003","category":"submission_rejected","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"422: node_errors returned by Comfy /prompt"},"expected":{"family":"submission_rejected"}},
+    {"id":"submit-004","category":"submission_rejected","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"T2V node 409 is missing or changed"},"expected":{"family":"submission_rejected"}},
+    {"id":"submit-005","category":"submission_rejected","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"T2V node 405:362 inputs are invalid"},"expected":{"family":"submission_rejected"}},
+
+    {"id":"execute-001","category":"execution_failed","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"Comfy execution status: error"},"expected":{"family":"execution_failed"}},
+    {"id":"execute-002","category":"execution_failed","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"Comfy execution failed"},"expected":{"family":"execution_failed"}},
+    {"id":"execute-003","category":"execution_failed","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"CUDA out of memory during KSampler execution"},"expected":{"family":"execution_failed"}},
+    {"id":"execute-004","category":"execution_failed","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"Error occurred when executing VAEDecode: tensor size mismatch"},"expected":{"family":"execution_failed"}},
+    {"id":"execute-005","category":"execution_failed","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"Prompt accepted as 8cb1; execution interrupted at node 341"},"expected":{"family":"execution_failed"}},
+
+    {"id":"timeout-001","category":"timed_out","input":{"eventType":"job.timed_out","kind":"job","status":"timed out","message":"Job exceeded running timeout of 3600000 ms"},"expected":{"family":"timed_out"}},
+    {"id":"timeout-002","category":"timed_out","input":{"eventType":"job.timed_out","kind":"job","status":"timed out","message":"Unknown error"},"expected":{"family":"timed_out"}},
+    {"id":"timeout-003","category":"timed_out","input":{"eventType":"job.timed_out","kind":"job","status":"timed out","message":"Worker cancellation returned false after the execution deadline"},"expected":{"family":"timed_out"}},
+
+    {"id":"delivery-001","category":"delivery_failed","input":{"eventType":"delivery.failed","kind":"outbox","status":"failed","message":"Invalid artifact metadata"},"expected":{"family":"delivery_failed"}},
+    {"id":"delivery-002","category":"delivery_failed","input":{"eventType":"delivery.failed","kind":"outbox","status":"failed","message":"Artifact is missing filename, subfolder, or type"},"expected":{"family":"delivery_failed"}},
+    {"id":"delivery-003","category":"delivery_failed","input":{"eventType":"delivery.failed","kind":"outbox","status":"failed","message":"Delivery attempt limit already exceeded"},"expected":{"family":"delivery_failed"}},
+    {"id":"delivery-004","category":"delivery_failed","input":{"eventType":"delivery.failed","kind":"outbox","status":"failed","message":"Telegram sendDocument returned HTTP 413"},"expected":{"family":"delivery_failed"}},
+    {"id":"delivery-005","category":"delivery_failed","input":{"eventType":"delivery.failed","kind":"outbox","status":"failed","message":"ffprobe exited with status 1"},"expected":{"family":"delivery_failed"}},
+    {"id":"delivery-006","category":"delivery_failed","input":{"eventType":"delivery.failed","kind":"outbox","status":"failed","message":"ENOENT: no such file or directory, open '/var/spool/helix/output.mp4'"},"expected":{"family":"delivery_failed"}},
+
+    {"id":"database-001","category":"database","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"connect ECONNREFUSED 127.0.0.1:5432"},"expected":{"family":"database"}},
+    {"id":"database-002","category":"database","input":{"eventType":"runtime.error","kind":"runtime","status":"failed","message":"PostgreSQL connection terminated unexpectedly"},"expected":{"family":"database"}},
+    {"id":"database-003","category":"database","input":{"eventType":"runtime.error","kind":"runtime","status":"failed","message":"duplicate key value violates unique constraint media_jobs_pkey"},"expected":{"family":"database"}},
+    {"id":"database-004","category":"database","input":{"eventType":"runtime.error","kind":"runtime","status":"failed","message":"relation media_job_events does not exist"},"expected":{"family":"database"}},
+
+    {"id":"unknown-001","category":"unknown","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"Unknown error"},"expected":{"family":"unknown"}},
+    {"id":"unknown-002","category":"unknown","input":{"eventType":"runtime.error","kind":"runtime","status":"failed","message":"Something unexpected happened"},"expected":{"family":"unknown"}},
+    {"id":"unknown-003","category":"unknown","input":{"eventType":"job.failed","kind":"job","status":"failed","message":"External encoder reported code zebra"},"expected":{"family":"unknown"}},
+    {"id":"unknown-004","category":"unknown","input":{"eventType":"job.cancelled","kind":"job","status":"cancelled","message":"Operator confirmed cancellation"},"expected":{"family":"unknown"}},
+    {"id":"unknown-005","category":"unknown","input":{"eventType":"job.succeeded","kind":"job","status":"succeeded","message":"Completed successfully"},"expected":{"family":"unknown"}},
+    {"id":"unknown-006","category":"unknown","input":{"eventType":"delivery.retry_scheduled","kind":"outbox","status":"pending","message":"Retry in 60 seconds"},"expected":{"family":"unknown"}}
+  ]
+}

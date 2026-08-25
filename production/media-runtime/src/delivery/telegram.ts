@@ -9,8 +9,7 @@ export interface TelegramMessageResult {
 interface MetadataInput {
   filename: string;
   runtime: string;
-  video: string;
-  audio: string;
+  media: { kind: "video"; value: string; audio: string } | { kind: "image"; value: string };
   tool: string;
   workerName: string;
   jobId: string;
@@ -188,17 +187,9 @@ export class TelegramDelivery {
         )
       }</i></b>`,
 
-      `<b>Video</b> · <b><i>${
-        escapeHtml(
-          input.video
-        )
-      }</i></b>`,
+      `<b>${input.media.kind === "video" ? "Video" : "Image"}</b> · <b><i>${escapeHtml(input.media.value)}</i></b>`,
 
-      `<b>Audio</b> · <b><i>${
-        escapeHtml(
-          input.audio
-        )
-      }</i></b>`,
+      ...(input.media.kind === "video" ? [`<b>Audio</b> · <b><i>${escapeHtml(input.media.audio)}</i></b>`] : []),
 
       `<b>Worker</b> · <b>${
         escapeHtml(

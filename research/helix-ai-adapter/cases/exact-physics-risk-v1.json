@@ -1,0 +1,46 @@
+{
+  "version": "exact-physics-risk-v1",
+  "operation": "detectExactPhysicsRisk(text)",
+  "cases": [
+    {"id":"physics-001","category":"exact_collision","input":{"text":"A red ball must strike the left edge of a blue block, causing only the blue block to knock over a glass."},"expected":{"matched":true}},
+    {"id":"physics-002","category":"exact_collision","input":{"text":"Show the cue ball contacting the 8-ball at its right quarter; the cue ball stops while the 8-ball enters the corner pocket."},"expected":{"matched":true}},
+    {"id":"physics-003","category":"exact_collision","input":{"text":"Three dominoes fall in order, and the third alone releases a marble that rolls into a cup."},"expected":{"matched":true}},
+    {"id":"physics-004","category":"exact_collision","input":{"text":"The front wheel hits one loose brick, which flips upward and breaks the second window without touching the first."},"expected":{"matched":true}},
+    {"id":"physics-005","category":"exact_collision","input":{"text":"A bottle lands precisely neck-first, rebounds once, and remains upright without sliding."},"expected":{"matched":true}},
+    {"id":"physics-006","category":"exact_collision","input":{"text":"The hammer hits the center nail only; the two neighboring nails must not move."},"expected":{"matched":true}},
+    {"id":"physics-007","category":"exact_collision","input":{"text":"A chain reaction passes from gear A to B to C, with C rotating clockwise only after B stops."},"expected":{"matched":true}},
+
+    {"id":"reflection-001","category":"exact_reflection","input":{"text":"As the camera circles her, her face must remain geometrically correct in both opposing mirrors at every angle."},"expected":{"matched":true}},
+    {"id":"reflection-002","category":"exact_reflection","input":{"text":"The mirror reflection reveals the person behind the camera while that person remains outside the direct view."},"expected":{"matched":true}},
+    {"id":"reflection-003","category":"exact_reflection","input":{"text":"Keep the car's reflection aligned exactly with it across the curved chrome wall during the tracking shot."},"expected":{"matched":true}},
+    {"id":"reflection-004","category":"exact_reflection","input":{"text":"Two mirrors reflect the clock recursively, and every reflected clock must show the same moving second hand."},"expected":{"matched":true}},
+
+    {"id":"state-001","category":"irreversible_state","input":{"text":"The intact bottle shatters on impact and must never appear intact again; only shards and spilled liquid remain."},"expected":{"matched":true}},
+    {"id":"state-002","category":"irreversible_state","input":{"text":"The paper burns completely to ash, and no unburned paper may reappear after the camera moves around it."},"expected":{"matched":true}},
+    {"id":"state-003","category":"irreversible_state","input":{"text":"She cuts the rope into two separate pieces; both pieces must remain separate for the rest of the shot."},"expected":{"matched":true}},
+    {"id":"state-004","category":"irreversible_state","input":{"text":"The ice sculpture melts into a puddle and may not reform during the final orbit."},"expected":{"matched":true}},
+
+    {"id":"ordinary-001","category":"ordinary_action","input":{"text":"A motorcycle follows a winding mountain road while the camera tracks alongside."},"expected":{"matched":false}},
+    {"id":"ordinary-002","category":"ordinary_action","input":{"text":"A singer performs under warm lights as the camera slowly pushes in."},"expected":{"matched":false}},
+    {"id":"ordinary-003","category":"ordinary_action","input":{"text":"A woman notices an approaching bus and turns toward it while speaking."},"expected":{"matched":false}},
+    {"id":"ordinary-004","category":"ordinary_action","input":{"text":"Rain falls over a quiet cafe while customers talk softly."},"expected":{"matched":false}},
+    {"id":"ordinary-005","category":"ordinary_action","input":{"text":"A sports car drives along the coast at sunset with engine and road audio."},"expected":{"matched":false}},
+    {"id":"ordinary-006","category":"ordinary_action","input":{"text":"A child drops a red ball and laughs when it bounces away."},"expected":{"matched":false}},
+    {"id":"ordinary-007","category":"ordinary_action","input":{"text":"A glass bottle stands on a wooden table beside a window."},"expected":{"matched":false}},
+
+    {"id":"distractor-001","category":"creative_distractor","input":{"text":"An emotionally impactful portrait of a physicist standing before a mirror."},"expected":{"matched":false}},
+    {"id":"distractor-002","category":"creative_distractor","input":{"text":"A precise cinematic composition with reflective silver lighting."},"expected":{"matched":false}},
+    {"id":"distractor-003","category":"creative_distractor","input":{"text":"Broken sunlight reflects across the lake as domino-shaped buildings fill the skyline."},"expected":{"matched":false}},
+    {"id":"distractor-004","category":"creative_distractor","input":{"text":"A collision of cultures represented through abstract dance."},"expected":{"matched":false}},
+    {"id":"distractor-005","category":"creative_distractor","input":{"text":"The actor reflects on an irreversible decision in a quiet room."},"expected":{"matched":false}},
+
+    {"id":"negation-001","category":"negation_correction","input":{"text":"Do not show the exact collision; cut away before the vehicles touch."},"expected":{"matched":false}},
+    {"id":"negation-002","category":"negation_correction","input":{"text":"The bottle was going to shatter, but instead it simply rolls across the table intact."},"expected":{"matched":false}},
+    {"id":"negation-003","category":"negation_correction","input":{"text":"No mirrors or reflections are visible; use a straightforward tracking shot."},"expected":{"matched":false}},
+    {"id":"negation-004","category":"negation_correction","input":{"text":"Start with a simple bounce—correction, the ball must hit two levers in sequence and open the hatch only after the second contact."},"expected":{"matched":true}},
+
+    {"id":"unclear-001","category":"unclear","input":{"text":"Make the physics look good."},"expected":{"matched":false}},
+    {"id":"unclear-002","category":"unclear","input":{"text":"Use realistic reflections and cinematic motion."},"expected":{"matched":false}},
+    {"id":"unclear-003","category":"unclear","input":{"text":"The object changes during the scene."},"expected":{"matched":false}}
+  ]
+}
