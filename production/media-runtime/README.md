@@ -62,10 +62,10 @@ helix-runtime :8787
 ## Current worker
 
 - Durable ID: `helix-rtx4060-01`
-- Human-facing name: `Christopher Nolan`
-- Profile: `comfy-video-ltx-stable`
+- Physical-worker name: `Helix RTX 4060`
 - Adapter: `comfy`
-- Validated capabilities: `video.i2v`, `video.t2v`
+- Production profile `nolan`: Christopher Nolan; validated `video.i2v`, `video.t2v`
+- Production profile `leibovitz`: Annie Leibovitz; `image.t2i` remains unvalidated
 - GPU: RTX 4060, 8188 MiB VRAM
 - ComfyUI: 0.33.0
 - Pinned Comfy revision: `7dde56176efa71fd74ef7b3930ab5882d1926288`

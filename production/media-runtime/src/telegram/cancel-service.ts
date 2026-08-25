@@ -10,6 +10,10 @@ import type {
   JobService
 } from "../jobs/service.js";
 
+import type {
+  WorkerRegistry
+} from "../workers/registry.js";
+
 import {
   resolveJobReference
 } from "./job-reference.js";
@@ -58,11 +62,8 @@ export class TelegramCancelService {
     private readonly jobService:
       JobService,
 
-    private readonly workerId:
-      string,
-
-    private readonly workerName:
-      string,
+    private readonly workers:
+      WorkerRegistry,
 
     private readonly expiresSeconds =
       60,
@@ -70,25 +71,6 @@ export class TelegramCancelService {
     private readonly maxInvalid =
       3
   ) {}
-
-  private workerLabel(
-    workerId:
-      string |
-      null
-  ) {
-    if (!workerId) {
-      return "Unassigned";
-    }
-
-    if (
-      workerId ===
-      this.workerId
-    ) {
-      return this.workerName;
-    }
-
-    return workerId;
-  }
 
   private noPendingHtml() {
     return (
@@ -104,6 +86,9 @@ export class TelegramCancelService {
       workerId:
         string |
         null;
+      profileId:
+        string |
+        null;
     }
   ) {
     return (
@@ -114,8 +99,9 @@ export class TelegramCancelService {
 
       `<b>Worker</b> · ` +
       `<b>${escapeHtml(
-        this.workerLabel(
-          job.workerId
+        this.workers.profileDisplayName(
+          job.workerId,
+          job.profileId
         )
       )}</b>\n` +
 

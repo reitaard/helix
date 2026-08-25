@@ -37,7 +37,6 @@ export interface WorkerChecks {
 
 export interface WorkerHealth {
   workerId: string;
-  profile: string;
   state: WorkerState;
   checks: WorkerChecks;
   latencyMs: number;

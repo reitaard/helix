@@ -222,7 +222,8 @@ const telegramT2VModeService =
 const telegramT2VSettingsService =
   t2vProfileService
     ? new TelegramT2VSettingsService(
-        t2vProfileService
+        t2vProfileService,
+        nolanProfile?.displayName
       )
     : null;
 
@@ -262,8 +263,7 @@ const telegramCancelService =
         operatorActionRepository,
         jobRepository,
         jobs,
-        physicalWorker.id,
-        nolanProfile.displayName
+        registry
       )
     : null;
 

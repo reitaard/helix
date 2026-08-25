@@ -30,8 +30,8 @@ Telegram original document + caption
 
 ```text
 workerId: helix-rtx4060-01
-display name: Christopher Nolan
-profile: comfy-video-ltx-stable
+physical-worker display name: Helix RTX 4060
+Production Profile: nolan / Christopher Nolan
 Comfy revision: 7dde56176efa71fd74ef7b3930ab5882d1926288
 GPU: RTX 4060
 VRAM: 8188 MiB

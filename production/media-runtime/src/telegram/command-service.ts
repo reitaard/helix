@@ -1114,17 +1114,11 @@ export class TelegramCommandService {
 
     const job = matches[0]!;
 
-    const worker =
-      job.workerId
-        ? this.workers.get(
-            job.workerId
-          )
-        : null;
-
     const workerName =
-      worker?.name ??
-      job.workerId ??
-      "Unassigned";
+      this.workers.profileDisplayName(
+        job.workerId,
+        job.profileId
+      );
 
     const runtime =
       durationBetween(
