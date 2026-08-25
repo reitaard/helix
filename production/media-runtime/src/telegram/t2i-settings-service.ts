@@ -76,7 +76,7 @@ export class TelegramT2ISettingsService {
         `<b>Aspect : ⦗${escapeHtml(settings.aspect)}⦘</b>\n` +
         `<blockquote expandable><b><i>• options •</i></b>\n` +
         `${T2I_ASPECT_OPTIONS.map(option => `<code>${option.ratio}</code> · ${escapeHtml(option.label)}`).join("\n")}</blockquote>\n` +
-        `<i>Set</i> · <code>/t2i set asp &lt;ratio&gt;</code>`
+        `<i>Set</i> · <code>/t2i set asp &lt;ratio|name&gt;</code>`
       );
     }
 

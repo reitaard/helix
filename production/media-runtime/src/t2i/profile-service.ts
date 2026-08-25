@@ -17,6 +17,15 @@ export type T2ISetting =
   | "asp"
   | "seed";
 
+function normalizedAspectName(
+  value: string
+) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+}
+
 export class T2IProfileService {
   constructor(
     private readonly settings:
@@ -40,6 +49,7 @@ export class T2IProfileService {
     const current = await this.get();
     const value = raw.trim();
     const lower = value.toLowerCase();
+    const normalized = normalizedAspectName(value);
     const next: T2ISettings = {
       ...current
     };
@@ -49,11 +59,15 @@ export class T2IProfileService {
         lower === "reset"
           ? DEFAULT_T2I_SETTINGS.aspect
           : T2I_ASPECT_OPTIONS.find(
-              option => option.ratio === value
+              option =>
+                option.ratio === value ||
+                normalizedAspectName(
+                  option.label
+                ) === normalized
             )?.ratio;
 
       if (!aspect) {
-        throw new Error("Invalid aspect ratio");
+        throw new Error("Invalid aspect ratio or name");
       }
 
       next.aspect = aspect;
