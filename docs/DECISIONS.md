@@ -113,3 +113,15 @@ Only choices we are willing to treat as current project commitments belong here.
 **Decision:** Production experiments must score both prompt/benchmark adherence and finished-video quality.
 
 **Reason:** The 5/8/10-second native T2V tests repeatedly showed that stricter prompt adherence can make a worse video: robotic acting, poor pacing, symbolic debris, or static shots may satisfy more clauses while reducing naturalness and usefulness. Helix should optimize reliable creative output, not merely textual obedience.
+
+## 2026-08-25 — Prompt Relay is a scene-progression control, not a state machine
+
+**Decision:** Kijai Prompt Relay is an optional LTX 2.5 Production control for temporal semantic routing and scene progression. It should be considered when a single generation contains distinct narrative/behavioral beats and native LTX exposes later beats too early or smears events across the clip. It is not the default path for every shot and must not be treated as a hard frame switch, physics controller, or persistent object-state machine.
+
+**Reason:** Clean native-vs-Relay tests showed modest improvement on a simple motorcycle sequence, strong reduction of semantic leakage in a walk → stop/speak → run sequence, and a clear scene-development benefit in a 15-second café narrative where native LTX introduced later story content too early. A receive → inspect/open → discard object-state stress test also showed that Relay does not solve fragile physical state and possession chains. The useful abstraction is `persistent global state + temporally routed semantic beats`, while object causality and reference identity remain separate Production problems.
+
+## 2026-08-25 — Reference conditioning remains opt-in and must be validated independently
+
+**Decision:** Licon MSR is a researched LTX 2.5 reference/continuity candidate, not yet a validated Production capability. Test it independently before combining it with Prompt Relay.
+
+**Reason:** MSR and Prompt Relay target different failure dimensions. Prompt Relay routes semantic beats over time; MSR is intended to preserve referenced characters, clothing, objects and backgrounds through latent reference slots. Combining unvalidated controls would make failures impossible to attribute. The first MSR experiments should therefore establish one-subject identity retention, then multi-subject slot separation, before any combined scene-progression test.
