@@ -115,15 +115,23 @@ export class TelegramT2IService {
   async handleCommand(args: string[]) {
     const action = args[0]?.toLowerCase();
     if (!action) return this.begin();
-    if (action === "settings" || action === "s") {
-      return args.length === 1 ? this.settings.panel() : `<b>Usage</b> · <code>/t2i settings</code>`;
+    if (action === "settings") {
+      return args.length === 1
+        ? this.settings.panel()
+        : `<b>Usage</b> · <code>/t2i settings</code>`;
     }
-    if (action === "reset") return args.length === 1 ? this.reset.begin() : `<b>Usage</b> · <code>/t2i reset</code>`;
-    if (action === "set") {
-      if (!args[1]) return this.settings.panel();
-      return args.length === 2 ? this.settings.help(args[1]) : this.settings.set(args[1], args.slice(2).join(" "));
+    if (action === "reset") {
+      return args.length === 1
+        ? this.reset.begin()
+        : `<b>Usage</b> · <code>/t2i reset</code>`;
     }
-    return `<b>Usage</b> · <code>/t2i [settings|set|reset]</code>`;
+    if (action !== "set" && action !== "s") {
+      return `<b>Usage</b> · <code>/t2i [settings|set|reset]</code>`;
+    }
+    if (!args[1]) return this.settings.panel();
+    return args.length === 2
+      ? this.settings.help(args[1])
+      : this.settings.set(args[1], args.slice(2).join(" "));
   }
 
   async begin() {
