@@ -287,3 +287,14 @@ A real Windows reboot -> automatic ComfyUI worker startup remains to be proven.
 5. **Production contract freeze** — freeze/version the stable workflow family and expose one semantic contract to Telegram, n8n and later Helix Director callers.
 
 There is intentionally no Auto phase. Mode selection stays explicit until a future system requirement proves otherwise.
+
+## Production profiles and experimental T2I
+
+There is one physical worker, `helix-rtx4060-01`, with one RTX 4060, Comfy
+endpoint, adapter, and queue; physical GPU concurrency remains one. It now has
+logical Production Profiles: `nolan` / Christopher Nolan for validated LTX
+video tools, and `leibovitz` / Annie Leibovitz for future `image.t2i`.
+Leibovitz is not a second worker and FLUX.2 Klein 4B Distilled is unvalidated on
+this hardware. The runtime has durable T2I aspect/seed settings and pending
+state only. It intentionally has no enabled Telegram T2I command, workflow
+binding, dimensions, or FLUX tuning until a vetted local API workflow exists.

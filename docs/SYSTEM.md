@@ -111,7 +111,7 @@ This is expected to become a central algorithmic layer of Helix.
 
 Production is deliberately separate. Candidate internal areas include image, video, audio, voice, captions, editing, compositing, QC, upscaling, and rendering.
 
-Provider/model routing belongs here. The existing asynchronous generation workflow pattern should be preserved as useful implementation knowledge, but it is not the main Helix brain contract.
+Provider/model routing belongs here. The existing asynchronous generation workflow pattern should be preserved as useful implementation knowledge, but it is not the main Helix brain contract. A physical worker may expose multiple logical Production Profiles while retaining one adapter, endpoint, queue, and GPU concurrency limit; model implementations remain replaceable infrastructure.
 
 ## 5. Distribution
 

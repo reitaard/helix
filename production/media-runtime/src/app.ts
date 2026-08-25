@@ -8,6 +8,7 @@ import type {
 import {
   JobCancellationError,
   JobSubmissionError,
+  ProfileResolutionError,
   WorkerNotFoundError
 } from "./jobs/service.js";
 
@@ -24,10 +25,14 @@ const createJobSchema =
     workerId:
       z.string().min(1),
 
+    profileId:
+      z.string().min(1).optional(),
+
     tool:
       z.enum([
         "video.i2v",
-        "video.t2v"
+        "video.t2v",
+        "image.t2i"
       ])
       .default(
         "video.i2v"
@@ -244,6 +249,10 @@ export function createApp(
               parsed.data
                 .workerId,
 
+            ...(parsed.data.profileId
+              ? { profileId: parsed.data.profileId }
+              : {}),
+
             workflow:
               parsed.data
                 .workflow,
@@ -296,6 +305,15 @@ export function createApp(
               workerId:
                 error.workerId
             });
+        }
+
+        if (error instanceof ProfileResolutionError) {
+          return reply.code(400).send({
+            error: error.code,
+            workerId: error.workerId,
+            tool: error.tool,
+            ...(error.profileId ? { profileId: error.profileId } : {})
+          });
         }
 
         if (

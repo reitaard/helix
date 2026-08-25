@@ -21,6 +21,8 @@ export interface CreateMediaJobInput {
 
   workerId: string;
 
+  profileId?: string;
+
   workflow:
     Record<
       string,
@@ -46,6 +48,28 @@ export class WorkerNotFoundError
   ) {
     super(
       `Worker not found: ${workerId}`
+    );
+  }
+}
+
+export class ProfileResolutionError
+  extends Error {
+
+  constructor(
+    readonly code:
+      | "profile_not_found"
+      | "profile_tool_mismatch"
+      | "profile_ambiguous",
+    readonly workerId: string,
+    readonly tool: string,
+    readonly profileId?: string
+  ) {
+    super(
+      code === "profile_not_found"
+        ? `Production profile not found: ${profileId}`
+        : code === "profile_tool_mismatch"
+          ? `Production profile ${profileId} does not support ${tool}`
+          : `Production profile is ambiguous for ${tool}`
     );
   }
 }
@@ -227,6 +251,30 @@ export class JobService {
       );
     }
 
+    const resolution =
+      this.workers.resolveProfile(
+        input.workerId,
+        input.tool,
+        input.profileId
+      );
+
+    if (resolution.kind !== "resolved") {
+      if (resolution.kind === "worker_not_found") {
+        throw new WorkerNotFoundError(input.workerId);
+      }
+
+      throw new ProfileResolutionError(
+        resolution.kind,
+        input.workerId,
+        input.tool,
+        "profileId" in resolution
+          ? resolution.profileId
+          : undefined
+      );
+    }
+
+    const profile = resolution.profile;
+
     let workflow =
       structuredClone(
         input.workflow
@@ -258,6 +306,9 @@ export class JobService {
         workerId:
           input.workerId,
 
+        profileId:
+          profile.id,
+
         adapter:
           worker.runtime,
 
@@ -270,6 +321,9 @@ export class JobService {
 
           workerId:
             input.workerId,
+
+          profileId:
+            profile.id,
 
           inputs:
             input.inputs,

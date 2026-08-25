@@ -687,6 +687,8 @@ export class TelegramT2VService {
           workerId:
             this.workerId,
 
+          profileId: "nolan",
+
           workflow,
 
           inputs: {},

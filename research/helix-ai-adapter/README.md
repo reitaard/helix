@@ -45,7 +45,10 @@ The benchmark performs no database writes, Telegram calls, Comfy calls, workflow
 - `INSPECTED_CONTRACT.md` — source-backed map of the current branch.
 - `TEST_PLAN.md` — hypotheses, metrics, gates, and experiment sequence.
 - `cases/production-settings-v1.json` — versioned gold cases.
-- `benchmark.py` — standalone standard-library benchmark runner.
+- `benchmark.py` — standalone V1 core-settings benchmark runner.
+- `aspect_benchmark.py` — separate `interpretAspect(text)` benchmark runner.
+- `use_case_benchmark.py` — detached runner for independent prompt-risk, error-family, and shot-structure experiments.
+- `TERRA_USE_CASE_BRIEF.md` — exact handoff for running and reporting the detached use-case suite through Recode.
 - `results/README.md` — result retention rules.
 
 ## Runtime operations

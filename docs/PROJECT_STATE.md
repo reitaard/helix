@@ -343,3 +343,15 @@ There is intentionally no Auto phase.
 Production remains a parallel execution/research track. The brain phase should define what a `Niche` means, what platform evidence is persisted, how content features and trends are represented, how observed facts differ from inferred patterns, what a `NicheModel` contains, and how the Director consumes that model.
 
 The intended research direction is platform-first rather than web-search-first: YouTube/Facebook/Reels-style data should provide primary behavioral evidence while broader web research supplements rather than replaces platform observations.
+
+## Production profile / T2I architecture foundation
+
+`helix-rtx4060-01` remains the one physical RTX 4060 worker, Comfy endpoint,
+adapter, and queue, with maximum concurrent GPU jobs fixed at one. `nolan`
+(Christopher Nolan) is its validated LTX `video.t2v` / `video.i2v` Production
+Profile. `leibovitz` (Annie Leibovitz) is a second logical Production Profile
+for future `image.t2i`, not a second worker. FLUX.2 Klein 4B Distilled remains
+experimental and unvalidated. The runtime now has profile-aware job identity,
+T2I aspect/seed persistence, and a disabled Telegram-flow foundation; it does
+not advertise `/t2i`, bind a workflow, select dimensions, or claim an image
+run until the vetted local FLUX API workflow is supplied.
