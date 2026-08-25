@@ -19,6 +19,10 @@ import {
 } from "./debug-service.js";
 
 import {
+  TelegramDownloadsService
+} from "./downloads-service.js";
+
+import {
   TelegramCancelService
 } from "./cancel-service.js";
 
@@ -483,6 +487,9 @@ export class TelegramCommandService {
     private readonly debug:
       TelegramDebugService,
 
+    private readonly downloads:
+      TelegramDownloadsService,
+
     private readonly cancel:
       TelegramCancelService,
 
@@ -669,6 +676,7 @@ export class TelegramCommandService {
       `<code>/queue</code> <b>-</b> <b>Queue check</b>\n` +
       `<code>/jobs</code> <b>-</b> <b>Recent jobs</b>\n` +
       `<code>/job &lt;id&gt;</code> <b>-</b> <b>Job details</b>\n` +
+      `<code>/downloads</code> <b>-</b> <b>Recent GPU artifacts</b>\n` +
       `<code>/outbox</code> <b>-</b> <b>Send queue</b>\n` +
       `<code>/errors</code> <b>-</b> <b>Recent failures</b>\n` +
       `<code>/events &lt;id&gt;</code> <b>-</b> <b>Job events</b>\n` +
@@ -1522,6 +1530,18 @@ export class TelegramCommandService {
             )
           );
           break;
+
+        case "/dl":
+        case "/downloads": {
+          const response =
+            await this.downloads
+              .handleCommand(args);
+
+          if (response) {
+            await this.sendHtml(response);
+          }
+          break;
+        }
 
         case "/ob":
         case "/outbox":
