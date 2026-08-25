@@ -6,7 +6,7 @@ The project is intentionally divided so that the **brain of the system is indepe
 
 ## Current status
 
-**Preparation / foundation phase, with the first Production execution slice locked as a stable checkpoint and a controlled native LTX 2.5 T2V quality baseline now established.**
+**Preparation / foundation phase, with the first Production execution slice locked as a stable checkpoint, a controlled native LTX 2.5 T2V quality baseline established, and a persisted T2V settings/reset surface now implemented.**
 
 The active brain-development path is:
 
@@ -22,7 +22,11 @@ Production/generation continues as a separate workstream and will connect throug
 
 The current Production checkpoint includes a durable ComfyUI execution runtime, PostgreSQL job/delivery state, original-file Telegram delivery, operator diagnostics, durable operational alerts, complete job-event debugging, guarded terminal-style job cancellation, and a validated native LTX 2.5 T2V path initiated from Telegram with pre-submit confirmation.
 
-Native LTX 2.5 T2V has also been benchmarked across controlled 5-second, 8-second and 10-second runs before adding Director/Prompt Relay controls. The current research result is to use focused native LTX first for shots inside its proven comfort zone and escalate to stronger Production controls only when timing, shot responsibility, state changes, or structured progression repeatedly fail.
+T2V is no longer prompt-only. `Christopher Nolan / video.t2v` has a persisted semantic settings layer with Core controls for aspect, quality, duration and prompt enhancement, plus explicit `-dev` access to FPS, Stage 1/2 seeds, negative prompt, megapixel override, sampler and guidance. Durable reset confirmation can restore Core defaults or the full exposed T2V baseline.
+
+Native LTX 2.5 T2V has been benchmarked across controlled 5-second, 8-second and 10-second runs before adding Director/Prompt Relay controls. The current research result is to use focused native LTX first for shots inside its proven comfort zone and escalate to stronger Production controls only when timing, shot responsibility, state changes, or structured progression repeatedly fail.
+
+The next Production design phase is a **generation mode/preset layer** above the settings surface. Modes such as fast/quality/auto are not yet defined contracts; they will be calibrated from controlled runtime/quality tests rather than guessed from raw Comfy fields. Existing manual settings remain the underlying source of truth.
 
 The current generation research direction is **open/self-hosted first**. Runway is not part of the active Production plan. Seedance 2.0 is being used as a behavioral/quality reference rather than an active dependency.
 
