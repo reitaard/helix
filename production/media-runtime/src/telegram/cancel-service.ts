@@ -247,7 +247,7 @@ export class TelegramCancelService {
     ) {
       return (
         `${title("CANCEL")}\n` +
-        `${this.jobHeader(job)}\n\n` +
+        `${this.jobHeader(job)}\n` +
         `<b><i>Job is already cancelled.</i></b>`
       );
     }
@@ -259,7 +259,7 @@ export class TelegramCancelService {
     ) {
       return (
         `${title("CANCEL")}\n` +
-        `${this.jobHeader(job)}\n\n` +
+        `${this.jobHeader(job)}\n` +
         `<b><i>Job is already finished.</i></b>`
       );
     }
@@ -292,7 +292,7 @@ export class TelegramCancelService {
 
     return (
       `${title("CANCEL")}\n` +
-      `${this.jobHeader(job)}\n\n` +
+      `${this.jobHeader(job)}\n` +
       `<b>Cancel this job?</b>  ` +
       `<b><i>Type</i></b> ` +
       `<b>[</b> ` +
@@ -347,7 +347,7 @@ export class TelegramCancelService {
 
       return (
         `${title("CANCEL")}\n` +
-        `<b>Cancellation aborted.</b>\n\n` +
+        `<b>Cancellation aborted.</b>\n` +
         `<b><i>Job continues running.</i></b>`
       );
     }
@@ -470,14 +470,14 @@ export class TelegramCancelService {
 
       return (
         `${title("CANCEL")}\n` +
-        `<b>Cancellation aborted after 3 invalid responses.</b>\n\n` +
+        `<b>Cancellation aborted after 3 invalid responses.</b>\n` +
         `<b><i>Job continues running.</i></b>`
       );
     }
 
     return (
       `${title("CANCEL")}\n` +
-      `<b>Invalid response!</b>\n\n` +
+      `<b>Invalid response!</b>\n` +
       `<b><i>Type</i></b> ` +
       `‘<code>yes</code>’ ` +
       `<b><i>or</i></b> ` +

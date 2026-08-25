@@ -180,6 +180,21 @@ function durationBetween(
   );
 }
 
+function jobRuntime(
+  status: string,
+  startedAt: string | null,
+  finishedAt: string | null
+) {
+  if (
+    startedAt === null &&
+    ["failed", "cancelled", "timed_out"].includes(status)
+  ) {
+    return "not started";
+  }
+
+  return durationBetween(startedAt, finishedAt);
+}
+
 function formatTimestamp(
   value: string | null
 ) {
@@ -921,22 +936,22 @@ export class TelegramCommandService {
       );
     }
 
+    const profiles = this.workers.listProfiles(this.workerId) ?? [];
+    if (profiles.length > 0) {
+      lines.push(
+        "",
+        "<b><i>• Production •</i></b>",
+        ...profiles.map(profile =>
+          `<b>${escapeHtml(profile.displayName)}</b> · <i>${profile.capabilities.map(escapeHtml).join(" · ")}</i>`
+        )
+      );
+    }
+
     if (system.length > 0) {
       lines.push(
         "",
         "<b><i>• System •</i></b>",
         ...system
-      );
-    }
-
-    const profiles = this.workers.listProfiles(this.workerId) ?? [];
-    if (profiles.length > 0) {
-      lines.push(
-        "",
-        "<b><i>• Profiles •</i></b>",
-        ...profiles.map(profile =>
-          `<b>${escapeHtml(profile.displayName)}</b> · <i>${profile.capabilities.map(escapeHtml).join(" · ")}</i>`
-        )
       );
     }
 
@@ -1051,7 +1066,8 @@ export class TelegramCommandService {
       jobs.map(
         job => {
           const runtime =
-            durationBetween(
+            jobRuntime(
+              job.status,
               job.startedAt,
               job.finishedAt
             );
@@ -1132,7 +1148,8 @@ export class TelegramCommandService {
       );
 
     const runtime =
-      durationBetween(
+      jobRuntime(
+        job.status,
         job.startedAt,
         job.finishedAt
       );

@@ -197,6 +197,12 @@ export class OperatorAlertRepository {
                   'workerId',
                     j.worker_id,
 
+                  'profileId',
+                    j.profile_id,
+
+                  'tool',
+                    j.tool,
+
                   'error',
                     COALESCE(
                       e.payload

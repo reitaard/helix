@@ -106,8 +106,8 @@ export class TelegramT2IService {
       `<b>Aspect</b> · <b>${escapeHtml(settings.aspect)}</b>\n` +
       `<b>Image</b> · <b>${image.width}×${image.height}</b>\n` +
       `<b>Seed</b> · <b>${settings.seed}</b>\n` +
-      `<b>Worker</b> · <b>${escapeHtml(this.workerName)}</b>\n\n` +
-      `<b>Generate this image?</b> <b><i>Type</i></b> ` +
+      `<b>Worker</b> · <b>${escapeHtml(this.workerName)}</b>\n` +
+      `<b><i>Generate this image? Type</i></b> ` +
       `<b>[</b> <code>yes</code> <b>/</b> <code>no</code> <b>]</b>`
     );
   }
@@ -180,7 +180,7 @@ export class TelegramT2IService {
     }
     if (lower === "no") {
       await this.pending.remove(this.chatId);
-      return `${title("T2I")}\n<b>Generation aborted.</b>\n\n<b><i>No job was submitted.</i></b>`;
+      return `${title("T2I")}\n<b>Generation aborted.</b>\n<b><i>No job was submitted.</i></b>`;
     }
     if (lower === "yes") {
       let settings: ResolvedT2ISettings;
@@ -218,8 +218,8 @@ export class TelegramT2IService {
     const updated = await this.pending.incrementInvalid(this.chatId);
     if (!updated || updated.invalidAttempts >= this.maxInvalid) {
       await this.pending.remove(this.chatId);
-      return `${title("T2I")}\n<b>Generation aborted after 3 invalid responses.</b>\n\n<b><i>No job was submitted.</i></b>`;
+      return `${title("T2I")}\n<b>Generation aborted after 3 invalid responses.</b>\n<b><i>No job was submitted.</i></b>`;
     }
-    return `${title("T2I")}\n<b>Invalid response!</b>\n\n<b><i>Type</i></b> ‘<code>yes</code>’ <b><i>or</i></b> ‘<code>no</code>’ <b><i>(Attempt · ${updated.invalidAttempts}/${this.maxInvalid})</i></b>`;
+    return `${title("T2I")}\n<b>Invalid response!</b>\n<b><i>Type</i></b> ‘<code>yes</code>’ <b><i>or</i></b> ‘<code>no</code>’ <b><i>(Attempt · ${updated.invalidAttempts}/${this.maxInvalid})</i></b>`;
   }
 }

@@ -163,7 +163,7 @@ export class TelegramDebugService {
         resolved.job.id
       )}</code>\n` +
       `<b>Tool</b> · <code>${escapeHtml(resolved.job.tool)}</code>\n` +
-      `<b>Worker</b> · <b>${escapeHtml(this.workers.profileDisplayName(resolved.job.workerId, resolved.job.profileId))}</b>\n\n` +
+      `<b>Worker</b> · <b>${escapeHtml(this.workers.profileDisplayName(resolved.job.workerId, resolved.job.profileId))}</b>\n` +
       `<blockquote expandable>${timeline.join(
         "\n"
       )}</blockquote>`

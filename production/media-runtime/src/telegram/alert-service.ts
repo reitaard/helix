@@ -217,16 +217,23 @@ export class TelegramAlertService {
             "workerId"
           );
 
-        const worker =
-          workerId
-            ? this.workers.get(
-                workerId
-              )
-            : null;
+        const profileId =
+          readString(
+            payload,
+            "profileId"
+          );
+
+        const tool =
+          readString(
+            payload,
+            "tool"
+          ) ?? "unknown";
 
         const name =
-          worker?.name ??
-          this.workerName;
+          this.workers.profileDisplayName(
+            workerId,
+            profileId
+          );
 
         const error =
           compactError(
@@ -244,6 +251,8 @@ export class TelegramAlertService {
 
           `<b>Worker</b> · <b><i>${escapeHtml(name)}</i></b>\n` +
 
+          `<b>Tool</b> · <code>${escapeHtml(tool)}</code>\n` +
+
           `<b>State</b> · <b><i>failed</i></b>\n` +
 
           `<b>Error</b> · <b><i>${escapeHtml(error)}</i></b>`
@@ -257,16 +266,23 @@ export class TelegramAlertService {
             "workerId"
           );
 
-        const worker =
-          workerId
-            ? this.workers.get(
-                workerId
-              )
-            : null;
+        const profileId =
+          readString(
+            payload,
+            "profileId"
+          );
+
+        const tool =
+          readString(
+            payload,
+            "tool"
+          ) ?? "unknown";
 
         const name =
-          worker?.name ??
-          this.workerName;
+          this.workers.profileDisplayName(
+            workerId,
+            profileId
+          );
 
         const runtime =
           durationBetween(
@@ -296,6 +312,8 @@ export class TelegramAlertService {
           `<b>Job</b> · <code>${jobId ?? "unknown"}</code>\n` +
 
           `<b>Worker</b> · <b><i>${escapeHtml(name)}</i></b>\n` +
+
+          `<b>Tool</b> · <code>${escapeHtml(tool)}</code>\n` +
 
           `<b>Runtime</b> · <i>${escapeHtml(runtime)}</i>\n` +
 
@@ -371,7 +389,7 @@ export class TelegramAlertService {
         return (
           `${title("WORKER OFFLINE")}\n` +
 
-          `<b><i>${escapeHtml(name)}</i></b> · <b><i>Offline</i></b>` +
+          `<b>Worker</b> · <b><i>${escapeHtml(name)}</i></b> · <b><i>Offline</i></b>` +
 
           suffix
         );
@@ -395,7 +413,7 @@ export class TelegramAlertService {
         return (
           `${title("WORKER RECOVERED")}\n` +
 
-          `<b><i>${escapeHtml(name)}</i></b> · <b><i>Online</i></b>\n` +
+          `<b>Worker</b> · <b><i>${escapeHtml(name)}</i></b> · <b><i>Online</i></b>\n` +
 
           `<b>State</b> · <b><i>${escapeHtml(state)}</i></b>`
         );

@@ -192,10 +192,9 @@ export class TelegramT2VService {
       ) +
       `<b>Worker</b> · <b>${escapeHtml(
         this.workerName
-      )}</b>\n\n` +
+      )}</b>\n` +
 
-      `<b>Generate this video?</b>  ` +
-      `<b><i>Type</i></b> ` +
+      `<b><i>Generate this video? Type</i></b> ` +
       `<b>[</b> ` +
       `<code>yes</code> ` +
       `<b>/</b> ` +
@@ -206,11 +205,11 @@ export class TelegramT2VService {
 
   private settingsUsageHtml() {
     return (
-      `${title("T2V SETTINGS")}\n\n` +
+      `${title("T2V SETTINGS")}\n` +
       `<b>Open</b>\n` +
       `<code>/t2v settings</code>\n` +
       `<code>/t2v s</code>\n` +
-      `<code>/t2v set</code>\n\n` +
+      `<code>/t2v set</code>\n` +
       `<b>Change</b>\n` +
       `<code>/t2v set &lt;setting&gt; &lt;value&gt;</code>`
     );
@@ -651,7 +650,7 @@ export class TelegramT2VService {
 
       return (
         `${title("T2V")}\n` +
-        `<b>Generation aborted.</b>\n\n` +
+        `<b>Generation aborted.</b>\n` +
         `<b><i>No job was submitted.</i></b>`
       );
     }
@@ -780,14 +779,14 @@ export class TelegramT2VService {
 
       return (
         `${title("T2V")}\n` +
-        `<b>Generation aborted after 3 invalid responses.</b>\n\n` +
+        `<b>Generation aborted after 3 invalid responses.</b>\n` +
         `<b><i>No job was submitted.</i></b>`
       );
     }
 
     return (
       `${title("T2V")}\n` +
-      `<b>Invalid response!</b>\n\n` +
+      `<b>Invalid response!</b>\n` +
 
       `<b><i>Type</i></b> ` +
       `‘<code>yes</code>’ ` +
