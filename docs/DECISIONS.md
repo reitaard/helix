@@ -28,7 +28,7 @@ Only choices we are willing to treat as current project commitments belong here.
 
 **Decision:** Director outputs must not depend on a specific model/provider.
 
-**Reason:** Seedance, Runway, open models, editors, renderers, and future production methods should be interchangeable execution options.
+**Reason:** LTX, Seedance-class systems, Wan, H3, stock footage, motion graphics, human editors, and future production methods should remain interchangeable execution possibilities from the Director's point of view.
 
 ## 2026-08-19 — Preserve asynchronous generation pattern as Production knowledge
 
@@ -95,3 +95,21 @@ Only choices we are willing to treat as current project commitments belong here.
 **Decision:** Generated artifact captions use the actual media tool such as `[video.t2v]` instead of a generic Comfy heading, and use the configured worker presentation name rather than the durable worker ID.
 
 **Reason:** Operator output should describe the Helix action that produced the artifact while preserving durable IDs internally. Presentation naming and execution identity remain separate concerns.
+
+## 2026-08-25 — Current generation direction is open/self-hosted first
+
+**Decision:** Runway is not part of the active Production plan. Current generation research and integration should prioritize open/self-hosted execution through ComfyUI and locally controllable model/workflow families. Seedance 2.0 is currently a behavioral/quality reference for reverse-engineering prompt and temporal behavior, not an active provider dependency.
+
+**Reason:** The current project goal is to learn which open Production components can reproduce the useful behavior of packaged commercial video systems while preserving local control, replaceability, inspectability, and a stable Helix-owned execution boundary.
+
+## 2026-08-25 — Native LTX first; escalate controls only when needed
+
+**Decision:** For LTX 2.5, Production should try a focused native prompt before adding LTX Director, Prompt Relay, or continuation machinery. Extra control layers are justified when native prompting repeatedly fails required timing, shot responsibility, state change, or structured progression.
+
+**Reason:** Controlled native T2V experiments showed that LTX 2.5 already performs meaningful temporal allocation, camera/action planning, native hard cuts, subject continuity, and audiovisual synchronization. Adding tool-specific control to every shot would increase complexity and can destabilize shot types that already work well natively.
+
+## 2026-08-25 — Evaluate usable video separately from clause-by-clause adherence
+
+**Decision:** Production experiments must score both prompt/benchmark adherence and finished-video quality.
+
+**Reason:** The 5/8/10-second native T2V tests repeatedly showed that stricter prompt adherence can make a worse video: robotic acting, poor pacing, symbolic debris, or static shots may satisfy more clauses while reducing naturalness and usefulness. Helix should optimize reliable creative output, not merely textual obedience.

@@ -6,7 +6,7 @@ The project is intentionally divided so that the **brain of the system is indepe
 
 ## Current status
 
-**Preparation / foundation phase, with the first Production execution slice locked as a stable checkpoint.**
+**Preparation / foundation phase, with the first Production execution slice locked as a stable checkpoint and a controlled native LTX 2.5 T2V quality baseline now established.**
 
 The active brain-development path is:
 
@@ -20,7 +20,13 @@ Experiment Engine
 
 Production/generation continues as a separate workstream and will connect through stable briefs/contracts rather than shaping the Intelligence or Director architecture.
 
-The current Production checkpoint includes a durable ComfyUI execution runtime, PostgreSQL job/delivery state, original-file Telegram delivery, operator diagnostics, durable operational alerts, complete job-event debugging, guarded terminal-style job cancellation, and a validated native LTX 2.5 T2V path initiated from Telegram with pre-submit confirmation. See [`production/README.md`](production/README.md) and [`production/media-runtime/README.md`](production/media-runtime/README.md).
+The current Production checkpoint includes a durable ComfyUI execution runtime, PostgreSQL job/delivery state, original-file Telegram delivery, operator diagnostics, durable operational alerts, complete job-event debugging, guarded terminal-style job cancellation, and a validated native LTX 2.5 T2V path initiated from Telegram with pre-submit confirmation.
+
+Native LTX 2.5 T2V has also been benchmarked across controlled 5-second, 8-second and 10-second runs before adding Director/Prompt Relay controls. The current research result is to use focused native LTX first for shots inside its proven comfort zone and escalate to stronger Production controls only when timing, shot responsibility, state changes, or structured progression repeatedly fail.
+
+The current generation research direction is **open/self-hosted first**. Runway is not part of the active Production plan. Seedance 2.0 is being used as a behavioral/quality reference rather than an active dependency.
+
+See [`production/README.md`](production/README.md), [`production/ltx-director/NATIVE_T2V.md`](production/ltx-director/NATIVE_T2V.md), and [`production/media-runtime/README.md`](production/media-runtime/README.md).
 
 ## System divisions
 
@@ -48,6 +54,6 @@ Analytics measures what happened.
 Feedback improves the next cycle.
 ```
 
-No Director component should depend on a specific model such as Seedance, Wan, H3, Runway, or any future provider.
+No Director component should depend on a specific model or production provider. The current open/self-hosted Production direction is an execution choice, not a Helix brain dependency.
 
 Anything not recorded as a decision remains a working assumption until validated.

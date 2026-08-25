@@ -2,6 +2,8 @@
 
 Production is the execution layer. This area contains the active ComfyUI worker/runtime work as well as model/workflow experiments.
 
+The current generation direction is **open/self-hosted first**. Runway is not part of the active Production plan. Seedance 2.0 is currently used as a behavioral/quality reference for understanding packaged video-model prompting and temporal behavior rather than as an integrated provider.
+
 ## Current execution path
 
 ```text
@@ -51,6 +53,36 @@ LTX/Director workflow experiments remain execution research, not a frozen runtim
 
 See [`production/ltx-director/`](ltx-director/) for those experiment notes.
 
+## Native T2V research checkpoint
+
+Native T2V has now been tested deliberately before adding Director/Prompt Relay controls.
+
+Controlled native runs cover:
+
+```text
+5 s  -> 121 frames @ 24 fps
+8 s  -> 193 frames @ 24 fps
+10 s -> 241 frames @ 24 fps
+1280x704 output on the current 16:9 / 0.9 MP two-stage path
+Prompt Enhance OFF for the native baseline
+```
+
+Current conclusions:
+
+- native LTX already provides meaningful temporal allocation, camera/action planning, native hard cuts and joint AV behavior;
+- focused continuous shots should try native LTX first;
+- 8 seconds is the current research sweet spot for richer native single shots, while the deployed runtime still keeps its fixed 5-second baseline until the settings contract is designed;
+- exact collision geometry, dense physical causality, precise optical/reflection geometry and strict multi-action tracking remain weak;
+- longer duration can stretch a story instead of completing more events;
+- natural overlapping action language generally works better than rigid state-machine phrasing;
+- visual-quality descriptions can matter more than repeated logical negatives/constraints;
+- benchmark adherence and finished-video quality must be evaluated separately;
+- dominant sound sources are more reliable than subtle ambient beds.
+
+The quality-oriented 8-second batch showed strong native results for sports-car tracking, singer/performance footage, human acting/dialogue and motorcycle POV. Multishot visuals are promising, but shot responsibilities and audio continuity still need more control/testing.
+
+See [`production/ltx-director/NATIVE_T2V.md`](ltx-director/NATIVE_T2V.md) for the full findings and current prompt/control policy.
+
 ## Workflow integration policy
 
 Do not hard-code a large semantic input contract while workflows are still changing.
@@ -70,6 +102,8 @@ add semantic bindings around stable controls
 ```
 
 The first native T2V runtime binding is deliberately narrow: Helix changes only the positive prompt at `405:376.inputs.value` in the vetted API-format workflow. Resolution, duration, FPS, prompt enhancement, negative prompt, model and sampler controls remain fixed for this checkpoint and will be designed as a separate settings surface.
+
+Native LTX should be the first Production path for shots inside its proven comfort zone. Director/Prompt Relay should be introduced when a required beat, state change, shot responsibility, or timing relationship repeatedly fails under focused native prompting.
 
 ## Runtime ownership
 
@@ -170,7 +204,7 @@ Tool:         video.t2v
 Result:       succeeded
 Runtime:      4m 10s
 Artifact:     video/LTX_2.5_t2v_00001_.mp4
-Video:        1280×704 · 5.0s
+Video:        1280x704 · 5.0s
 Audio:        present
 Worker:       Christopher Nolan
 Delivery:     Telegram, 1 attempt
@@ -178,7 +212,9 @@ Delivery:     Telegram, 1 attempt
 
 This proved Telegram intent -> Helix durable job -> native LTX 2.5 generation -> durable reconciliation -> original-file Telegram return.
 
-Delivered-file captions now use the actual Helix job tool, such as `[video.t2v]`, and the configured worker display name `Christopher Nolan`. The Job label is bold and the short durable ID remains monospace.
+Delivered-file captions use the actual Helix job tool, such as `[video.t2v]`, and the configured worker display name `Christopher Nolan`. The Job label is bold and the short durable ID remains monospace.
+
+Model-quality evaluation should use the native Comfy artifact or a verified original-file document path. Earlier test copies transported through Telegram were observed with changed resolution/frame cadence compared with the native artifacts, which is enough to contaminate fine motion/detail comparisons.
 
 ## Current checkpoint
 
@@ -200,6 +236,7 @@ Completed:
 - durable cancellation confirmation;
 - durable T2V prompt/confirmation state;
 - validated native `video.t2v` generation and Telegram delivery;
+- controlled 5/8/10-second native T2V research baseline;
 - tool-aware Telegram artifact captions;
 - advisory WebSocket-event readiness semantics;
 - read-only pinned-revision/upstream Comfy update awareness.
@@ -209,7 +246,7 @@ Still deferred:
 - worker output-retention cleanup;
 - actual image upload/staging;
 - broader prompt/relay/sampler semantic bindings;
-- T2V settings beyond the fixed prompt-only baseline;
+- T2V settings beyond the fixed prompt-only runtime baseline;
 - persistent WebSocket execution tracking;
 - broader Telegram mutation commands.
 
@@ -219,4 +256,10 @@ A real Windows reboot -> automatic ComfyUI worker startup remains to be proven. 
 
 The next main Helix brain phase is **Niche Intelligence**, not additional Telegram/runtime expansion.
 
-Production workflow work can resume separately with T2V settings design around the now-proven native LTX 2.5 baseline, plus continued I2V optimization. The settings work should expose stable Helix semantics rather than raw Comfy node controls.
+Production workflow research can continue independently in this order:
+
+1. preserve the current native 8-second quality baseline;
+2. run Prompt Enhance ON/OFF as a controlled preprocessing test;
+3. re-test LTX Director / Prompt Relay specifically against native limitations that need stronger control;
+4. design the stable T2V settings contract around proven Helix semantics rather than raw Comfy fields;
+5. later revisit longer structured generation and the Seedance motorcycle comparison after the native-vs-controlled boundary is understood.

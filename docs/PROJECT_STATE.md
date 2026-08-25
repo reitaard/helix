@@ -2,9 +2,9 @@
 
 ## Current phase
 
-**Preparation / foundation, with a validated Production execution slice, a narrow Telegram operator surface, and a proven native LTX 2.5 T2V input/output loop.**
+**Preparation / foundation, with a validated Production execution slice, a narrow Telegram operator surface, a proven native LTX 2.5 T2V input/output loop, and a controlled native T2V quality baseline.**
 
-The high-level Helix system division is established. Production execution is hardened enough to pause as a stable checkpoint while the project returns to the main Helix brain path.
+The high-level Helix system division is established. Production execution is hardened enough to pause as a stable checkpoint while generation research continues independently and the project returns to the main Helix brain path.
 
 ## Primary system direction
 
@@ -13,6 +13,8 @@ Niche Intelligence -> Director -> Experiment Engine
 ```
 
 Production/generation remains a separate workstream connected later through stable creative/variant briefs. Generation technology must not shape the Intelligence or Helix Director contracts.
+
+The current Production generation direction is **open/self-hosted first**. Runway is not part of the active plan. Seedance 2.0 is currently a behavioral/quality reference for understanding prompt interpretation, temporal planning, continuity, and packaged-model behavior; it is not an active provider dependency.
 
 ## Project divisions
 
@@ -26,7 +28,7 @@ Production/generation remains a separate workstream connected later through stab
 
 ## Active Production checkpoint
 
-Current status as of 2026-08-24:
+Current status as of 2026-08-25:
 
 ```text
 caller / n8n / Telegram
@@ -161,7 +163,7 @@ Three invalid responses abort the request, a new slash command abandons pending 
 
 ### Confirmed T2V input
 
-`/t2v` now separates prompt entry from GPU execution:
+`/t2v` separates prompt entry from GPU execution:
 
 ```text
 /t2v
@@ -177,7 +179,7 @@ video.t2v
 
 Pending T2V state is durable in `operator_pending_t2v`. The prompt window is five minutes and the confirmation window is 60 seconds. Three invalid confirmation responses abort. A new slash command abandons the pending T2V action. No media job exists until `yes` is confirmed.
 
-The current native LTX 2.5 T2V semantic surface is deliberately prompt-only. Helix mutates `405:376.inputs.value` and verifies that prompt enhancement at `405:383` remains disabled. The current 16:9 / 0.9 MP / 24 fps / 5-second baseline remains fixed.
+The current native LTX 2.5 T2V semantic surface is deliberately prompt-only. Helix mutates `405:376.inputs.value` and verifies that prompt enhancement at `405:383` remains disabled. The deployed runtime baseline remains fixed at 16:9 / 0.9 MP / 24 fps / 5 seconds until the T2V settings contract is explicitly designed. Experimental quality research has separately established 8 seconds as the strongest current general-purpose native test duration for richer single-shot scenes.
 
 Worker state no longer treats a transient Comfy WebSocket-events timeout as execution failure by itself. Runtime, queue and capability checks determine execution readiness; event-socket failure remains visible as an advisory diagnostic.
 
@@ -199,7 +201,7 @@ Tool:         video.t2v
 Result:       succeeded
 Runtime:      4m 10s
 Artifact:     video/LTX_2.5_t2v_00001_.mp4
-Video:        1280×704 · 5.0s
+Video:        1280x704 · 5.0s
 Audio:        present
 Delivery:     Telegram, 1 attempt
 Worker:       Christopher Nolan
@@ -208,6 +210,45 @@ Worker:       Christopher Nolan
 This proves Telegram intent -> Helix durable job -> native LTX 2.5 generation -> artifact reconciliation -> original-file Telegram delivery.
 
 The durable pre-submit confirmation layer was added after the successful generation proof so future prompt entry does not immediately spend GPU time.
+
+## Native LTX 2.5 T2V research checkpoint
+
+A controlled native T2V benchmark has now been run across 5-second, 8-second and 10-second durations before adding Director or Prompt Relay.
+
+Validated native outputs:
+
+```text
+5 s  -> 121 frames @ 24 fps -> ~5.04 s
+8 s  -> 193 frames @ 24 fps -> ~8.04 s
+10 s -> 241 frames @ 24 fps -> ~10.04 s
+native output: 1280x704
+```
+
+The key findings are:
+
+- native LTX already performs meaningful semantic temporal allocation, camera/action planning, native hard cuts and joint AV generation;
+- continuous vehicle/camera shots, motorcycle POV, focused human acting and performance/music scenes are strong native territory;
+- exact collision geometry, strict multi-object physical causality, exact reflection geometry, dense low-level sub-action tracking and guaranteed final-state completion remain unreliable;
+- 8 seconds currently gives the best balance for richer native single-shot research; 5 seconds remains useful for compact/high-motion ideas and 10 seconds should be used only when the scene genuinely contains enough evolving action;
+- longer duration can produce temporal dilation rather than more completed events;
+- natural overlapping causal language often produces better acting than rigid `ONLY AFTER X -> Y` sequencing;
+- explicit visual post-state wording can improve persistence, but clause-by-clause adherence and finished-video quality must be scored separately;
+- subtle ambience is less reliable than dominant sound sources such as engines, voice/music, or discrete impacts;
+- a hard cut is not enough: multishot prompts work better when each shot has a distinct narrative/job function.
+
+The strongest quality-oriented native 8-second batch included:
+
+```text
+sports-car coastal tracking -> strongest complete native result
+singer performance           -> strong audiovisual/performance result
+cafe acting/dialogue         -> excellent visual acting, weak subtle ambience
+motorcycle mountain POV      -> credible continuous T2V vehicle world
+train-station multishot      -> good visual edit, weak audio
+```
+
+Full findings and current prompt/control policy are recorded in `production/ltx-director/NATIVE_T2V.md`.
+
+One operational evaluation rule is now explicit: benchmark the native Comfy artifact, not a transformed preview. Earlier Telegram-delivered copies were observed with changed resolution/frame cadence compared with the native files, which is enough to contaminate quality comparison. The intended `sendDocument` original-file path must remain verified end-to-end.
 
 ## Production workflow policy
 
@@ -227,12 +268,14 @@ freeze/version those graphs
 add semantic Helix bindings around proven controls
 ```
 
+Native LTX should be tried first for shots within its proven comfort zone. LTX Director/Prompt Relay should be introduced when native prompting repeatedly fails required timing, shot responsibilities, state changes or structured progression rather than being added automatically to every shot.
+
 Still deferred:
 
 - actual image upload/staging through `/upload/image`;
 - broad prompt/chunk-prompt bindings;
 - Prompt Relay/Director bindings;
-- broader T2V settings beyond the fixed prompt-only baseline;
+- broader T2V settings beyond the fixed prompt-only runtime baseline;
 - sampler/model tuning as stable user-facing semantics;
 - persistent WebSocket execution tracking;
 - worker output-retention deletion infrastructure;
@@ -257,7 +300,10 @@ One operational validation remains pending: the Windows scheduled task has been 
 - [x] Add live worker RAM/VRAM diagnostics and read-only Comfy upstream-drift awareness.
 - [x] Validate a simple native LTX 2.5 T2V workflow and Telegram production loop.
 - [x] Add durable T2V pre-submit confirmation.
-- [ ] Design the stable T2V settings contract.
+- [x] Establish native 5/8/10-second T2V quality findings before Director/Prompt Relay retesting.
+- [ ] Design the stable T2V settings contract using the native findings.
+- [ ] Run controlled Prompt Enhance ON/OFF evaluation.
+- [ ] Re-test LTX Director / Prompt Relay only against native limitations that need stronger control.
 - [ ] Validate real Windows reboot/AtStartup behavior for the ComfyUI worker.
 
 ## Next Helix brain phase
