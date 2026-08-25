@@ -19,6 +19,10 @@ import {
 } from "./repositories/worker-repository.js";
 
 import {
+  ArtifactSourceRepository
+} from "./repositories/artifact-source-repository.js";
+
+import {
   JobReconciler
 } from "./jobs/reconciler.js";
 
@@ -97,6 +101,10 @@ import {
 import {
   TelegramDebugService
 } from "./telegram/debug-service.js";
+
+import {
+  TelegramDownloadsService
+} from "./telegram/downloads-service.js";
 
 import {
   TelegramCancelService
@@ -196,6 +204,9 @@ const leibovitzProfile =
 
 const jobRepository =
   new JobRepository(db);
+
+const artifactSourceRepository =
+  new ArtifactSourceRepository(db);
 
 const deliveryRepository =
   new DeliveryRepository(db);
@@ -388,16 +399,33 @@ const reconciler =
     config.jobTimeoutMs
   );
 
-const deliveryWorker =
+const telegramDelivery =
   config.telegram
+    ? new TelegramDelivery(
+        config.telegram.botToken,
+        config.telegram.chatId
+      )
+    : null;
+
+const deliveryWorker =
+  telegramDelivery
     ? new DeliveryWorker(
         deliveryRepository,
         registry,
-        new TelegramDelivery(
-          config.telegram.botToken,
-          config.telegram.chatId
-        ),
+        telegramDelivery,
         config.spoolDir
+      )
+    : null;
+
+const telegramDownloadsService =
+  telegramDelivery &&
+  physicalWorker
+    ? new TelegramDownloadsService(
+        physicalWorker.id,
+        config.spoolDir,
+        registry,
+        artifactSourceRepository,
+        telegramDelivery
       )
     : null;
 
@@ -428,7 +456,8 @@ const telegramCommandService =
   comfyUpdateChecker &&
   telegramCancelService &&
   telegramT2VService &&
-  telegramT2IService
+  telegramT2IService &&
+  telegramDownloadsService
     ? new TelegramCommandService(
         config.telegram.botToken,
         config.telegram.chatId,
@@ -440,6 +469,7 @@ const telegramCommandService =
         deliveryRepository,
         outboxRepository,
         telegramDebugService,
+        telegramDownloadsService,
         telegramCancelService,
         telegramT2VService,
         telegramT2IService
