@@ -35,11 +35,24 @@ function asRecord(
 
 function nodeInputs(
   workflow: Record<string, unknown>,
-  nodeId: string
+  nodeId: string,
+  classType?: string
 ) {
-  return asRecord(
-    asRecord(workflow[nodeId])?.inputs
+  const node = asRecord(
+    workflow[nodeId]
   );
+
+  if (
+    !node ||
+    (
+      classType !== undefined &&
+      node.class_type !== classType
+    )
+  ) {
+    return null;
+  }
+
+  return asRecord(node.inputs);
 }
 
 function stringValue(
@@ -254,14 +267,36 @@ export function inspectComfyWorkflow(
   }
 
   const t2vPrompt = stringValue(
-    nodeInputs(workflow, "405:376")?.value
+    nodeInputs(
+      workflow,
+      "405:376",
+      "PrimitiveStringMultiline"
+    )?.value
   );
 
   if (t2vPrompt !== null) {
     const details: ComfyWorkflowInspection["details"] = [];
-    const resolution = nodeInputs(workflow, "409");
+    const resolution = nodeInputs(
+      workflow,
+      "409",
+      "ResolutionSelector"
+    );
+    const duration = numberValue(
+      nodeInputs(
+        workflow,
+        "405:362",
+        "PrimitiveInt"
+      )?.value
+    );
     const enhance = booleanValue(
-      nodeInputs(workflow, "405:383")?.value
+      nodeInputs(
+        workflow,
+        "405:383",
+        "PrimitiveBoolean"
+      )?.value
+    );
+    const megapixels = numberValue(
+      resolution?.megapixels
     );
 
     pushDetail(
@@ -272,12 +307,16 @@ export function inspectComfyWorkflow(
     pushDetail(
       details,
       "Megapixels",
-      displayNumber(numberValue(resolution?.megapixels))
+      megapixels === null
+        ? null
+        : `${megapixels} MP`
     );
     pushDetail(
       details,
       "Duration",
-      displayNumber(numberValue(nodeInputs(workflow, "405:362")?.value))
+      duration === null
+        ? null
+        : `${duration}s`
     );
     pushDetail(
       details,
@@ -287,32 +326,76 @@ export function inspectComfyWorkflow(
     pushDetail(
       details,
       "FPS",
-      displayNumber(numberValue(nodeInputs(workflow, "405:361")?.value))
+      displayNumber(
+        numberValue(
+          nodeInputs(
+            workflow,
+            "405:361",
+            "PrimitiveInt"
+          )?.value
+        )
+      )
     );
     pushDetail(
       details,
       "Stage1",
-      displayNumber(numberValue(nodeInputs(workflow, "405:339")?.noise_seed))
+      displayNumber(
+        numberValue(
+          nodeInputs(
+            workflow,
+            "405:339",
+            "RandomNoise"
+          )?.noise_seed
+        )
+      )
     );
     pushDetail(
       details,
       "Stage2",
-      displayNumber(numberValue(nodeInputs(workflow, "405:338")?.noise_seed))
+      displayNumber(
+        numberValue(
+          nodeInputs(
+            workflow,
+            "405:338",
+            "RandomNoise"
+          )?.noise_seed
+        )
+      )
     );
     pushDetail(
       details,
       "Negative",
-      stringValue(nodeInputs(workflow, "405:373")?.text)
+      stringValue(
+        nodeInputs(
+          workflow,
+          "405:373",
+          "CLIPTextEncode"
+        )?.text
+      )
     );
     pushDetail(
       details,
       "Sampler",
-      stringValue(nodeInputs(workflow, "405:352")?.sampler_name)
+      stringValue(
+        nodeInputs(
+          workflow,
+          "405:352",
+          "KSamplerSelect"
+        )?.sampler_name
+      )
     );
     pushDetail(
       details,
       "Guidance",
-      displayNumber(numberValue(nodeInputs(workflow, "405:388")?.video_cfg))
+      displayNumber(
+        numberValue(
+          nodeInputs(
+            workflow,
+            "405:388",
+            "LTXVDualCFGGuider"
+          )?.video_cfg
+        )
+      )
     );
 
     return {
@@ -324,13 +407,29 @@ export function inspectComfyWorkflow(
   }
 
   const t2iPrompt = stringValue(
-    nodeInputs(workflow, "76")?.value
+    nodeInputs(
+      workflow,
+      "76",
+      "PrimitiveStringMultiline"
+    )?.value
   );
 
   if (t2iPrompt !== null) {
     const details: ComfyWorkflowInspection["details"] = [];
-    const width = numberValue(nodeInputs(workflow, "77:84")?.value);
-    const height = numberValue(nodeInputs(workflow, "77:85")?.value);
+    const width = numberValue(
+      nodeInputs(
+        workflow,
+        "77:84",
+        "PrimitiveInt"
+      )?.value
+    );
+    const height = numberValue(
+      nodeInputs(
+        workflow,
+        "77:85",
+        "PrimitiveInt"
+      )?.value
+    );
 
     if (width !== null && height !== null) {
       pushDetail(details, "Image", `${width}×${height}`);
@@ -339,7 +438,15 @@ export function inspectComfyWorkflow(
     pushDetail(
       details,
       "Seed",
-      displayNumber(numberValue(nodeInputs(workflow, "77:86")?.noise_seed))
+      displayNumber(
+        numberValue(
+          nodeInputs(
+            workflow,
+            "77:86",
+            "RandomNoise"
+          )?.noise_seed
+        )
+      )
     );
 
     return {
