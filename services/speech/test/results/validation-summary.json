@@ -1,0 +1,71 @@
+{
+  "package_version": "0.1.5",
+  "model": "medium-streaming-en",
+  "model_arch": 5,
+  "model_path": "/opt/helix-speech/models/download.moonshine.ai/model/medium-streaming-en/quantized_26_08_21",
+  "sample": "beckett.wav",
+  "sample_duration_seconds": 9.963375,
+  "cli_runs": [
+    {
+      "transcript": "Ever tried?\nEver failed.\nNo matter.\nTry again.\nFail again.\nFail better.",
+      "wall_seconds": 7.43,
+      "user_cpu_seconds": 30.34,
+      "system_cpu_seconds": 3.73,
+      "cpu_percent": 458.0,
+      "peak_rss_kib": 812924,
+      "exit_status": 0,
+      "warnings_or_errors": []
+    },
+    {
+      "transcript": "Ever tried?\nEver failed.\nNo matter.\nTry again.\nFail again.\nFail better.",
+      "wall_seconds": 6.75,
+      "user_cpu_seconds": 27.37,
+      "system_cpu_seconds": 3.21,
+      "cpu_percent": 452.0,
+      "peak_rss_kib": 812552,
+      "exit_status": 0,
+      "warnings_or_errors": []
+    }
+  ],
+  "resident_python": {
+    "model_load_seconds": 0.5573372775688767,
+    "memory_after_model_load": {
+      "resident_rss_kib": 725140,
+      "peak_rss_kib": 753232
+    },
+    "runs": [
+      {
+        "text": "Ever tried?\nEver failed.\nNo matter.\nTry again.\nFail again.\nFail better.",
+        "transcription_seconds": 7.0622344352304935,
+        "resident_rss_kib": 734960,
+        "peak_rss_kib": 816276,
+        "real_time_factor": 0.7088194949232056
+      },
+      {
+        "text": "Ever tried?\nEver failed.\nNo matter.\nTry again.\nFail again.\nFail better.",
+        "transcription_seconds": 6.868013761937618,
+        "resident_rss_kib": 734960,
+        "peak_rss_kib": 821404,
+        "real_time_factor": 0.6893260327888511
+      }
+    ],
+    "transcriber_released": true
+  },
+  "codec_pipeline": {
+    "ogg": {
+      "text": "Ever tried?\nEver failed.\nNo matter.\nTry again.\nFail again.\nFail better.",
+      "input_format": "ogg",
+      "converted_format": "wav/pcm_s16le/16000Hz/mono",
+      "transcription_seconds": 7.500375968404114,
+      "real_time_factor": 0.7527947074564708
+    },
+    "opus": {
+      "text": "Ever tried?\nEver failed.\nNo matter.\nTry again.\nFail again.\nFail better.",
+      "input_format": "opus",
+      "converted_format": "wav/pcm_s16le/16000Hz/mono",
+      "transcription_seconds": 6.125634228810668,
+      "real_time_factor": 0.6148151834906012
+    }
+  },
+  "model_integrity_verified": true
+}
