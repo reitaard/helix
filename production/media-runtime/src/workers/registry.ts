@@ -3,6 +3,10 @@ import {
 } from "../adapters/comfy/adapter.js";
 
 import type {
+  AdapterExecutionEventListener
+} from "../domain/media-adapter.js";
+
+import type {
   ProductionProfileDefinition,
   WorkerDefinition,
   WorkerState
@@ -240,6 +244,19 @@ export class WorkerRegistry {
   ) {
     return this.adapters.get(id)
       ?.submit(workflow) ?? null;
+  }
+
+  subscribeExecutionEvents(
+    id: string,
+    listener: AdapterExecutionEventListener
+  ) {
+    const adapter = this.adapters.get(id);
+
+    return adapter
+      ? adapter.subscribeExecutionEvents(
+          listener
+        )
+      : null;
   }
 
   async cancel(
