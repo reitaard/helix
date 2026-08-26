@@ -12,6 +12,9 @@ import test from "node:test";
 import {
   TelegramDelivery
 } from "../dist/delivery/telegram.js";
+import {
+  TelegramJobLifecycleRepository
+} from "../dist/repositories/telegram-job-lifecycle-repository.js";
 
 test("Telegram lifecycle migration persists confirmation and job message identity", async () => {
   const sql = await readFile(
@@ -41,6 +44,41 @@ test("Telegram lifecycle migration persists confirmation and job message identit
   assert.match(
     sql,
     /UNIQUE INDEX IF NOT EXISTS[\s\S]*telegram_job_lifecycles_chat_message_idx/
+  );
+});
+
+test("progress status sweep excludes delivery-owned retry and terminal-delivery cards", async () => {
+  let capturedSql = "";
+
+  const db = {
+    async query(sql) {
+      capturedSql = String(sql);
+      return {
+        rows: []
+      };
+    }
+  };
+
+  const repository =
+    new TelegramJobLifecycleRepository(db);
+
+  await repository.listActive();
+
+  assert.match(
+    capturedSql,
+    /presentation_state = 'active'/
+  );
+  assert.match(
+    capturedSql,
+    /delivery_retrying/
+  );
+  assert.match(
+    capturedSql,
+    /delivery_failed/
+  );
+  assert.match(
+    capturedSql,
+    /NOT IN/
   );
 });
 
