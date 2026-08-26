@@ -19,6 +19,20 @@ export interface ComfyWorkflowInspection {
   }>;
 }
 
+export interface ComfyHistoryDiagnostics {
+  raw: number;
+  valid: number;
+  completed: number;
+  outputs: number;
+  artifacts: number;
+  malformed: number;
+}
+
+export interface ParsedComfyHistory {
+  items: ComfyHistoryItem[];
+  diagnostics: ComfyHistoryDiagnostics;
+}
+
 function asRecord(
   value: unknown
 ): Record<string, unknown> | null {
@@ -213,32 +227,81 @@ export function collectComfyArtifacts(
   return artifacts;
 }
 
-export function parseComfyHistory(
-  history: Record<string, unknown>
-): ComfyHistoryItem[] {
-  const items = Object.entries(history)
-    .map(([promptId, value], index) => {
-      const record = asRecord(value);
-      if (!record) return null;
+export function parseComfyHistoryWithDiagnostics(
+  history: unknown
+): ParsedComfyHistory {
+  const root = asRecord(history);
 
-      const status = asRecord(record.status);
-      if (status?.completed !== true) return null;
+  if (!root) {
+    throw new Error(
+      "Comfy history response is malformed"
+    );
+  }
 
-      const artifacts = collectComfyArtifacts(
-        asRecord(record.outputs) ?? undefined
-      );
+  const diagnostics: ComfyHistoryDiagnostics = {
+    raw: Object.keys(root).length,
+    valid: 0,
+    completed: 0,
+    outputs: 0,
+    artifacts: 0,
+    malformed: 0
+  };
 
-      if (artifacts.length === 0) return null;
+  const items: Array<ComfyHistoryItem & {
+    index: number;
+  }> = [];
 
-      return {
-        promptId,
-        completedAt: historyTimestamp(record),
-        artifacts,
-        workflow: workflowFromRecord(record),
-        index
-      };
-    })
-    .filter((item): item is NonNullable<typeof item> => item !== null);
+  for (const [
+    promptId,
+    value
+  ] of Object.entries(root)) {
+    const record = asRecord(value);
+    const status = asRecord(record?.status);
+    const outputs = asRecord(record?.outputs);
+
+    if (!record || !status || !outputs) {
+      diagnostics.malformed += 1;
+      continue;
+    }
+
+    diagnostics.valid += 1;
+
+    if (Object.keys(outputs).length > 0) {
+      diagnostics.outputs += 1;
+    }
+
+    if (status.completed !== true) {
+      continue;
+    }
+
+    diagnostics.completed += 1;
+
+    const artifacts =
+      collectComfyArtifacts(outputs);
+
+    if (artifacts.length === 0) {
+      continue;
+    }
+
+    diagnostics.artifacts += 1;
+
+    items.push({
+      promptId,
+      completedAt: historyTimestamp(record),
+      artifacts,
+      workflow: workflowFromRecord(record),
+      index: items.length
+    });
+  }
+
+  if (
+    diagnostics.raw > 0 &&
+    diagnostics.valid === 0
+  ) {
+    throw new Error(
+      "Comfy history response contains no valid records"
+    );
+  }
 
   items.sort((a, b) => {
     const aTime = a.completedAt
@@ -251,7 +314,20 @@ export function parseComfyHistory(
     return bTime - aTime || b.index - a.index;
   });
 
-  return items.map(({ index: _index, ...item }) => item);
+  return {
+    items: items.map(
+      ({ index: _index, ...item }) => item
+    ),
+    diagnostics
+  };
+}
+
+export function parseComfyHistory(
+  history: unknown
+): ComfyHistoryItem[] {
+  return parseComfyHistoryWithDiagnostics(
+    history
+  ).items;
 }
 
 export function inspectComfyWorkflow(
@@ -445,6 +521,41 @@ export function inspectComfyWorkflow(
             "77:86",
             "RandomNoise"
           )?.noise_seed
+        )
+      )
+    );
+    pushDetail(
+      details,
+      "Sampler",
+      stringValue(
+        nodeInputs(
+          workflow,
+          "77:80",
+          "KSamplerSelect"
+        )?.sampler_name
+      )
+    );
+    pushDetail(
+      details,
+      "Guidance",
+      displayNumber(
+        numberValue(
+          nodeInputs(
+            workflow,
+            "77:90"
+          )?.cfg
+        )
+      )
+    );
+    pushDetail(
+      details,
+      "Steps",
+      displayNumber(
+        numberValue(
+          nodeInputs(
+            workflow,
+            "77:93"
+          )?.steps
         )
       )
     );

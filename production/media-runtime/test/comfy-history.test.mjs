@@ -3,7 +3,8 @@ import test from "node:test";
 
 import {
   inspectComfyWorkflow,
-  parseComfyHistory
+  parseComfyHistory,
+  parseComfyHistoryWithDiagnostics
 } from "../dist/adapters/comfy/history.js";
 
 function node(
@@ -99,6 +100,127 @@ test("inspectComfyWorkflow extracts known LTX settings", () => {
   assert.equal(details.Negative, "cartoon");
   assert.equal(details.Sampler, "euler_ancestral");
   assert.equal(details.Guidance, "1.5");
+});
+
+test("parseComfyHistory accepts the real Comfy prompt-array image shape", () => {
+  const workflow = {
+    "76": node("PrimitiveStringMultiline", { value: "A studio portrait." }),
+    "77:84": node("PrimitiveInt", { value: 1280 }),
+    "77:85": node("PrimitiveInt", { value: 720 }),
+    "77:86": node("RandomNoise", { noise_seed: 42 }),
+    "77:80": node("KSamplerSelect", { sampler_name: "euler" }),
+    "77:90": node("FluxGuidance", { cfg: 1.0 }),
+    "77:93": node("Flux2Scheduler", { steps: 4 })
+  };
+  const history = {
+    image_prompt_id: {
+      prompt: [7, "image_prompt_id", workflow, { create_time: 1_700_000_000 }, ["78"]],
+      outputs: {
+        "78": {
+          images: [{
+            filename: "Flux2-Klein-Distilled_00014_.png",
+            subfolder: "",
+            type: "output"
+          }]
+        }
+      },
+      status: {
+        status_str: "success",
+        completed: true,
+        messages: [["execution_success", { timestamp: 1_700_000_100_000 }]]
+      }
+    }
+  };
+
+  const parsed = parseComfyHistoryWithDiagnostics(history);
+  const item = parsed.items[0];
+  const inspection = inspectComfyWorkflow(item.workflow);
+  const details = Object.fromEntries(
+    inspection.details.map(detail => [detail.label, detail.value])
+  );
+
+  assert.equal(parsed.items.length, 1);
+  assert.equal(parsed.diagnostics.raw, 1);
+  assert.equal(parsed.diagnostics.completed, 1);
+  assert.equal(parsed.diagnostics.outputs, 1);
+  assert.equal(parsed.diagnostics.artifacts, 1);
+  assert.equal(item.promptId, "image_prompt_id");
+  assert.equal(item.artifacts[0].filename, "Flux2-Klein-Distilled_00014_.png");
+  assert.equal(item.workflow, workflow);
+  assert.equal(inspection.prompt, "A studio portrait.");
+  assert.equal(details.Image, "1280×720");
+  assert.equal(details.Seed, "42");
+  assert.equal(details.Sampler, "euler");
+  assert.equal(details.Guidance, "1");
+  assert.equal(details.Steps, "4");
+});
+
+test("parseComfyHistory detects completed video outputs recursively", () => {
+  const items = parseComfyHistory({
+    video_prompt_id: {
+      prompt: [1, "video_prompt_id", {}, {}, ["90"]],
+      outputs: {
+        "90": {
+          video: {
+            files: [{ filename: "clip.mp4", subfolder: "video", type: "output" }]
+          }
+        }
+      },
+      status: {
+        status_str: "success",
+        completed: true,
+        messages: []
+      }
+    }
+  });
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].artifacts[0].filename, "clip.mp4");
+});
+
+test("parseComfyHistory ignores malformed records when valid records remain", () => {
+  const parsed = parseComfyHistoryWithDiagnostics({
+    malformed: "not a history record",
+    valid: {
+      prompt: [1, "valid", {}, {}, []],
+      outputs: {},
+      status: {
+        status_str: "success",
+        completed: true,
+        messages: []
+      }
+    }
+  });
+
+  assert.equal(parsed.items.length, 0);
+  assert.equal(parsed.diagnostics.raw, 2);
+  assert.equal(parsed.diagnostics.valid, 1);
+  assert.equal(parsed.diagnostics.malformed, 1);
+});
+
+test("parseComfyHistory accepts genuinely empty history", () => {
+  const parsed = parseComfyHistoryWithDiagnostics({});
+
+  assert.deepEqual(parsed.items, []);
+  assert.deepEqual(parsed.diagnostics, {
+    raw: 0,
+    valid: 0,
+    completed: 0,
+    outputs: 0,
+    artifacts: 0,
+    malformed: 0
+  });
+});
+
+test("parseComfyHistory rejects malformed top-level history", () => {
+  assert.throws(
+    () => parseComfyHistoryWithDiagnostics([]),
+    /malformed/
+  );
+  assert.throws(
+    () => parseComfyHistoryWithDiagnostics({ wrapper: { unexpected: true } }),
+    /no valid records/
+  );
 });
 
 test("inspectComfyWorkflow does not mislabel unknown node ids", () => {

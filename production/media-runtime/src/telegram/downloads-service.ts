@@ -16,7 +16,7 @@ import type {
 
 import {
   inspectComfyWorkflow,
-  parseComfyHistory,
+  parseComfyHistoryWithDiagnostics,
   type ComfyHistoryItem,
   type ComfyWorkflowInspection
 } from "../adapters/comfy/history.js";
@@ -166,19 +166,64 @@ export class TelegramDownloadsService {
   private async history(
     limit: number
   ) {
-    const raw =
-      await this.workers.history(
-        this.workerId,
-        limit
+    try {
+      const raw =
+        await this.workers.history(
+          this.workerId,
+          limit
+        );
+
+      if (!raw) {
+        throw new Error(
+          "Worker adapter unavailable"
+        );
+      }
+
+      const parsed =
+        parseComfyHistoryWithDiagnostics(
+          raw
+        );
+      const counts = parsed.diagnostics;
+
+      console.log(
+        `[downloads] history raw=${counts.raw} ` +
+        `valid=${counts.valid} ` +
+        `completed=${counts.completed} ` +
+        `outputs=${counts.outputs} ` +
+        `artifacts=${counts.artifacts}` +
+        (
+          counts.malformed > 0
+            ? ` malformed=${counts.malformed}`
+            : ""
+        )
       );
 
-    if (!raw) {
-      throw new Error(
-        "Comfy history is unavailable"
-      );
+      return {
+        kind: "available" as const,
+        items: parsed.items
+      };
     }
+    catch (error) {
+      const message =
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error);
 
-    return parseComfyHistory(raw);
+      console.error(
+        `[downloads] history unavailable: ${message}`
+      );
+
+      return {
+        kind: "unavailable" as const
+      };
+    }
+  }
+
+  private historyUnavailableHtml() {
+    return (
+      `${title("DOWNLOADS")}\n` +
+      `<i>Comfy history unavailable.</i>`
+    );
   }
 
   private async source(
@@ -224,10 +269,18 @@ export class TelegramDownloadsService {
       };
     }
 
-    const items =
+    const history =
       await this.history(
         DOWNLOAD_HISTORY_LIMIT
       );
+
+    if (history.kind === "unavailable") {
+      return {
+        kind: "unavailable" as const
+      };
+    }
+
+    const items = history.items;
     const lower = clean.toLowerCase();
     const matches = items.filter(
       item =>
@@ -267,10 +320,16 @@ export class TelegramDownloadsService {
   async listHtml(
     page = 1
   ) {
-    const items =
+    const history =
       await this.history(
         DOWNLOAD_HISTORY_LIMIT
       );
+
+    if (history.kind === "unavailable") {
+      return this.historyUnavailableHtml();
+    }
+
+    const items = history.items;
 
     if (items.length === 0) {
       return (
@@ -650,8 +709,16 @@ export class TelegramDownloadsService {
   }
 
   private resolutionErrorHtml(
-    kind: "invalid" | "missing" | "ambiguous"
+    kind:
+      | "invalid"
+      | "missing"
+      | "ambiguous"
+      | "unavailable"
   ) {
+    if (kind === "unavailable") {
+      return this.historyUnavailableHtml();
+    }
+
     if (kind === "missing") {
       return (
         `${title("DOWNLOAD")}\n` +
