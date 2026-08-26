@@ -35,6 +35,10 @@ import {
 } from "./repositories/delivery-repository.js";
 
 import {
+  TelegramJobLifecycleRepository
+} from "./repositories/telegram-job-lifecycle-repository.js";
+
+import {
   OutboxRepository
 } from "./repositories/outbox-repository.js";
 
@@ -109,6 +113,10 @@ import {
 import {
   TelegramCancelService
 } from "./telegram/cancel-service.js";
+
+import {
+  TelegramProgressService
+} from "./telegram/progress-service.js";
 
 import {
   TelegramT2VService
@@ -211,6 +219,9 @@ const artifactSourceRepository =
 const deliveryRepository =
   new DeliveryRepository(db);
 
+const telegramJobLifecycleRepository =
+  new TelegramJobLifecycleRepository(db);
+
 const outboxRepository =
   new OutboxRepository(db);
 
@@ -250,6 +261,14 @@ const t2vSettingsRepository =
   new T2VSettingsRepository(
     db
   );
+
+const telegramDelivery =
+  config.telegram
+    ? new TelegramDelivery(
+        config.telegram.botToken,
+        config.telegram.chatId
+      )
+    : null;
 
 const t2vModeService =
   new T2VModeService(
@@ -346,6 +365,7 @@ const telegramCancelService =
 
 const telegramT2VService =
   config.telegram &&
+  telegramDelivery &&
   physicalWorker &&
   nolanProfile &&
   t2vProfileService &&
@@ -359,6 +379,8 @@ const telegramT2VService =
         config.t2vWorkflowPath,
         jobs,
         t2vPendingRepository,
+        telegramJobLifecycleRepository,
+        telegramDelivery,
         t2vProfileService,
         t2vModeService,
         telegramT2VModeService,
@@ -369,6 +391,7 @@ const telegramT2VService =
 
 const telegramT2IService =
   config.telegram &&
+  telegramDelivery &&
   physicalWorker &&
   leibovitzProfile &&
   t2iProfileService &&
@@ -381,6 +404,8 @@ const telegramT2IService =
         config.t2iWorkflowPath,
         jobs,
         t2iPendingRepository,
+        telegramJobLifecycleRepository,
+        telegramDelivery,
         t2iProfileService,
         telegramT2ISettingsService,
         telegramT2IResetService
@@ -399,21 +424,25 @@ const reconciler =
     config.jobTimeoutMs
   );
 
-const telegramDelivery =
-  config.telegram
-    ? new TelegramDelivery(
-        config.telegram.botToken,
-        config.telegram.chatId
-      )
-    : null;
-
 const deliveryWorker =
   telegramDelivery
     ? new DeliveryWorker(
         deliveryRepository,
+        telegramJobLifecycleRepository,
         registry,
         telegramDelivery,
         config.spoolDir
+      )
+    : null;
+
+const telegramProgressService =
+  telegramDelivery &&
+  physicalWorker
+    ? new TelegramProgressService(
+        physicalWorker.id,
+        registry,
+        telegramJobLifecycleRepository,
+        telegramDelivery
       )
     : null;
 
@@ -490,13 +519,14 @@ async function shutdown(
     "shutting down"
   );
 
-  reconciler.stop();
-  deliveryWorker?.stop();
-  telegramAlertService?.stop();
-  telegramCancelService?.stop();
+  telegramCommandService?.stop();
+  telegramProgressService?.stop();
   telegramT2VService?.stop();
   telegramT2IService?.stop();
-  telegramCommandService?.stop();
+  telegramCancelService?.stop();
+  telegramAlertService?.stop();
+  deliveryWorker?.stop();
+  reconciler.stop();
 
   await app.close();
   await db.end();
@@ -528,6 +558,7 @@ try {
     port: config.port
   });
 
+  telegramProgressService?.start();
   reconciler.start();
   deliveryWorker?.start();
   telegramAlertService?.start();
@@ -539,12 +570,14 @@ try {
 catch (error) {
   app.log.error(error);
 
-  reconciler.stop();
-  deliveryWorker?.stop();
-  telegramAlertService?.stop();
+  telegramCommandService?.stop();
+  telegramProgressService?.stop();
   telegramT2VService?.stop();
   telegramT2IService?.stop();
-  telegramCommandService?.stop();
+  telegramCancelService?.stop();
+  telegramAlertService?.stop();
+  deliveryWorker?.stop();
+  reconciler.stop();
 
   await db.end();
 
