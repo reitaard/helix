@@ -58,6 +58,43 @@ function history(count) {
 }
 
 function serviceWith(rawHistory, mapping = null) {
+  const externalByBackend = new Map();
+  const externalByNumber = new Map();
+  let nextReference = 52n;
+
+  const ensureExternal = backendJobId => {
+    const existing =
+      externalByBackend.get(backendJobId);
+
+    if (existing) {
+      return existing;
+    }
+
+    const jobNumber =
+      nextReference.toString();
+    nextReference += 1n;
+
+    const external = {
+      id: `comfy_ref_${jobNumber}`,
+      jobNumber,
+      backendJobId,
+      tool: "comfy.artifact",
+      workerId: "Comfy UI",
+      profileId: null
+    };
+
+    externalByBackend.set(
+      backendJobId,
+      external
+    );
+    externalByNumber.set(
+      jobNumber,
+      external
+    );
+
+    return external;
+  };
+
   const workers = {
     async history() {
       if (rawHistory instanceof Error) {
@@ -77,18 +114,23 @@ function serviceWith(rawHistory, mapping = null) {
   };
   const sources = {
     async findByBackendJobId(backendJobId) {
-      if (mapping?.backendJobId !== backendJobId) {
-        return null;
+      if (mapping?.backendJobId === backendJobId) {
+        return mapping;
       }
 
-      return mapping;
+      return ensureExternal(
+        backendJobId
+      );
     },
     async findByJobNumber(jobNumber) {
-      if (mapping?.jobNumber !== jobNumber) {
-        return null;
+      if (mapping?.jobNumber === jobNumber) {
+        return mapping;
       }
 
-      return mapping;
+      return (
+        externalByNumber.get(jobNumber) ??
+        null
+      );
     }
   };
   const telegram = {
@@ -123,7 +165,7 @@ test("Downloads paginates 20 items per page", async () => {
   assert.doesNotMatch(second, /\n\n/);
 });
 
-test("Downloads inspect resolves a compact prompt prefix", async () => {
+test("Downloads keeps legacy prompt-prefix inspect but presents the numeric reference", async () => {
   const service = serviceWith({
     imageabc123: imageRecord("imageabc123")
   });
@@ -131,13 +173,32 @@ test("Downloads inspect resolves a compact prompt prefix", async () => {
   const html = await service.handleCommand(["i", "imagea"]);
 
   assert.match(html, /<blockquote expandable>/);
+  assert.match(html, /<b>Job<\/b> · <code>52<\/code>/);
   assert.match(html, /Prompt for imageabc123/);
   assert.match(html, /<b>Image<\/b> · 1280×720/);
   assert.match(html, /<b>Sampler<\/b> · euler/);
   assert.match(html, /<b>Guidance<\/b> · 1/);
   assert.match(html, /<b>Steps<\/b> · 4/);
-  assert.match(html, /<i>Get<\/i> · <code>\/dl g imagea<\/code>/);
+  assert.match(html, /<i>Get<\/i> · <code>\/dl g 52<\/code>/);
   assert.doesNotMatch(html, /\n\n/);
+});
+
+test("Downloads gives Comfy-only artifacts one numeric reference and resolves it", async () => {
+  const promptId = "161023abcdef";
+  const service = serviceWith({
+    [promptId]: imageRecord(promptId)
+  });
+
+  const list = await service.handleCommand([]);
+  const inspect = await service.handleCommand(["i", "52"]);
+  const get = await service.handleCommand(["g", "52"]);
+
+  assert.match(list, /<code>52<\/code>/);
+  assert.doesNotMatch(list, /<code>161023<\/code>/);
+  assert.match(inspect, /<b>Job<\/b> · <code>52<\/code>/);
+  assert.match(inspect, /<b>Comfy Prompt<\/b> · <code>161023abcdef<\/code>/);
+  assert.match(inspect, /Prompt for 161023abcdef/);
+  assert.match(get, /Transfer started.<\/b> · <code>52<\/code>/);
 });
 
 test("Downloads uses one numeric Job reference for mapped artifacts", async () => {

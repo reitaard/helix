@@ -560,8 +560,60 @@ export class JobRepository {
           updated_at,
           started_at,
           finished_at
-        FROM media_jobs
-        WHERE job_number = $1::bigint
+        FROM (
+          SELECT
+            0 AS priority,
+            id,
+            job_number,
+            tool,
+            status,
+            worker_id,
+            profile_id,
+            adapter,
+            backend_job_id,
+            idempotency_key,
+            request,
+            result,
+            error,
+            created_at,
+            updated_at,
+            started_at,
+            finished_at
+          FROM media_jobs
+          WHERE job_number = $1::bigint
+
+          UNION ALL
+
+          SELECT
+            1 AS priority,
+            'comfy_ref_' ||
+              reference_number::text AS id,
+            reference_number AS job_number,
+            'comfy.artifact' AS tool,
+            'succeeded' AS status,
+            'Comfy UI' AS worker_id,
+            NULL::text AS profile_id,
+            'comfy' AS adapter,
+            backend_job_id,
+            NULL::text AS idempotency_key,
+            jsonb_build_object(
+              'kind',
+              'comfy_artifact',
+              'referenceNumber',
+              reference_number::text
+            ) AS request,
+            NULL::jsonb AS result,
+            NULL::jsonb AS error,
+            first_seen_at AS created_at,
+            first_seen_at AS updated_at,
+            first_seen_at AS started_at,
+            first_seen_at AS finished_at
+          FROM media_references
+          WHERE kind = 'comfy_artifact'
+            AND reference_number = $1::bigint
+        ) AS lookup
+        ORDER BY priority
+        LIMIT 1
         `,
         [jobNumber]
       );

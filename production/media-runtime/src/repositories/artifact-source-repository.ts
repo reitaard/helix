@@ -20,10 +20,119 @@ interface ArtifactSourceRow {
   profile_id: string | null;
 }
 
+interface ExternalArtifactReferenceRow {
+  reference_number: string;
+  backend_job_id: string;
+}
+
+function mapJobRow(
+  row: ArtifactSourceRow
+): ArtifactSourceJob {
+  return {
+    id: row.id,
+    jobNumber: row.job_number,
+    backendJobId: row.backend_job_id,
+    tool: row.tool,
+    workerId: row.worker_id,
+    profileId: row.profile_id
+  };
+}
+
+function mapExternalReference(
+  row: ExternalArtifactReferenceRow
+): ArtifactSourceJob {
+  return {
+    id: `comfy_ref_${row.reference_number}`,
+    jobNumber: row.reference_number,
+    backendJobId: row.backend_job_id,
+    tool: "comfy.artifact",
+    workerId: "Comfy UI",
+    profileId: null
+  };
+}
+
 export class ArtifactSourceRepository {
   constructor(
     private readonly db: Pool
   ) {}
+
+  private async findExternalByBackendJobId(
+    backendJobId: string
+  ): Promise<ArtifactSourceJob | null> {
+    const result =
+      await this.db.query<
+        ExternalArtifactReferenceRow
+      >(
+        `
+        SELECT
+          reference_number,
+          backend_job_id
+        FROM media_references
+        WHERE kind = 'comfy_artifact'
+          AND backend_job_id = $1
+        `,
+        [backendJobId]
+      );
+
+    const row = result.rows[0];
+
+    return row
+      ? mapExternalReference(row)
+      : null;
+  }
+
+  private async ensureExternalReference(
+    backendJobId: string
+  ): Promise<ArtifactSourceJob> {
+    const existing =
+      await this.findExternalByBackendJobId(
+        backendJobId
+      );
+
+    if (existing) {
+      return existing;
+    }
+
+    const inserted =
+      await this.db.query<
+        ExternalArtifactReferenceRow
+      >(
+        `
+        INSERT INTO media_references (
+          kind,
+          backend_job_id
+        )
+        VALUES (
+          'comfy_artifact',
+          $1
+        )
+        ON CONFLICT DO NOTHING
+        RETURNING
+          reference_number,
+          backend_job_id
+        `,
+        [backendJobId]
+      );
+
+    const row = inserted.rows[0];
+
+    if (row) {
+      return mapExternalReference(row);
+    }
+
+    const raced =
+      await this.findExternalByBackendJobId(
+        backendJobId
+      );
+
+    if (!raced) {
+      throw new Error(
+        `Failed to allocate media reference for Comfy prompt ${backendJobId}`
+      );
+    }
+
+    return raced;
+  }
 
   async findByBackendJobId(
     backendJobId: string
@@ -50,16 +159,13 @@ export class ArtifactSourceRepository {
 
     const row = result.rows[0];
 
-    return row
-      ? {
-          id: row.id,
-          jobNumber: row.job_number,
-          backendJobId: row.backend_job_id,
-          tool: row.tool,
-          workerId: row.worker_id,
-          profileId: row.profile_id
-        }
-      : null;
+    if (row) {
+      return mapJobRow(row);
+    }
+
+    return this.ensureExternalReference(
+      backendJobId
+    );
   }
 
   async findByJobNumber(
@@ -85,15 +191,32 @@ export class ArtifactSourceRepository {
 
     const row = result.rows[0];
 
-    return row
-      ? {
-          id: row.id,
-          jobNumber: row.job_number,
-          backendJobId: row.backend_job_id,
-          tool: row.tool,
-          workerId: row.worker_id,
-          profileId: row.profile_id
-        }
+    if (row) {
+      return mapJobRow(row);
+    }
+
+    const external =
+      await this.db.query<
+        ExternalArtifactReferenceRow
+      >(
+        `
+        SELECT
+          reference_number,
+          backend_job_id
+        FROM media_references
+        WHERE kind = 'comfy_artifact'
+          AND reference_number = $1::bigint
+        `,
+        [jobNumber]
+      );
+
+    const externalRow =
+      external.rows[0];
+
+    return externalRow
+      ? mapExternalReference(
+          externalRow
+        )
       : null;
   }
 }

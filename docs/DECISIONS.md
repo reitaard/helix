@@ -132,14 +132,14 @@ Only choices we are willing to treat as current project commitments belong here.
 
 **Reason:** Profile identity describes tool authority and operator presentation, not additional hardware. Sharing the physical boundary avoids false worker/queue semantics while preserving distinct settings and generation behavior.
 
-## 2026-08-26 — Telegram uses one durable numeric Job reference
+## 2026-08-26 — Telegram uses one durable numeric media reference namespace
 
-**Decision:** Every media job receives a unique, non-null, sequential `BIGINT job_number`. Telegram displays and resolves this exact unpadded number across Jobs, details, events, cancellation, alerts, delivery, Outbox, errors, and Downloads. Internal Helix `job_...` primary keys and Comfy Prompt IDs remain unchanged; legacy references remain accepted where previously supported.
+**Decision:** Helix uses one collision-free, unpadded `BIGINT` media-reference namespace for the operator surface. Helix-managed jobs retain their unique non-null `media_jobs.job_number`. Completed artifacts discovered directly from Comfy history without a Helix job receive a durable `media_references.reference_number` from the same PostgreSQL sequence. `/dl`, `/dl i`, `/dl g`, and `/jb` resolve the same number to the same media execution. Comfy-only references do not create fake `media_jobs` rows. Internal Helix `job_...` primary keys and Comfy Prompt IDs remain unchanged; legacy references remain accepted where previously supported.
 
-**Reason:** One short numeric reference is easier to recognize, copy, and type than visually similar Helix and Comfy UUID prefixes. An additive public reference avoids risky primary-key or foreign-key rewrites.
+**Reason:** A number shown by Downloads must remain usable everywhere the operator expects that media reference. Sharing one allocator prevents a Helix Job and a Comfy-only artifact from ever being assigned the same operator number, while preserving truthful lifecycle ownership in `media_jobs`.
 
 ## 2026-08-26 — Jobs and Downloads use 20-item pagination
 
-**Decision:** `/j`, `/jbs`, and `/jobs` show 20 jobs per page with `/j p <page>` navigation. `/dl` and `/downloads` show 20 live Comfy history items per page with `/dl p <page>`. `/jb <number>` remains Job detail; `/j` never aliases detail.
+**Decision:** `/j`, `/jbs`, and `/jobs` show 20 jobs per page with `/j p <page>` navigation. `/dl` and `/downloads` show 20 live Comfy history items per page with `/dl p <page>`. `/jb <number>` remains Job/media detail; `/j` never aliases detail.
 
 **Reason:** Five Jobs hid too much recent history, while unbounded messages would violate compact Telegram presentation. Matching 20-item page grammar keeps both operational browsers predictable.

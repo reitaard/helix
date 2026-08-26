@@ -115,6 +115,47 @@ export function renderJobGeneration(
   const root =
     asRecord(request);
 
+  if (
+    readString(root, "kind") ===
+      "comfy_artifact"
+  ) {
+    const referenceNumber =
+      readString(
+        root,
+        "referenceNumber"
+      );
+
+    const lines = [
+      "<b><i>• external artifact •</i></b>",
+      "<b>Source</b> · <b>Comfy UI</b>"
+    ];
+
+    if (backendJobId) {
+      lines.push(
+        `<b>Comfy Prompt</b> · <code>${escapeHtml(
+          backendJobId
+        )}</code>`
+      );
+    }
+
+    if (referenceNumber) {
+      lines.push(
+        `<b>Inspect</b> · <code>/dl i ${escapeHtml(
+          referenceNumber
+        )}</code>`,
+        `<b>Get</b> · <code>/dl g ${escapeHtml(
+          referenceNumber
+        )}</code>`
+      );
+    }
+
+    return (
+      `<blockquote expandable>${
+        lines.join("\n")
+      }</blockquote>`
+    );
+  }
+
   const generation =
     asRecord(root?.generation);
 
