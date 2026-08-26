@@ -65,11 +65,6 @@ export interface ComfyPromptResponse {
 }
 
 export class ComfyClient {
-  private readonly executionClientId =
-    `helix-runtime-${crypto
-      .randomUUID()
-      .replaceAll("-", "")}`;
-
   private readonly executionListeners =
     new Set<AdapterExecutionEventListener>();
 
@@ -81,7 +76,11 @@ export class ComfyClient {
       null;
 
   constructor(
-    private readonly baseUrl: string
+    private readonly baseUrl: string,
+    private readonly executionClientId =
+      `helix-runtime-${crypto
+        .randomUUID()
+        .replaceAll("-", "")}`
   ) {}
 
   private async getJson<T>(
