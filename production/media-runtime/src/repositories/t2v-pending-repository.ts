@@ -16,6 +16,9 @@ interface PendingRow {
   settings_snapshot:
     unknown;
 
+  confirmation_message_id:
+    string | null;
+
   invalid_attempts:
     number;
 
@@ -42,6 +45,9 @@ export interface PendingT2V {
 
   settingsSnapshot:
     unknown;
+
+  confirmationMessageId:
+    string | null;
 
   invalidAttempts:
     number;
@@ -71,6 +77,9 @@ function mapRow(
 
     settingsSnapshot:
       row.settings_snapshot,
+
+    confirmationMessageId:
+      row.confirmation_message_id,
 
     invalidAttempts:
       row.invalid_attempts,
@@ -111,6 +120,7 @@ export class T2VPendingRepository {
           phase,
           prompt,
           settings_snapshot,
+          confirmation_message_id,
           invalid_attempts,
           expires_at,
           created_at,
@@ -141,12 +151,14 @@ export class T2VPendingRepository {
           phase,
           prompt,
           settings_snapshot,
+          confirmation_message_id,
           invalid_attempts,
           expires_at
         )
       VALUES (
         $1,
         'awaiting_prompt',
+        NULL,
         NULL,
         NULL,
         0,
@@ -162,6 +174,9 @@ export class T2VPendingRepository {
           NULL,
 
         settings_snapshot =
+          NULL,
+
+        confirmation_message_id =
           NULL,
 
         invalid_attempts =
@@ -202,6 +217,9 @@ export class T2VPendingRepository {
           settings_snapshot =
             $3::jsonb,
 
+          confirmation_message_id =
+            NULL,
+
           invalid_attempts =
             0,
 
@@ -230,6 +248,28 @@ export class T2VPendingRepository {
       (result.rowCount ?? 0) >
       0
     );
+  }
+
+  async captureConfirmationMessage(
+    chatId: string,
+    messageId: string
+  ) {
+    const result =
+      await this.db.query(
+        `
+        UPDATE operator_pending_t2v
+        SET
+          confirmation_message_id = $2,
+          updated_at = NOW()
+        WHERE
+          chat_id = $1
+          AND phase = 'awaiting_confirmation'
+          AND confirmation_message_id IS NULL
+        `,
+        [chatId, messageId]
+      );
+
+    return (result.rowCount ?? 0) > 0;
   }
 
   async incrementInvalid(
@@ -266,6 +306,7 @@ export class T2VPendingRepository {
           phase,
           prompt,
           settings_snapshot,
+          confirmation_message_id,
           invalid_attempts,
           expires_at,
           created_at,
