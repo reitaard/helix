@@ -239,4 +239,21 @@ export class TelegramJobLifecycleRepository {
       [jobId, status]
     );
   }
+
+  async markDelivered(
+    jobId: string
+  ) {
+    await this.db.query(
+      `
+      UPDATE telegram_job_lifecycles
+      SET
+        presentation_state = 'delivered',
+        last_job_status = 'succeeded',
+        updated_at = NOW()
+      WHERE job_id = $1
+        AND presentation_state = 'active'
+      `,
+      [jobId]
+    );
+  }
 }
