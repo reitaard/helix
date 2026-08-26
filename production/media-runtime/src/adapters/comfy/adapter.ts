@@ -7,6 +7,7 @@ import {
 } from "./execution-status.js";
 
 import type {
+  AdapterExecutionEventListener,
   AdapterLiveness,
   AdapterReadiness,
   MediaAdapter
@@ -161,6 +162,15 @@ export class ComfyAdapter
       .downloadArtifact(
         artifact,
         destinationPath
+      );
+  }
+
+  subscribeExecutionEvents(
+    listener: AdapterExecutionEventListener
+  ) {
+    return this.client
+      .subscribeExecutionEvents(
+        listener
       );
   }
 
