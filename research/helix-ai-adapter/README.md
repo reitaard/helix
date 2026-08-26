@@ -2,7 +2,9 @@
 
 **Status:** detached research only
 
-**Branch:** `research/qwen-production-settings`
+**Primary branch:** `research/qwen-production-settings`
+
+**Configuration rerun branch:** `research/qwen-config-matrix`
 
 **Selected research model:** Qwen3 0.6B Q8_0
 **Runtime endpoint:** local `helixai-adapter` (`http://127.0.0.1:8181`)
@@ -48,6 +50,8 @@ The benchmark performs no database writes, Telegram calls, Comfy calls, workflow
 - `benchmark.py` — standalone V1 core-settings benchmark runner.
 - `aspect_benchmark.py` — separate `interpretAspect(text)` benchmark runner.
 - `use_case_benchmark.py` — detached runner for independent prompt-risk, error-family, and shot-structure experiments.
+- `config_matrix_benchmark.py` — repeats frozen fixtures across deterministic, official-sampling, practical thinking, and few-shot profiles.
+- `CONFIG_MATRIX_V1.md` — configuration-rerun method, scores, caveats, and corrected conclusion.
 - `TERRA_USE_CASE_BRIEF.md` — exact handoff for running and reporting the detached use-case suite through Recode.
 - `results/README.md` — result retention rules.
 
