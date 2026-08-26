@@ -12,6 +12,7 @@ test("T2I prompt sends one confirmation card and captures its message id", async
     prompt: null,
     settingsSnapshot: null,
     confirmationMessageId: null,
+    expectedReplyMessageId: null,
     invalidAttempts: 0,
     expiresAt: "2026-08-26T09:00:00.000Z",
     createdAt: "2026-08-26T08:30:00.000Z",
@@ -20,6 +21,7 @@ test("T2I prompt sends one confirmation card and captures its message id", async
 
   let sentHtml = null;
   let capturedMessageId = null;
+  let expectedReplyMessageId = null;
 
   const pending = {
     async expireDue() {
@@ -38,6 +40,10 @@ test("T2I prompt sends one confirmation card and captures its message id", async
       capturedMessageId = messageId;
       state.confirmationMessageId = messageId;
       return true;
+    },
+    async setExpectedReply(_chatId, messageId) {
+      expectedReplyMessageId = messageId;
+      state.expectedReplyMessageId = messageId;
     }
   };
 
@@ -84,6 +90,7 @@ test("T2I prompt sends one confirmation card and captures its message id", async
   assert.equal(response, null);
   assert.equal(capturedMessageId, "9001");
   assert.equal(state.confirmationMessageId, "9001");
+  assert.equal(expectedReplyMessageId, "9001");
   assert.equal(state.phase, "awaiting_confirmation");
   assert.equal(state.prompt, "cinematic portrait in soft window light");
   assert.match(sentHtml, /Text2Image/);

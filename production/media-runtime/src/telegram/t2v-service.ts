@@ -498,7 +498,8 @@ export class TelegramT2VService {
             hasDevOverrides(effective.base),
             effective.mode
           ),
-          context ? { chatId: context.chatId, threadId: context.threadId } : undefined
+          context ? { chatId: context.chatId, threadId: context.threadId } : undefined,
+          context?.messageId
         );
 
       const captured =
@@ -514,6 +515,7 @@ export class TelegramT2VService {
         );
       }
 
+      await this.pending.setExpectedReply(key, confirmation.messageId);
       return null;
     }
 

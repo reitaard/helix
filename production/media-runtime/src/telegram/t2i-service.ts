@@ -268,7 +268,8 @@ export class TelegramT2IService {
 
       const confirmation = await this.telegram.sendHtml(
         this.confirmationHtml(answer, settings),
-        context ? { chatId: context.chatId, threadId: context.threadId } : undefined
+        context ? { chatId: context.chatId, threadId: context.threadId } : undefined,
+        context?.messageId
       );
 
       const captured =
@@ -281,6 +282,7 @@ export class TelegramT2IService {
         );
       }
 
+      await this.pending.setExpectedReply(key, confirmation.messageId);
       return null;
     }
 
