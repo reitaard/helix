@@ -16,6 +16,10 @@ import {
 } from "../repositories/delivery-repository.js";
 
 import {
+  TelegramJobLifecycleRepository
+} from "../repositories/telegram-job-lifecycle-repository.js";
+
+import {
   WorkerRegistry
 } from "../workers/registry.js";
 
@@ -95,6 +99,9 @@ export class DeliveryWorker {
   constructor(
     private readonly deliveries:
       DeliveryRepository,
+
+    private readonly lifecycles:
+      TelegramJobLifecycleRepository,
 
     private readonly workers:
       WorkerRegistry,
@@ -246,39 +253,60 @@ export class DeliveryWorker {
               delivery.profileId
             );
 
+          const metadata = {
+            filename:
+              safeFilename,
+
+            runtime:
+              formatRuntime(
+                delivery.startedAt,
+                delivery.finishedAt
+              ),
+
+            media: mediaMetadata,
+
+            tool:
+              delivery.tool,
+
+            workerName,
+
+            jobNumber:
+              delivery.jobNumber,
+
+            completedAt:
+              delivery.finishedAt
+          };
+
+          const lifecycle =
+            delivery.artifactIndex === 0
+              ? await this.lifecycles
+                  .get(delivery.jobId)
+              : null;
+
+          const replaceLifecycle =
+            lifecycle?.presentationState ===
+              "active";
+
           const document =
-            await this.telegram
-              .sendDocument({
-                filePath:
-                  destination,
-
-                filename:
-                  safeFilename,
-
-                metadata: {
-                  filename:
-                    safeFilename,
-
-                  runtime:
-                    formatRuntime(
-                      delivery.startedAt,
-                      delivery.finishedAt
-                    ),
-
-                  media: mediaMetadata,
-
-                  tool:
-                    delivery.tool,
-
-                  workerName,
-
-                  jobNumber:
-                    delivery.jobNumber,
-
-                  completedAt:
-                    delivery.finishedAt
-                }
-              });
+            replaceLifecycle
+              ? await this.telegram
+                  .editDocument({
+                    messageId:
+                      lifecycle.messageId,
+                    filePath:
+                      destination,
+                    filename:
+                      safeFilename,
+                    metadata
+                  })
+              : await this.telegram
+                  .sendDocument({
+                    filePath:
+                      destination,
+                    filename:
+                      safeFilename,
+                    metadata
+                  });
 
           await this.deliveries
             .markDelivered({
@@ -298,8 +326,15 @@ export class DeliveryWorker {
                 document.messageId
             });
 
+          if (replaceLifecycle) {
+            await this.lifecycles
+              .markDelivered(
+                delivery.jobId
+              );
+          }
+
           console.log(
-            `[delivery] ${delivery.jobId} -> telegram document+caption ${document.messageId}`
+            `[delivery] ${delivery.jobId} -> telegram ${replaceLifecycle ? "lifecycle media" : "document+caption"} ${document.messageId}`
           );
         }
         catch (error) {
