@@ -2,6 +2,7 @@ import {
   compactError,
   durationBetween,
   escapeHtml,
+  formatDuration,
   title
 } from "./presentation.js";
 
@@ -283,6 +284,42 @@ export function deliveringProgressHtml(
     `<b>${escapeHtml(workerName)}</b>\n\n` +
     `<code>Workflow  ${progressBar(100)}  100%</code>\n\n` +
     `<i>Uploading artifact…</i>`
+  );
+}
+
+export function deliveryRetryProgressHtml(
+  job: ProgressJobView,
+  workerName: string,
+  attemptCount: number,
+  retryAfterSeconds: number
+) {
+  return (
+    `${title("COMPLETE")}\n\n` +
+    `<b>Job</b> · <code>${escapeHtml(job.jobNumber)}</code> · ` +
+    `<b>${escapeHtml(workerName)}</b>\n\n` +
+    `<code>Workflow  ${progressBar(100)}  100%</code>\n\n` +
+    `<b>Artifact delivery retrying</b> · ` +
+    `<i>attempt ${Math.max(1, attemptCount)}</i>\n` +
+    `<b>Retry</b> · <i>${escapeHtml(
+      formatDuration(
+        Math.max(0, retryAfterSeconds)
+      )
+    )}</i>`
+  );
+}
+
+export function deliveryFailedProgressHtml(
+  job: ProgressJobView,
+  workerName: string,
+  message: string
+) {
+  return (
+    `${title("DELIVERY FAILED")}\n\n` +
+    `<b>Job</b> · <code>${escapeHtml(job.jobNumber)}</code> · ` +
+    `<b>${escapeHtml(workerName)}</b>\n\n` +
+    `<i>Generation completed, but automatic artifact delivery failed.</i>\n` +
+    `<blockquote>${escapeHtml(compactError(message))}</blockquote>\n` +
+    `<b>Get</b> · <code>/dl g ${escapeHtml(job.jobNumber)}</code>`
   );
 }
 
