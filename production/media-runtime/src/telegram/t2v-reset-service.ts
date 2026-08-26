@@ -276,7 +276,8 @@ export class TelegramT2VResetService {
   private confirmationHtml(
     current: T2VSettings,
     target: T2VSettings,
-    scope: ResetScope
+    scope: ResetScope,
+    useButtons = false
   ) {
     const dev =
       scope === "all";
@@ -320,14 +321,16 @@ export class TelegramT2VResetService {
         T2V_TOOL
       )}</i></b>\n` +
       `${blocks.join("\n")}\n` +
-      `<b><i>Reset these settings? Type</i></b> ` +
-      `<b>[</b> <code>yes</code> <b>/</b> <code>no</code> <b>]</b>`
+      (useButtons
+        ? `<b><i>Reset these settings?</i></b>`
+        : `<b><i>Reset these settings? Type</i></b> <b>[</b> <code>yes</code> <b>/</b> <code>no</code> <b>]</b>`)
     );
   }
 
   async begin(
     dev: boolean,
-    key: TelegramConversationKey | string = this.chatId
+    key: TelegramConversationKey | string = this.chatId,
+    useButtons = false
   ) {
     const scope: ResetScope =
       dev
@@ -380,7 +383,8 @@ export class TelegramT2VResetService {
     return this.confirmationHtml(
       current,
       target,
-      scope
+      scope,
+      useButtons
     );
   }
 

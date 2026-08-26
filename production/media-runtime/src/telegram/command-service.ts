@@ -66,8 +66,22 @@ import {
 
 const JOBS_PAGE_SIZE = 20;
 
+interface TelegramCallbackMessage {
+  message_id?: number | string;
+  message_thread_id?: number | string;
+  is_topic_message?: boolean;
+  chat?: { id: number | string; type?: string };
+}
+
 interface TelegramUpdate {
   update_id: number;
+
+  callback_query?: {
+    id?: string;
+    data?: string;
+    from?: { id: number | string };
+    message?: TelegramCallbackMessage;
+  };
 
   message?: {
     text?: string;
@@ -625,7 +639,8 @@ export class TelegramCommandService {
   private sendHtml(
     html: string,
     destination: TelegramDestination = this.replyDestination ?? { chatId: this.chatId, threadId: null },
-    forceReplyTo?: string
+    forceReplyTo?: string,
+    inlineKeyboard?: Array<Array<{ text: string; callback_data: string }>>
   ) {
     return this.postJson(
       "sendMessage",
@@ -640,6 +655,8 @@ export class TelegramCommandService {
         ...(forceReplyTo ? {
           reply_parameters: { message_id: forceReplyTo },
           reply_markup: { force_reply: true, selective: true }
+        } : inlineKeyboard ? {
+          reply_markup: { inline_keyboard: inlineKeyboard }
         } : {})
       }
     );
@@ -680,7 +697,8 @@ export class TelegramCommandService {
           limit: 1,
           timeout: 0,
           allowed_updates: [
-            "message"
+            "message",
+            "callback_query"
           ]
         }
       );
@@ -714,7 +732,8 @@ export class TelegramCommandService {
           limit: 20,
           timeout: 25,
           allowed_updates: [
-            "message"
+            "message",
+            "callback_query"
           ]
         },
         35000,
@@ -1552,9 +1571,137 @@ export class TelegramCommandService {
     );
   }
 
+  private async answerCallbackQuery(
+    callbackQueryId: string,
+    text?: string
+  ) {
+    await this.postJson("answerCallbackQuery", {
+      callback_query_id: callbackQueryId,
+      ...(text ? { text } : {})
+    });
+  }
+
+  private async clearInlineKeyboard(
+    chatId: string,
+    messageId: string
+  ) {
+    await this.postJson("editMessageReplyMarkup", {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: { inline_keyboard: [] }
+    });
+  }
+
+  private async editCallbackHtml(
+    chatId: string,
+    messageId: string,
+    html: string
+  ) {
+    await this.postJson("editMessageText", {
+      chat_id: chatId,
+      message_id: messageId,
+      text: html,
+      parse_mode: "HTML",
+      link_preview_options: { is_disabled: true },
+      reply_markup: { inline_keyboard: [] }
+    });
+  }
+
+  private async handleCallbackQuery(
+    update: TelegramUpdate
+  ) {
+    const callback = update.callback_query;
+    const message = callback?.message;
+    const callbackId = callback?.id;
+    const data = callback?.data;
+
+    if (!callbackId || !data || !message?.chat || !message.message_id || !callback?.from || !this.bot) {
+      return;
+    }
+
+    const match = /^helix:(t2i|t2v):(generate|reset|cancel)$/.exec(data);
+    if (!match) {
+      await this.answerCallbackQuery(callbackId, "Action unavailable.");
+      return;
+    }
+
+    const route = classifyTelegramRoute(message, this.chatId, this.forum);
+    const tool = match[1];
+    const action = match[2];
+    const routeMatches =
+      (tool === "t2i" && route.kind === "forum_image") ||
+      (tool === "t2v" && route.kind === "forum_video");
+
+    if (!routeMatches) {
+      await this.answerCallbackQuery(callbackId, "Action unavailable.");
+      return;
+    }
+
+    const chatId = String(message.chat.id);
+    const threadId = message.message_thread_id === undefined ? null : String(message.message_thread_id);
+    const messageId = String(message.message_id);
+    const key = {
+      chatId,
+      threadId: threadId ?? "0",
+      userId: String(callback.from.id)
+    };
+    const service = tool === "t2i" ? this.t2i : this.t2v;
+    const accepted = await service.acceptsGroupCallback(
+      key,
+      messageId,
+      action as "generate" | "reset" | "cancel"
+    );
+
+    if (!accepted) {
+      await this.answerCallbackQuery(callbackId, "This action expired or belongs to another user.");
+      return;
+    }
+
+    await this.answerCallbackQuery(callbackId);
+    await this.clearInlineKeyboard(chatId, messageId);
+
+    const context = {
+      botId: this.bot.id,
+      botUsername: this.bot.username,
+      updateId: update.update_id,
+      chatId,
+      threadId,
+      userId: key.userId,
+      messageId
+    };
+    const response = await service.handlePlainText(
+      action === "cancel" ? "no" : "yes",
+      key,
+      context
+    );
+
+    if (response) {
+      await this.editCallbackHtml(chatId, messageId, response);
+    }
+  }
+
   private async handleUpdate(
     update: TelegramUpdate
   ) {
+    if (update.callback_query) {
+      try {
+        await this.handleCallbackQuery(update);
+      }
+      catch (error) {
+        console.error("[telegram] callback query failed", error);
+        const callbackId = update.callback_query.id;
+        if (callbackId) {
+          try {
+            await this.answerCallbackQuery(callbackId, "Unable to process this action.");
+          }
+          catch {
+            // The callback may already have been answered.
+          }
+        }
+      }
+      return;
+    }
+
     const message =
       update.message;
 
@@ -1681,9 +1828,21 @@ export class TelegramCommandService {
             await this.sendHtml(`${title("IMAGE GENERATION")}\n<code>/t2i</code> <b>-</b> <b>Generate image</b>\n<code>/t2i settings</code> <b>-</b> <b>Settings</b>`);
           } else {
             const key = { chatId: context.chatId, threadId: context.threadId ?? "0", userId: context.userId };
-            const response = await this.t2i.handleCommand(args, key);
-            const sent = await this.sendHtml(response, undefined, context.messageId) as { message_id?: number | string };
-            if (sent.message_id !== undefined) await this.t2i.setExpectedReply(key, String(sent.message_id));
+            const response = await this.t2i.handleCommand(args, key, true);
+            const promptInput = args.length === 0;
+            const resetConfirmation = args[0]?.toLowerCase() === "reset" && args.length === 1 && await this.t2i.hasPending(key);
+            const sent = await this.sendHtml(
+              response,
+              undefined,
+              promptInput ? context.messageId : undefined,
+              resetConfirmation ? [[
+                { text: "Reset", callback_data: "helix:t2i:reset" },
+                { text: "Cancel", callback_data: "helix:t2i:cancel" }
+              ]] : undefined
+            ) as { message_id?: number | string };
+            if ((promptInput || resetConfirmation) && sent.message_id !== undefined) {
+              await this.t2i.setExpectedReply(key, String(sent.message_id));
+            }
           }
           return;
         }
@@ -1691,9 +1850,21 @@ export class TelegramCommandService {
           await this.sendHtml(`${title("VIDEO GENERATION")}\n<code>/t2v</code> <b>-</b> <b>Generate video</b>\n<code>/t2v mode</code> <b>-</b> <b>Production mode</b>\n<code>/t2v settings</code> <b>-</b> <b>Settings</b>`);
         } else {
           const key = { chatId: context.chatId, threadId: context.threadId ?? "0", userId: context.userId };
-          const response = await this.t2v.handleCommand(args, key, false);
-          const sent = await this.sendHtml(response, undefined, context.messageId) as { message_id?: number | string };
-          if (sent.message_id !== undefined) await this.t2v.setExpectedReply(key, String(sent.message_id));
+          const response = await this.t2v.handleCommand(args, key, false, true);
+          const promptInput = args.length === 0;
+          const resetConfirmation = args[0]?.toLowerCase() === "reset" && args.length === 1 && await this.t2v.hasPending(key);
+          const sent = await this.sendHtml(
+            response,
+            undefined,
+            promptInput ? context.messageId : undefined,
+            resetConfirmation ? [[
+              { text: "Reset", callback_data: "helix:t2v:reset" },
+              { text: "Cancel", callback_data: "helix:t2v:cancel" }
+            ]] : undefined
+          ) as { message_id?: number | string };
+          if ((promptInput || resetConfirmation) && sent.message_id !== undefined) {
+            await this.t2v.setExpectedReply(key, String(sent.message_id));
+          }
         }
         return;
       }

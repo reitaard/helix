@@ -115,6 +115,22 @@ test("dual loader renders workflow and active-node percentages separately", () =
   assert.doesNotMatch(html, /\n\n/);
 });
 
+test("sampling loader remains present before sampler progress starts", () => {
+  const html = runningProgressHtml(
+    job,
+    "Christopher Nolan",
+    {
+      workflowPercent: 25,
+      nodePercent: null,
+      stage: "Loading"
+    }
+  );
+
+  assert.match(html, /Sampling  ░░░░░░░░░░  --/);
+  assert.match(html, /Loading/);
+  assert.doesNotMatch(html, /\n\n/);
+});
+
 test("delivery retry stays inside the lifecycle card", () => {
   const html = deliveryRetryProgressHtml(
     {

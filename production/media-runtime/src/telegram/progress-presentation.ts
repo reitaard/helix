@@ -257,13 +257,10 @@ export function runningProgressHtml(
     `<code>Workflow  ${progressBar(workflowPercent)}  ${workflowPercent}%</code>`
   ];
 
-  if (snapshot.nodePercent !== null) {
-    const nodePercent =
-      clampPercent(snapshot.nodePercent);
-    lines.push(
-      `<code>Sampling  ${progressBar(nodePercent)}  ${nodePercent}%</code>`
-    );
-  }
+  const sampling = snapshot.nodePercent === null
+    ? `<code>Sampling  ${progressBar(0)}  --</code>`
+    : `<code>Sampling  ${progressBar(clampPercent(snapshot.nodePercent))}  ${clampPercent(snapshot.nodePercent)}%</code>`;
+  lines.push(sampling);
 
   lines.push(
     `${escapeHtml(clip(snapshot.stage ?? "Processing"))} · <b><i>Running (${escapeHtml(elapsed(job))})</i></b>`

@@ -193,13 +193,13 @@ The initial “send prompt” message must request a reply using both:
 - `reply_parameters` referencing the initiating user's message; and
 - `reply_markup: { force_reply: true, selective: true }`.
 
-The confirmation card must remain editable so it can become the lifecycle/progress/final-media message. Telegram rejects edits to messages carrying `ForceReply` markup; therefore confirmation has no reply markup. It is still privacy-safe: persist its returned message ID as `expected_reply_message_id` and accept plain text only when it comes from the same conversation key and replies to that exact confirmation message. Replace the expected ID whenever a new prompt or confirmation is emitted.
+ForceReply applies only to bare `/t2i` and `/t2v` free-text prompt capture. Settings, setting changes, modes, help, usage, and ordinary result/toast messages must not force a reply.
 
-Group handling must fail closed while the expected ID is unset. Define transaction/state recovery for partial failures: if Telegram send fails, remove/abort the newly created pending state; if Telegram send succeeds but persisting its message ID fails, log privately, attempt to delete the orphaned bot message, and abort the pending state. Never leave a group interaction accepting arbitrary text.
+The forum confirmation card remains editable and carries inline `[ Generate ] [ Cancel ]` buttons; reset carries `[ Reset ] [ Cancel ]`. Persist the returned confirmation message ID and accept a callback only from the same `(chatId, threadId, userId)`, exact message, expected action family, and unexpired pending state. Remove the keyboard after the first valid action. Repeated, expired, wrong-user, wrong-topic, and mismatched callbacks fail closed without creating a job.
 
-Private-chat behavior may remain permissive for backward compatibility, but group behavior must be reply-bound.
+Group free text is accepted only while the matching bare-command prompt is awaiting input and only as a reply to its exact selective ForceReply message. Private-chat behavior retains direct `yes` / `no` confirmation without buttons.
 
-Inline callbacks are not required for this implementation. Do not expand scope unless ForceReply proves unworkable in a real Bot API test.
+Define state recovery for partial failures: if Telegram send fails, remove/abort newly created pending state; if Telegram send succeeds but persisting its message ID fails, log privately, attempt to delete the orphaned bot message, and abort pending state. Never leave a group interaction accepting arbitrary text.
 
 ### 4.6 Durable job origin and delivery destination
 
@@ -334,10 +334,10 @@ At minimum add focused tests for:
 - One user can have simultaneous Image and Video interactions.
 - A command or reply in one topic does not abandon another topic's state.
 - One user's reply cannot complete another user's prompt or confirmation.
-- Group plain text not replying to the expected ForceReply message is ignored.
+- Group free-text prompts not replying to the expected bare-generation ForceReply message are ignored.
 - Non-pending `yes`/`no` in a forum is ignored.
 - Forbidden operator commands and wrong-topic pointers leave pending state unchanged.
-- ForceReply includes both `reply_parameters` and selective reply markup; expected message IDs roll over correctly.
+- Bare generation ForceReply includes both `reply_parameters` and selective reply markup; other command responses do not force replies.
 - Telegram send failure after pending creation aborts that pending state.
 - Expiry removes only due records and handles all routes.
 

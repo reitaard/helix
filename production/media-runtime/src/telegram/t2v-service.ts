@@ -135,7 +135,8 @@ export class TelegramT2VService {
     prompt: string,
     settings: ResolvedT2VSettings,
     devProfile: boolean,
-    mode: T2VMode
+    mode: T2VMode,
+    useButtons = false
   ) {
     const quality =
       settings.megapixelsOverride === null
@@ -160,8 +161,9 @@ export class TelegramT2VService {
       `<b>Enhance</b> · <b>[${settings.enhance ? "ON" : "OFF"}]</b>\n` +
       (devProfile ? `<b>Access</b> · <b>[DEV]</b>\n` : "") +
       `<b>Worker</b> · <b>${escapeHtml(this.workerName)}</b>\n` +
-      `<b><i>Generate this video? Type</i></b> ` +
-      `<b>[</b> <code>yes</code> <b>/</b> <code>no</code> <b>]</b>`
+      (useButtons
+        ? `<b><i>Generate this video?</i></b>`
+        : `<b><i>Generate this video? Type</i></b> <b>[</b> <code>yes</code> <b>/</b> <code>no</code> <b>]</b>`)
     );
   }
 
@@ -224,7 +226,8 @@ export class TelegramT2VService {
   async handleCommand(
     args: string[],
     key: TelegramConversationKey | string = this.chatId,
-    allowDev = true
+    allowDev = true,
+    useButtons = false
   ) {
     if (args.length === 0) {
       return this.begin(key);
@@ -248,10 +251,10 @@ export class TelegramT2VService {
 
     if (mode === "reset") {
       if (args.length === 1) {
-        return this.reset.begin(false, key);
+        return this.reset.begin(false, key, useButtons);
       }
       if (args.length === 2 && isDevFlag(args[1])) {
-        return this.reset.begin(true, key);
+        return this.reset.begin(true, key, useButtons);
       }
       return `<b>Usage</b> · <code>/t2v reset [-dev|-d]</code>`;
     }
@@ -363,7 +366,20 @@ export class TelegramT2VService {
 
   async acceptsGroupReply(key: TelegramConversationKey, replyToMessageId: string | null) {
     if (!replyToMessageId) return false;
-    return (await this.pending.get(key))?.expectedReplyMessageId === replyToMessageId || await this.reset.acceptsGroupReply(key, replyToMessageId);
+    const state = await this.pending.get(key);
+    return state?.phase === "awaiting_prompt" && state.expectedReplyMessageId === replyToMessageId;
+  }
+
+  async acceptsGroupCallback(
+    key: TelegramConversationKey,
+    messageId: string,
+    action: "generate" | "reset" | "cancel"
+  ) {
+    const state = await this.pending.get(key);
+    const generation = state?.phase === "awaiting_confirmation" && state.confirmationMessageId === messageId;
+    if (generation) return action === "generate" || action === "cancel";
+    const reset = await this.reset.acceptsGroupReply(key, messageId);
+    return reset && (action === "reset" || action === "cancel");
   }
 
   private async workflowFor(
@@ -490,16 +506,30 @@ export class TelegramT2VService {
         return this.noPendingHtml();
       }
 
-      const confirmation =
-        await this.telegram.sendHtml(
-          this.confirmationHtml(
-            answer,
-            effective.settings,
-            hasDevOverrides(effective.base),
-            effective.mode
-          ),
-          context ? { chatId: context.chatId, threadId: context.threadId } : undefined
-        );
+      const destination = context
+        ? { chatId: context.chatId, threadId: context.threadId }
+        : undefined;
+      const isForum = context !== undefined && context.chatId !== this.chatId;
+      const confirmationHtml = this.confirmationHtml(
+        answer,
+        effective.settings,
+        hasDevOverrides(effective.base),
+        effective.mode,
+        isForum
+      );
+      const confirmation = isForum
+        ? await this.telegram.sendHtmlWithInlineKeyboard(
+            confirmationHtml,
+            destination!,
+            [[
+              { text: "Generate", callback_data: "helix:t2v:generate" },
+              { text: "Cancel", callback_data: "helix:t2v:cancel" }
+            ]]
+          )
+        : await this.telegram.sendHtml(
+            confirmationHtml,
+            destination
+          );
 
       const captured =
         await this.pending

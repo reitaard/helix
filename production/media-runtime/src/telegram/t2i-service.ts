@@ -121,7 +121,7 @@ export class TelegramT2IService {
     return `<b><i>No T2I generation is pending.</i></b>`;
   }
 
-  private confirmationHtml(prompt: string, settings: ResolvedT2ISettings) {
+  private confirmationHtml(prompt: string, settings: ResolvedT2ISettings, useButtons = false) {
     const image = dimensionsForT2IAspect(settings.aspect);
     return (
       `${profileTitle("Text2Image")}\n` +
@@ -131,8 +131,9 @@ export class TelegramT2IService {
       `<b>Image</b> · <b>${image.width}×${image.height}</b>\n` +
       `<b>Seed</b> · <b>${settings.seed}</b>\n` +
       `<b>Worker</b> · <b>${escapeHtml(this.workerName)}</b>\n` +
-      `<b><i>Generate this image? Type</i></b> ` +
-      `<b>[</b> <code>yes</code> <b>/</b> <code>no</code> <b>]</b>`
+      (useButtons
+        ? `<b><i>Generate this image?</i></b>`
+        : `<b><i>Generate this image? Type</i></b> <b>[</b> <code>yes</code> <b>/</b> <code>no</code> <b>]</b>`)
     );
   }
 
@@ -179,7 +180,11 @@ export class TelegramT2IService {
     }
   }
 
-  async handleCommand(args: string[], key: TelegramConversationKey | string = this.chatId) {
+  async handleCommand(
+    args: string[],
+    key: TelegramConversationKey | string = this.chatId,
+    useButtons = false
+  ) {
     const action = args[0]?.toLowerCase();
     if (!action) return this.begin(key);
     if (action === "settings") {
@@ -189,7 +194,7 @@ export class TelegramT2IService {
     }
     if (action === "reset") {
       return args.length === 1
-        ? this.reset.begin(key)
+        ? this.reset.begin(key, useButtons)
         : `<b>Usage</b> · <code>/t2i reset</code>`;
     }
     if (action !== "set" && action !== "s") {
@@ -227,7 +232,19 @@ export class TelegramT2IService {
   async acceptsGroupReply(key: TelegramConversationKey, replyToMessageId: string | null) {
     if (!replyToMessageId) return false;
     const state = await this.pending.get(key);
-    return state?.expectedReplyMessageId === replyToMessageId || await this.reset.acceptsGroupReply(key, replyToMessageId);
+    return state?.phase === "awaiting_prompt" && state.expectedReplyMessageId === replyToMessageId;
+  }
+
+  async acceptsGroupCallback(
+    key: TelegramConversationKey,
+    messageId: string,
+    action: "generate" | "reset" | "cancel"
+  ) {
+    const state = await this.pending.get(key);
+    const generation = state?.phase === "awaiting_confirmation" && state.confirmationMessageId === messageId;
+    if (generation) return action === "generate" || action === "cancel";
+    const reset = await this.reset.acceptsGroupReply(key, messageId);
+    return reset && (action === "reset" || action === "cancel");
   }
 
   private async workflowFor(prompt: string, settings: ResolvedT2ISettings): Promise<T2IWorkflow> {
@@ -266,10 +283,23 @@ export class TelegramT2IService {
       const stored = await this.pending.setPrompt(key, answer, settings, new Date(Date.now() + this.confirmSeconds * 1000));
       if (!stored) return this.noPendingHtml();
 
-      const confirmation = await this.telegram.sendHtml(
-        this.confirmationHtml(answer, settings),
-        context ? { chatId: context.chatId, threadId: context.threadId } : undefined
-      );
+      const destination = context
+        ? { chatId: context.chatId, threadId: context.threadId }
+        : undefined;
+      const isForum = context !== undefined && context.chatId !== this.chatId;
+      const confirmation = isForum
+        ? await this.telegram.sendHtmlWithInlineKeyboard(
+            this.confirmationHtml(answer, settings, true),
+            destination!,
+            [[
+              { text: "Generate", callback_data: "helix:t2i:generate" },
+              { text: "Cancel", callback_data: "helix:t2i:cancel" }
+            ]]
+          )
+        : await this.telegram.sendHtml(
+            this.confirmationHtml(answer, settings),
+            destination
+          );
 
       const captured =
         await this.pending

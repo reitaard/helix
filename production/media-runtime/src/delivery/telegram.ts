@@ -285,6 +285,34 @@ export class TelegramDelivery {
     );
   }
 
+  async sendHtmlWithInlineKeyboard(
+    html: string,
+    destination: TelegramDestination,
+    buttons: Array<Array<{ text: string; callback_data: string }>>
+  ): Promise<TelegramMessageResult> {
+    const response = await fetch(
+      this.endpoint("sendMessage"),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          chat_id: destination.chatId,
+          ...(destination.threadId ? { message_thread_id: destination.threadId } : {}),
+          text: html,
+          parse_mode: "HTML",
+          link_preview_options: { is_disabled: true },
+          reply_markup: { inline_keyboard: buttons }
+        }),
+        signal: AbortSignal.timeout(30_000)
+      }
+    );
+
+    return parseMessageResult(
+      await response.json(),
+      "Telegram sendMessage"
+    );
+  }
+
   async editHtml(
     messageId: string,
     html: string,

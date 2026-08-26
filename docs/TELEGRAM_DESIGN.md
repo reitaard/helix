@@ -101,9 +101,15 @@ CLIP Text Encode (Positive) · <b><i>Running (15s)</i></b>
 - The second row is always `<worker> // Job · <number>`.
 - The third row is always `└ <tool>`; use `image.t2i` for Annie Leibovitz and `video.t2v` for Christopher Nolan.
 - `Workflow` is always shown.
-- Add `Sampling` only while Comfy reports numeric sampler progress; place it between Workflow and the stage row.
+- `Sampling` is always shown between Workflow and the stage row. Before Comfy reports numeric sampler progress, render an empty loader with `--`; once reported, render its percentage.
 - The stage row owns the elapsed timer. Do not append a separate `Running`/timer row.
 - Queued, uploading, retry, failure, and cancellation lifecycle states retain this same title, worker/job, and tool hierarchy.
+
+### Forum generation interaction
+
+In Image and Video forum topics, selective ForceReply is used only by bare `/t2i` and `/t2v` commands to capture the free-text generation prompt. Settings panels, setting changes, modes, help, usage, and result/toast messages must not force a reply.
+
+After forum prompt capture, use inline `[ Generate ] [ Cancel ]` buttons. Forum reset confirmation uses `[ Reset ] [ Cancel ]`. Bind callbacks to the originating `(chatId, threadId, userId)` and exact confirmation message, remove the keyboard after the first valid action, and reject expired, repeated, wrong-user, wrong-topic, and mismatched-action callbacks. Private operator chat retains direct `yes` / `no` text confirmation without buttons.
 
 ## IDs and states
 

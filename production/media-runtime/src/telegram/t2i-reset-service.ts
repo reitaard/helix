@@ -31,7 +31,10 @@ export class TelegramT2IResetService {
     private readonly pending: T2IResetPendingRepository
   ) {}
 
-  async begin(key: TelegramConversationKey | string = this.chatId) {
+  async begin(
+    key: TelegramConversationKey | string = this.chatId,
+    useButtons = false
+  ) {
     const current = await this.profile.get();
 
     if (
@@ -49,8 +52,9 @@ export class TelegramT2IResetService {
 
     return (
       `${profileTitle("Text2Image", "RESET")}\n` +
-      `<b><i>Reset these settings? Type</i></b> ` +
-      `<b>[</b> <code>yes</code> <b>/</b> <code>no</code> <b>]</b>`
+      (useButtons
+        ? `<b><i>Reset these settings?</i></b>`
+        : `<b><i>Reset these settings? Type</i></b> <b>[</b> <code>yes</code> <b>/</b> <code>no</code> <b>]</b>`)
     );
   }
 
