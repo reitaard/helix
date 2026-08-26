@@ -25,6 +25,29 @@ function escapeHtml(
     .replaceAll(">", "&gt;");
 }
 
+function telegramMessageId(
+  value: string
+) {
+  if (!/^\d+$/.test(value)) {
+    throw new Error(
+      `Invalid Telegram message_id: ${value}`
+    );
+  }
+
+  const parsed = Number(value);
+
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed < 1
+  ) {
+    throw new Error(
+      `Invalid Telegram message_id: ${value}`
+    );
+  }
+
+  return parsed;
+}
+
 function parseMessageResult(
   body: unknown,
   operation: string
@@ -89,6 +112,41 @@ function parseMessageResult(
     messageId:
       String(messageId)
   };
+}
+
+function parseEditMessageResult(
+  body: unknown,
+  operation: string,
+  requestedMessageId: string
+) {
+  if (
+    body !== null &&
+    typeof body === "object" &&
+    !Array.isArray(body)
+  ) {
+    const response =
+      body as Record<string, unknown>;
+    const description =
+      typeof response.description === "string"
+        ? response.description
+        : "";
+
+    if (
+      response.ok !== true &&
+      /message is not modified/i.test(
+        description
+      )
+    ) {
+      return {
+        messageId: requestedMessageId
+      };
+    }
+  }
+
+  return parseMessageResult(
+    body,
+    operation
+  );
 }
 
 export class TelegramDelivery {
@@ -237,7 +295,9 @@ export class TelegramDelivery {
               chat_id:
                 this.chatId,
               message_id:
-                messageId,
+                telegramMessageId(
+                  messageId
+                ),
               text: html,
               parse_mode:
                 "HTML",
@@ -252,9 +312,10 @@ export class TelegramDelivery {
         }
       );
 
-    return parseMessageResult(
+    return parseEditMessageResult(
       await response.json(),
-      "Telegram editMessageText"
+      "Telegram editMessageText",
+      messageId
     );
   }
 
@@ -333,6 +394,10 @@ export class TelegramDelivery {
       caption: string;
     }
   ): Promise<TelegramMessageResult> {
+    telegramMessageId(
+      input.messageId
+    );
+
     const blob =
       await openAsBlob(
         input.filePath,
@@ -387,9 +452,10 @@ export class TelegramDelivery {
         }
       );
 
-    return parseMessageResult(
+    return parseEditMessageResult(
       await response.json(),
-      "Telegram editMessageMedia"
+      "Telegram editMessageMedia",
+      input.messageId
     );
   }
 
