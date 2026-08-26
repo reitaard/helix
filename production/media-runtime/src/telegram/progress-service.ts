@@ -21,7 +21,7 @@ import {
   queuedProgressHtml,
   runningProgressHtml,
   terminalProgressHtml,
-  workflowNodeCount,
+  workflowProgressPercent,
   type ProgressSnapshot
 } from "./progress-presentation.js";
 
@@ -322,20 +322,11 @@ export class TelegramProgressService {
         return;
 
       case "progress_state": {
-        const total =
-          workflowNodeCount(
-            state.lifecycle.request
-          );
-        const finished =
-          event.nodes.filter(
-            node =>
-              node.state === "finished"
-          ).length;
-
         state.snapshot.workflowPercent =
-          total > 0
-            ? finished / total * 100
-            : null;
+          workflowProgressPercent(
+            state.lifecycle.request,
+            event.nodes
+          );
 
         const running =
           event.nodes.find(
