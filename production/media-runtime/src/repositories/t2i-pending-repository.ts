@@ -7,6 +7,7 @@ interface PendingRow {
   phase: "awaiting_prompt" | "awaiting_confirmation";
   prompt: string | null;
   settings_snapshot: unknown;
+  confirmation_message_id: string | null;
   invalid_attempts: number;
   expires_at: Date;
   created_at: Date;
@@ -18,6 +19,7 @@ export interface PendingT2I {
   phase: PendingRow["phase"];
   prompt: string | null;
   settingsSnapshot: unknown;
+  confirmationMessageId: string | null;
   invalidAttempts: number;
   expiresAt: string;
   createdAt: string;
@@ -30,6 +32,7 @@ function mapRow(row: PendingRow): PendingT2I {
     phase: row.phase,
     prompt: row.prompt,
     settingsSnapshot: row.settings_snapshot,
+    confirmationMessageId: row.confirmation_message_id,
     invalidAttempts: row.invalid_attempts,
     expiresAt: row.expires_at.toISOString(),
     createdAt: row.created_at.toISOString(),
@@ -43,7 +46,8 @@ export class T2IPendingRepository {
   async get(chatId: string): Promise<PendingT2I | null> {
     const result = await this.db.query<PendingRow>(
       `
-      SELECT chat_id, phase, prompt, settings_snapshot, invalid_attempts,
+      SELECT chat_id, phase, prompt, settings_snapshot,
+        confirmation_message_id, invalid_attempts,
         expires_at, created_at, updated_at
       FROM operator_pending_t2i
       WHERE chat_id = $1
@@ -58,14 +62,16 @@ export class T2IPendingRepository {
     await this.db.query(
       `
       INSERT INTO operator_pending_t2i (
-        chat_id, phase, prompt, settings_snapshot, invalid_attempts, expires_at
+        chat_id, phase, prompt, settings_snapshot,
+        confirmation_message_id, invalid_attempts, expires_at
       )
-      VALUES ($1, 'awaiting_prompt', NULL, NULL, 0, $2)
+      VALUES ($1, 'awaiting_prompt', NULL, NULL, NULL, 0, $2)
       ON CONFLICT (chat_id)
       DO UPDATE SET
         phase = 'awaiting_prompt',
         prompt = NULL,
         settings_snapshot = NULL,
+        confirmation_message_id = NULL,
         invalid_attempts = 0,
         expires_at = EXCLUDED.expires_at,
         created_at = NOW(),
@@ -88,6 +94,7 @@ export class T2IPendingRepository {
         phase = 'awaiting_confirmation',
         prompt = $2,
         settings_snapshot = $3::jsonb,
+        confirmation_message_id = NULL,
         invalid_attempts = 0,
         expires_at = $4,
         updated_at = NOW()
@@ -95,6 +102,26 @@ export class T2IPendingRepository {
         AND phase = 'awaiting_prompt'
       `,
       [chatId, prompt, JSON.stringify(settingsSnapshot), expiresAt]
+    );
+
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async captureConfirmationMessage(
+    chatId: string,
+    messageId: string
+  ) {
+    const result = await this.db.query(
+      `
+      UPDATE operator_pending_t2i
+      SET
+        confirmation_message_id = $2,
+        updated_at = NOW()
+      WHERE chat_id = $1
+        AND phase = 'awaiting_confirmation'
+        AND confirmation_message_id IS NULL
+      `,
+      [chatId, messageId]
     );
 
     return (result.rowCount ?? 0) > 0;
@@ -109,7 +136,8 @@ export class T2IPendingRepository {
         updated_at = NOW()
       WHERE chat_id = $1
         AND phase = 'awaiting_confirmation'
-      RETURNING chat_id, phase, prompt, settings_snapshot, invalid_attempts,
+      RETURNING chat_id, phase, prompt, settings_snapshot,
+        confirmation_message_id, invalid_attempts,
         expires_at, created_at, updated_at
       `,
       [chatId]
