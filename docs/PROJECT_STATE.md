@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**Preparation / foundation, with a validated Production execution slice, a proven native LTX 2.5 T2V loop, controlled native T2V quality findings, completed Prompt Enhance and Prompt Relay research checkpoints, persisted semantic T2V settings/reset, and an explicit generation Mode layer.**
+**Preparation / foundation, with a validated Production execution slice, proven native LTX 2.5 T2V and FLUX.2 Klein T2I paths, controlled native T2V quality findings, completed Prompt Enhance and Prompt Relay research checkpoints, persisted semantic T2V/T2I settings, numeric Job references, and an explicit T2V generation Mode layer.**
 
 The high-level Helix system division is established. Production execution is hardened enough to operate as a stable checkpoint while generation research continues independently and the project advances the main Helix brain path.
 
@@ -18,7 +18,7 @@ The current Production direction is **open/self-hosted first**. Runway is not pa
 
 ## Active Production checkpoint
 
-Current status as of 2026-08-25:
+Current status as of 2026-08-26:
 
 ```text
 caller / n8n / Telegram
@@ -28,8 +28,9 @@ helix-runtime :8787
     ├── TelegramCommandService
     ├── TelegramAlertService
     ├── TelegramCancelService
-    ├── TelegramT2VService
-    ├── T2V Settings / Mode / Reset services
+    ├── TelegramT2VService + settings / mode / reset
+    ├── TelegramT2IService + settings / reset
+    ├── TelegramDownloadsService
     └── OutboxRepository
     ↓
 ComfyAdapter / ComfyClient
@@ -49,13 +50,14 @@ Current worker facts:
 
 ```text
 durable worker ID: helix-rtx4060-01
-display name: Christopher Nolan
+physical-worker name: Helix RTX 4060
+Production profiles: Christopher Nolan / Annie Leibovitz
 ComfyUI: 0.33.0
 Comfy revision: 7dde56176efa71fd74ef7b3930ab5882d1926288
 Python: 3.12.11
 PyTorch: 2.10.0+cu130
 GPU: RTX 4060
-validated tools: video.i2v, video.t2v
+validated tools: video.i2v, video.t2v, image.t2i
 max GPU jobs: 1
 ```
 
@@ -75,23 +77,29 @@ C:\AI\Models\FLUX
 
 and exposed through the standalone runtime's `extra_model_paths.yaml`.
 
-The VPS-side runtime supports durable media jobs, restart recovery, artifact discovery/retrieval, bounded Telegram delivery, diagnostics, alerts, cancellation, confirmed T2V prompt capture, persisted T2V settings, durable reset confirmation, and selected T2V generation modes.
+The VPS-side runtime supports durable numbered media jobs, restart recovery, artifact discovery/retrieval, a paginated live Downloads browser, bounded Telegram delivery, diagnostics, alerts, cancellation, confirmed T2V/T2I prompt capture, persisted settings, durable reset confirmation, and selected T2V generation modes.
 
 ## Telegram operator checkpoint
 
 Top-level commands remain:
 
 ```text
-/status      diagnostics
-/queue       current Comfy + Helix queue state
-/jobs        five most recent jobs
-/job <id>    one job plus Outbox/send state
-/outbox      send work still needing attention
-/errors      recent failures
-/events <id> complete durable event timeline
-/t2v         confirmed native LTX 2.5 generation
-/cancel <id> confirmed job cancellation
-/help        command list
+/status             diagnostics
+/queue              current Comfy + Helix queue state
+/j                   20 recent jobs per page
+/j p <page>          another Jobs page
+/jb <number>         one job plus Outbox/send state
+/dl                  recent live Comfy artifacts
+/dl p <page>         another Downloads page
+/dl i <number>       inspect a job artifact
+/dl g <number>       retrieve a job artifact
+/outbox              send work still needing attention
+/errors              recent failures
+/ev <number>         complete durable event timeline
+/t2v                 confirmed native LTX 2.5 generation
+/t2i                 confirmed FLUX.2 Klein image generation
+/cc <number>         confirmed job cancellation
+/help                command list
 ```
 
 T2V subcommands now include:
@@ -112,6 +120,10 @@ T2V subcommands now include:
 ```
 
 The service accepts messages only from the configured Telegram chat ID and does not expose shell/package/worker mutation operations.
+
+Every media job retains its internal Helix ID and Comfy Prompt ID while exposing one durable sequential `BIGINT` Job number to the operator. Migration `0011_job_numbers.sql` backfilled existing jobs chronologically as `1–51`; later jobs use the same sequence. Numeric lookup is exact. Legacy Helix UUID/prefix lookup remains compatible, and Downloads still accepts Comfy Prompt prefixes for unmapped history entries.
+
+Jobs and Downloads each show 20 items per page. Jobs use `/j p <page>` and Downloads use `/dl p <page>`; both expose compact previous/next commands.
 
 ## Confirmed T2V input
 
@@ -442,6 +454,9 @@ There is intentionally no Auto phase.
 - [x] Implement Core/Advanced T2V settings.
 - [x] Implement durable Core/full T2V reset.
 - [x] Implement explicit Manual/Fast/Quality generation Modes.
+- [x] Add profile-aware Annie Leibovitz T2I settings, confirmation, binding, generation, and original-file delivery.
+- [x] Add durable numeric Job references without changing internal Helix/Comfy IDs.
+- [x] Add 20-item Jobs and live Downloads pagination.
 - [ ] Validate/calibrate Fast and Quality with controlled benchmarks.
 - [x] Run controlled Prompt Enhance ON/OFF evaluation.
 - [x] Validate Prompt Relay for temporal semantic routing / scene progression.
@@ -462,11 +477,11 @@ The intended research direction is platform-first rather than web-search-first: 
 adapter, and queue, with maximum concurrent GPU jobs fixed at one. `nolan`
 (Christopher Nolan) is its validated LTX `video.t2v` / `video.i2v` Production
 Profile. `leibovitz` (Annie Leibovitz) is a second logical Production Profile
-for `image.t2i`, not a second worker. FLUX.2 Klein 4B Distilled FP8 remains
-experimental and unvalidated. The runtime has profile-aware job identity and a
-wired `/t2i` confirmation flow for the separately supplied Distilled API
-workflow. `HELIX_T2I_WORKFLOW_PATH` defaults to
+for `image.t2i`, not a second worker. FLUX.2 Klein 4B Distilled FP8 is
+validated through successful RTX 4060 Telegram generations and original-file
+deliveries. The runtime has
+profile-aware job identity and a durable `/t2i` confirmation flow for the
+supplied Distilled API workflow. `HELIX_T2I_WORKFLOW_PATH` defaults to
 `/app/workflows/image_flux2_klein_4b_distilled_fp8_t2i_v2.api.json`; migration
-`0010` plus deployment and the first real RTX 4060 Telegram generation remain
-required before validation can be claimed. V1 exposes only aspect/seed and
-binds only prompt, width, height, and concrete seed; Base/modes are deferred.
+`0010` is applied. V1 exposes only aspect/seed and binds only prompt, width,
+height, and concrete seed; Base/modes remain deferred.

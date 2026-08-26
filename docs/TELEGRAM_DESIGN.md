@@ -74,6 +74,7 @@ Worker > Christopher Nolan
 - Three-choice settings such as Quality and FPS remain visible rather than collapsed.
 - Views with no options may omit an `options` heading while retaining the quote around the detail block.
 - In `/jobs`, each job is one compact quote block without blank lines inside it.
+- `/j`, `/jbs`, and `/jobs` list 20 jobs per page. Use `/j p <page>` for compact previous/next navigation and `/jb <number>` for detail.
 
 ## Identity and naming
 
@@ -87,13 +88,18 @@ Worker > Christopher Nolan
 
 ## IDs and states
 
-ID length is view-specific:
+Each Helix job has a durable sequential numeric Job number. This is the operator-facing reference in every Telegram view and command:
 
-- `/jobs`: full job ID; this view is the copy source.
-- `/events`: full job ID in the header and the complete durable timeline.
-- failure/error views: full job ID unless the Creator explicitly requests compact form.
-- `/job` detail and compact delivery metadata may use the approved short form.
-- Input parsing accepts full IDs, prefixes, and a copied short ID ending in `...` when unambiguous.
+```text
+Job · 51
+/job 51
+/events 51
+/cancel 51
+/dl i 51
+/dl g 51
+```
+
+Job numbers are exact, unpadded, never recycled, and stored independently from internal Helix and Comfy identifiers. Legacy Helix UUID references and Comfy Prompt prefixes remain accepted for compatibility where they were previously supported. Full internal identifiers appear only in technical expandable details. Live Comfy artifacts without a corresponding Helix job use a clearly labelled compact Comfy reference.
 
 Use bracketed state where the approved format shows it:
 
@@ -232,7 +238,7 @@ Current approved short aliases include:
 ```text
 /st, /stat  -> /status
 /qu, /que   -> /queue
-/jbs        -> /jobs
+/j, /jbs    -> /jobs
 /jb         -> /job
 /ob         -> /outbox
 /err        -> /errors

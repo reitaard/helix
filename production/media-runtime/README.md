@@ -24,7 +24,9 @@ helix-runtime :8787
     │     ├── operator_alert_cursors
     │     ├── operator_worker_alert_state
     │     ├── operator_pending_actions
-    │     └── operator_pending_t2v
+    │     ├── operator_pending_t2v
+    │     ├── operator_pending_t2i
+    │     └── production_profile_tool_settings
     │
     ├── WorkerRegistry
     │     ↓
@@ -50,9 +52,13 @@ helix-runtime :8787
     │     ↓
     │   confirmed job cancellation
     │
-    ├── TelegramT2VService
+    ├── TelegramT2VService / TelegramT2IService
     │     ↓
     │   durable prompt capture + confirmation
+    │
+    ├── TelegramDownloadsService
+    │     ↓
+    │   paginated live Comfy history
     │
     └── TelegramCommandService
           ↓
@@ -65,7 +71,7 @@ helix-runtime :8787
 - Physical-worker name: `Helix RTX 4060`
 - Adapter: `comfy`
 - Production profile `nolan`: Christopher Nolan; validated `video.i2v`, `video.t2v`
-- Production profile `leibovitz`: Annie Leibovitz; `image.t2i` remains unvalidated
+- Production profile `leibovitz`: Annie Leibovitz; validated `image.t2i`
 - GPU: RTX 4060, 8188 MiB VRAM
 - ComfyUI: 0.33.0
 - Pinned Comfy revision: `7dde56176efa71fd74ef7b3930ab5882d1926288`
@@ -119,7 +125,7 @@ running -> timed_out
 backend error -> failed
 ```
 
-Comfy's `prompt_id` is stored as `backend_job_id`.
+Comfy's `prompt_id` is stored as `backend_job_id`. Internal Helix IDs remain `job_...` primary keys. Migration `0011_job_numbers.sql` adds a unique, non-null sequential `BIGINT job_number`, chronologically backfills existing jobs, and owns the sequence used for later inserts. Telegram uses this number everywhere while API/internal foreign-key relationships remain unchanged.
 
 Correctness comes from Comfy `/history/{prompt_id}` plus `/queue`. The reconciler runs inside `helix-runtime`, so unfinished jobs can be recovered after a runtime restart. Persistent WebSocket tracking remains an optional latency optimization.
 
@@ -141,28 +147,34 @@ This avoids status flapping while preserving visibility into the event channel. 
 
 `TelegramCommandService` is a narrow operator surface inside `helix-runtime`. It uses Telegram `getUpdates` long polling and accepts messages only from the configured `HELIX_TELEGRAM_CHAT_ID`; other chats are ignored.
 
-Diagnostics and debugging remain read-only. The only write-capable media actions in this checkpoint are explicitly confirmed cancellation, native T2V generation, and the single Distilled-FP8 T2I workflow integration.
+Diagnostics and debugging remain read-only. The only write-capable media actions in this checkpoint are explicitly confirmed cancellation, native T2V generation, the Distilled-FP8 T2I workflow integration, and explicit artifact retrieval through Downloads.
 
 Current advertised commands:
 
 ```text
-/status      - Diagnostics
-/queue       - Queue check
-/jobs        - Recent jobs
-/job <id>    - Job details
-/outbox      - Send queue
-/errors      - Recent failures
-/events <id> - Job events
-/t2v         - Generate video
-/cancel <id> - Cancel job
+/status        - Diagnostics
+/queue         - Queue check
+/j             - Jobs, 20 per page
+/j p <page>    - Jobs page
+/jb <number>   - Job details
+/dl            - Downloads, 20 per page
+/dl p <page>   - Downloads page
+/dl i <number> - Inspect artifact
+/dl g <number> - Get artifact
+/outbox        - Send queue
+/errors        - Recent failures
+/ev <number>   - Job events
+/t2v           - Generate video
+/t2i           - Generate image
+/cc <number>   - Cancel job
 ```
 
-`/help` remains available. Hidden aliases are intentionally not advertised:
+`/help` remains available. Additional short aliases are:
 
 ```text
 /st, /stat   -> /status
 /qu, /que    -> /queue
-/jbs         -> /jobs
+/j, /jbs     -> /jobs
 /jb          -> /job
 /ob          -> /outbox
 /err         -> /errors
@@ -185,15 +197,19 @@ Windows shared-GPU-memory usage is not shown because Comfy `/system_stats` does 
 
 Reads Comfy `/queue` directly and combines it with active Helix database jobs. It does not run the heavier readiness checks.
 
-### `/jobs`
+### `/j` / `/jobs`
 
-Shows the five most recent media jobs with full durable `job_...` identifiers in monospace. Status is presented in bold square brackets and runtime units remain italic.
+Shows 20 recent media jobs per page as compact quote blocks. `/j p <page>` provides previous/next pagination. Each row uses the durable sequential Job number, bold square-bracket status, tool/profile context, finish time where available, and italic runtime.
 
-### `/job <id>`
+### `/jb <number>` / `/job <number>`
 
-Accepts a full durable ID, a unique short prefix, or a copied short display value with trailing dots such as `e2a4a9...`. Ambiguous prefixes are rejected rather than guessed.
+Numeric Job lookup is exact. Full legacy Helix IDs, unique UUID prefixes, and copied short values ending in `...` remain accepted for compatibility; ambiguous legacy prefixes are rejected rather than guessed.
 
-The detail view includes job state, worker presentation name, tool, runtime, timestamps, and associated Outbox/send state.
+The detail view includes Job number, state, Production Profile, tool, runtime, timestamps, associated Outbox/send state, and an expandable semantic generation snapshot. Internal Helix and Comfy identifiers are confined to technical detail where useful.
+
+### `/dl` / `/downloads`
+
+Reads live Comfy history without creating a permanent artifact catalog. It shows 20 completed artifacts per page, uses `/dl p <page>` for pagination, `/dl i <number>` for expandable inspection, and `/dl g <number>` for explicit original-file retrieval. Mapped history uses the same numeric Job reference as every other Telegram view. Legacy Comfy Prompt prefixes remain accepted, and unmapped live history is clearly labelled as Comfy-only. Valid-empty history is distinct from unavailable or malformed history.
 
 ### `/outbox`
 
@@ -212,22 +228,22 @@ The view shows at most five actionable items and prioritizes terminal failures. 
 
 Shows the five most recent generation failures/timeouts and terminal Outbox failures. Cancelled jobs are excluded.
 
-Full durable job IDs are shown. Each error is rendered in a compact Telegram quote.
+Durable numeric Job references are shown. Each error is rendered in a compact Telegram quote.
 
-### `/events <id>`
+### `/ev <number>` / `/events <number>`
 
-Uses the same safe job-reference rules as `/job` and shows the complete durable `media_job_events` timeline newest first.
+Uses the same numeric-first, legacy-compatible reference rules as `/job` and shows the complete durable `media_job_events` timeline newest first.
 
 Each event includes its sequence number, Helix-local timestamp, and actual technical event name such as `job.running`, `job.succeeded`, or `delivery.failed`. The history is not silently truncated to ten rows.
 
 ## Confirmed Telegram cancellation
 
-`/cancel <id>` and hidden alias `/cc` use durable terminal-style confirmation.
+`/cancel <number>` and alias `/cc` use durable terminal-style confirmation.
 
 Migration `0004_operator_actions.sql` adds `operator_pending_actions`, with one pending action per configured operator chat.
 
 ```text
-/cancel <id>
+/cancel <number>
       ↓
 durable pending action
       ↓
@@ -266,30 +282,11 @@ JobService.create(tool = video.t2v)
 
 Migration `0005_t2v_confirmations.sql` adds `operator_pending_t2v`.
 
-The operator has five minutes to provide the prompt. Once captured, the prompt is shown back with the fixed baseline settings. Confirmation lasts 60 seconds. Three invalid responses abort the action. A new slash command abandons it. No GPU job is submitted before `yes`.
+The operator has five minutes to provide the prompt. Once captured, the prompt is shown back with a frozen semantic settings/mode snapshot. Confirmation lasts 60 seconds. Three invalid responses abort the action. A new slash command abandons it. No GPU job is submitted before `yes`.
 
 The vetted T2V workflow is deployment-managed at `/opt/helix-runtime/workflows/video_ltx2_5_t2v.api.json` and bind-mounted read-only as `/app/workflows/video_ltx2_5_t2v.api.json`.
 
-The current semantic mutation is intentionally limited to:
-
-```text
-405:376.inputs.value = prompt
-```
-
-Helix also verifies that prompt enhancement at node `405:383` remains disabled. The current workflow baseline keeps the following fixed:
-
-```text
-aspect:      16:9 widescreen
-resolution:  0.9 MP selector baseline
-output:      1280×704 in the proven run
-fps:         24
-duration:    5 seconds
-negative:    fixed workflow negative prompt
-sampler:     workflow-defined
-models:      workflow-defined
-```
-
-Broader T2V settings are deliberately deferred until the settings contract is designed around stable Helix semantics rather than raw Comfy node IDs.
+The vetted binder now applies the persisted semantic T2V contract: aspect, quality/effective megapixels, duration, Prompt Enhance, FPS, Stage 1/2 seeds, negative prompt, sampler, and guidance. Advanced controls require explicit `-dev`; model identity, sigmas, decode tiling, and other graph internals remain outside the operator contract. Manual/Fast/Quality Mode overlays are resolved before the frozen generation snapshot and never rewrite stored manual settings.
 
 ## Operational Telegram alerts
 
@@ -370,7 +367,7 @@ The original video is sent as a Telegram document/file so Telegram does not reco
 
 Delivery claims use PostgreSQL state, `FOR UPDATE SKIP LOCKED`, stale-delivery recovery, and exponential backoff. Retries are bounded to five attempts. Permanent malformed-artifact failures stop immediately. Terminal delivery failures remain `failed` with `next_attempt_at = NULL`.
 
-Delivered-file captions are tool-aware. A T2V result uses `[video.t2v]`, the configured worker display name `Christopher Nolan`, bold field labels, and a bold non-italic Job label with the short ID in monospace.
+Delivered-file captions are tool-aware. A T2V result uses `[video.t2v]`, the configured Production Profile name `Christopher Nolan`, bold field labels, and a bold non-italic numeric Job reference in monospace.
 
 The Telegram bot token and chat ID remain deployment secrets outside Git.
 
@@ -423,7 +420,7 @@ freeze/version graphs
 add semantic bindings
 ```
 
-Actual image upload/staging, broad semantic prompt/relay/sampler bindings, T2V settings beyond the fixed prompt-only baseline, persistent WebSocket tracking, and worker output-retention deletion infrastructure remain deferred.
+Actual image upload/staging, broader Director/Prompt Relay bindings, persistent WebSocket tracking, and worker output-retention deletion infrastructure remain deferred.
 
 ## Runtime checkpoint
 
@@ -437,8 +434,9 @@ Completed:
 - cancellation and running timeout;
 - race-safe terminal job states;
 - human-friendly worker presentation name;
-- `/status`, `/queue`, `/jobs`, `/job`, `/outbox`, `/errors`, `/events`, `/t2v`, `/cancel`, `/help`;
-- full durable IDs and safe prefix lookup;
+- `/status`, `/queue`, `/jobs`, `/job`, `/downloads`, `/outbox`, `/errors`, `/events`, `/t2v`, `/t2i`, `/cancel`, `/help`;
+- durable numeric Job references with safe legacy UUID-prefix compatibility;
+- 20-item paginated Jobs and Downloads views;
 - durable operational alerts and deduplication;
 - worker offline/recovered transition monitoring;
 - complete timestamped durable event inspection;
@@ -453,8 +451,7 @@ Deferred:
 
 - worker output retention cleanup;
 - actual image upload/staging;
-- broad semantic workflow bindings;
-- T2V settings beyond the fixed prompt-only baseline;
+- broader Director/Prompt Relay workflow bindings;
 - persistent WebSocket execution tracking;
 - broader Telegram write actions.
 
@@ -462,7 +459,7 @@ Deferred:
 
 The next main Helix phase is **Niche Intelligence**. The Production runtime should remain stable while Intelligence defines platform-first evidence, content features, niche structure, trend/saturation/novelty signals, and the `NicheModel` contract consumed later by the Director.
 
-When Production workflow work resumes, the next T2V task is not another raw-workflow integration. It is the settings design around the proven baseline: define stable user-facing controls first, then map those controls onto the workflow.
+When Production workflow work resumes, calibrate the existing semantic settings and Manual/Fast/Quality modes with controlled runs before expanding the contract.
 
 ## Runtime stack
 
@@ -496,12 +493,14 @@ profiles are logical identities on that worker, not additional workers:
 
 ```text
 nolan      -> Christopher Nolan -> video.t2v, video.i2v -> LTX (validated)
-leibovitz  -> Annie Leibovitz   -> image.t2i            -> FLUX.2 (unvalidated)
+leibovitz  -> Annie Leibovitz   -> image.t2i            -> FLUX.2 (validated)
 ```
 
-Jobs persist both `worker_id` and `profile_id`. Existing video jobs are
-backfilled to `nolan`; callers that omit `profileId` remain compatible when a
-single profile supplies the requested tool.
+Jobs persist both `worker_id` and `profile_id`. Migration
+`0010_production_profiles_t2i.sql` backfilled existing video jobs to `nolan`
+and added durable T2I settings/pending state; it is applied in production.
+Callers that omit `profileId` remain compatible when a single profile supplies
+the requested tool.
 
 ## T2I Distilled FP8 integration
 
@@ -532,5 +531,7 @@ seed. The provisional V1 dimensions are 1024×1024 (1:1), 832×1248 (2:3),
 `FLUX.2 Klein 4B Distilled FP8`; Base is reserved for later testing.
 
 Images use the generic artifact/delivery path and Telegram `sendDocument`, not
-`sendPhoto`; captions omit video duration/audio. `image.t2i` remains
-experimental and awaiting the first successful RTX 4060 Telegram smoke test.
+`sendPhoto`; captions omit video duration/audio. `image.t2i` is validated by
+successful RTX 4060 Telegram submissions, generations, and original-file
+deliveries. The narrow V1 settings/binder contract remains intentionally
+experimental and may evolve only through explicit workflow validation.

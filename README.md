@@ -20,13 +20,13 @@ Experiment Engine
 
 Production/generation continues as a separate workstream and will connect through stable briefs/contracts rather than shaping the Intelligence or Director architecture.
 
-The current Production checkpoint includes a durable ComfyUI execution runtime, PostgreSQL job/delivery state, original-file Telegram delivery, operator diagnostics, durable operational alerts, complete job-event debugging, guarded terminal-style job cancellation, and a validated native LTX 2.5 T2V path initiated from Telegram with pre-submit confirmation.
+The current Production checkpoint includes a durable ComfyUI execution runtime, PostgreSQL job/delivery state, sequential numeric Job references, 20-item paginated Jobs and live Downloads views, original-file Telegram delivery, operator diagnostics, durable operational alerts, complete job-event debugging, guarded terminal-style job cancellation, and validated Telegram generation paths for native LTX 2.5 T2V and FLUX.2 Klein 4B Distilled T2I with pre-submit confirmation.
 
 T2V is no longer prompt-only. `Christopher Nolan / video.t2v` has a persisted semantic settings layer with Core controls for aspect, quality, duration and prompt enhancement, plus explicit `-dev` access to FPS, Stage 1/2 seeds, negative prompt, megapixel override, sampler and guidance. Durable reset confirmation can restore Core defaults or the full exposed T2V baseline.
 
 Native LTX 2.5 T2V has been benchmarked across controlled 5-second, 8-second and 10-second runs before adding Director/Prompt Relay controls. The current research result is to use focused native LTX first for shots inside its proven comfort zone and escalate to stronger Production controls only when timing, shot responsibility, state changes, or structured progression repeatedly fail.
 
-The current Production mode layer is intentionally small: `manual`, `fast`, and `quality`. A mode overlays only proven execution settings and never rewrites the stored manual settings. There is no `auto` mode.
+The current Production mode layer is intentionally small: `manual`, `fast`, and `quality`. A mode overlays only proven execution settings and never rewrites the stored manual settings. There is no `auto` mode. Annie Leibovitz `image.t2i` intentionally has no modes; its narrow V1 settings are aspect and seed.
 
 The current generation research direction is **open/self-hosted first**. Runway is not part of the active Production plan. Seedance 2.0 is being used as a behavioral/quality reference rather than an active dependency.
 

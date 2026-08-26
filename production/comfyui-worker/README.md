@@ -378,10 +378,9 @@ One operational validation remains pending: the Windows scheduled task has been 
 `helix-rtx4060-01` is one physical RTX 4060/ComfyUI worker and remains limited
 to one concurrent GPU job. Helix maps logical profiles onto that same endpoint:
 `nolan` (Christopher Nolan, validated LTX video) and `leibovitz` (Annie
-Leibovitz, future FLUX.2 Klein 4B Distilled image generation). Leibovitz does
-not have a separate GPU, Comfy instance, queue, or validation claim. The
-runtime expects the separately supplied Distilled FP8 API workflow at the
-configured `HELIX_T2I_WORKFLOW_PATH` (default
-`/app/workflows/image_flux2_klein_4b_distilled_fp8_t2i_v2.api.json`). The
-operator must install it, apply migration `0010`, deploy, and complete a real
-Telegram T2I generation before this model is considered validated.
+Leibovitz, validated FLUX.2 Klein 4B Distilled image generation). Leibovitz
+does not have a separate GPU, Comfy instance, or queue. The runtime reads the
+installed Distilled FP8 API workflow from configured `HELIX_T2I_WORKFLOW_PATH`
+(default `/app/workflows/image_flux2_klein_4b_distilled_fp8_t2i_v2.api.json`).
+Migration `0010` is applied, and successful Telegram T2I generations plus
+original-file deliveries validate the narrow V1 path on this RTX 4060.

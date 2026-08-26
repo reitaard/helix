@@ -18,6 +18,8 @@ helix-runtime
     ├── TelegramT2VSettingsService
     ├── TelegramT2VModeService
     ├── TelegramT2VResetService
+    ├── TelegramT2IService + settings/reset
+    ├── TelegramDownloadsService
     └── OutboxRepository
     ↓
 ComfyAdapter / ComfyClient
@@ -33,7 +35,7 @@ VPS temporary spool
 Telegram original-file delivery
 ```
 
-The worker/runtime boundary is a stable checkpoint. It supports durable job acceptance, raw Comfy workflow submission, `prompt_id` persistence, queue/history reconciliation, restart recovery, artifact capture/retrieval, cancellation, running-job timeout, durable Telegram delivery, bounded retry, diagnostics, operator inspection, proactive alerts, confirmed T2V submission, persisted T2V settings, durable reset confirmation, and generation modes.
+The worker/runtime boundary is a stable checkpoint. It supports durable numbered job acceptance, raw Comfy workflow submission, `prompt_id` persistence, queue/history reconciliation, restart recovery, artifact capture/retrieval, paginated live Downloads, cancellation, running-job timeout, durable Telegram delivery, bounded retry, diagnostics, operator inspection, proactive alerts, confirmed T2V/T2I submission, persisted settings, durable reset confirmation, and T2V generation modes.
 
 See [`production/comfyui-worker/`](comfyui-worker/) for the worker state and roadmap.
 
@@ -219,15 +221,21 @@ Native LTX should be the first Production path for shots inside its proven comfo
 The operator surface includes:
 
 ```text
-/status      Diagnostics
-/queue       Queue check
-/jobs        Recent jobs
-/job <id>    Job details
-/outbox      Send queue
-/errors      Recent failures
-/events <id> Job events
-/t2v         Generate video
-/cancel <id> Cancel job
+/status       Diagnostics
+/queue        Queue check
+/j            Jobs, 20 per page
+/j p <page>   Jobs page
+/jb <number>  Job details
+/dl           Downloads, 20 per page
+/dl p <page>  Downloads page
+/dl i <number> Inspect artifact
+/dl g <number> Get artifact
+/outbox       Send queue
+/errors       Recent failures
+/ev <number>  Job events
+/t2v          Generate video
+/t2i          Generate image
+/cc <number>  Cancel job
 ```
 
 T2V subcommands now include settings, reset, and mode inspection/mutation.
@@ -253,6 +261,8 @@ No media job is created until confirmation. The settings snapshot freezes the ef
 Completed:
 
 - durable asynchronous submission and restart recovery;
+- sequential numeric Job references with legacy UUID compatibility;
+- 20-item paginated Jobs and live Downloads views;
 - artifact capture/retrieval and original-file Telegram delivery;
 - cancellation and running timeout;
 - diagnostics, alerts and complete event inspection;
@@ -264,7 +274,8 @@ Completed:
 - durable Core/full T2V reset;
 - persisted generation modes: Manual, Fast, Quality;
 - mode overlays that preserve stored manual settings;
-- effective settings snapshot at generation confirmation.
+- effective settings snapshot at generation confirmation;
+- validated Annie Leibovitz `image.t2i` generation and Telegram delivery.
 
 Still deferred:
 
@@ -293,12 +304,13 @@ There is intentionally no Auto phase. Mode selection stays explicit until a futu
 There is one physical worker, `helix-rtx4060-01`, with one RTX 4060, Comfy
 endpoint, adapter, and queue; physical GPU concurrency remains one. It now has
 logical Production Profiles: `nolan` / Christopher Nolan for validated LTX
-video tools, and `leibovitz` / Annie Leibovitz for future `image.t2i`.
-Leibovitz is not a second worker and FLUX.2 Klein 4B Distilled FP8 remains
-unvalidated on this hardware. The runtime now wires `/t2i` to the supplied
+video tools, and `leibovitz` / Annie Leibovitz for validated `image.t2i`.
+Leibovitz is not a second worker. FLUX.2 Klein 4B Distilled FP8 has completed
+successful RTX 4060 Telegram generation and original-file delivery. The
+runtime wires `/t2i` to the supplied
 Distilled API workflow only: semantic aspect/seed settings resolve to the
 provisional V1 dimensions, and the binder changes only prompt, width, height,
 and seed. `HELIX_T2I_WORKFLOW_PATH` defaults to
 `/app/workflows/image_flux2_klein_4b_distilled_fp8_t2i_v2.api.json`.
-The workflow must be separately installed and migration `0010` applied before
-the Telegram smoke test. Base/model switching and T2I modes remain deferred.
+The workflow is installed and migration `0010` is applied. Base/model
+switching and T2I modes remain deferred.

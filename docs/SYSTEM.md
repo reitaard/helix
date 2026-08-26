@@ -135,11 +135,13 @@ Collect observed platform and operational metrics, normalize them into `Performa
 Production currently uses one physical `helix-rtx4060-01` RTX 4060 worker,
 one Comfy endpoint/adapter/queue, and one physical concurrent GPU job. `nolan`
 and `leibovitz` are logical Production Profiles on that worker, not separate
-execution infrastructure. The first image path is the experimental
+execution infrastructure. The first image path is the validated
 `image.t2i` Distilled-FP8 variant; Telegram exposes only semantic aspect and
 seed while the runtime binds the supplied workflow at prompt, dimensions, and
-concrete seed. FLUX validation is earned only by a real successful RTX 4060
-run, not by code integration.
+concrete seed. Successful RTX 4060 Telegram generations and original-file
+deliveries validate this narrow path. Operator-facing media references are
+durable sequential Job numbers; internal Helix and Comfy identifiers remain
+stable behind that public reference.
 
 ## Principle
 

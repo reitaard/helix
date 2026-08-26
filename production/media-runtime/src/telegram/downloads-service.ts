@@ -40,7 +40,6 @@ import {
 import {
   escapeHtml,
   formatEventTimestamp,
-  shortJobId,
   title
 } from "./presentation.js";
 
@@ -52,6 +51,7 @@ interface SourceContext {
   source: string;
   tool: string | null;
   jobId: string | null;
+  jobNumber: string | null;
 }
 
 function clip(
@@ -239,7 +239,8 @@ export class TelegramDownloadsService {
       return {
         source: "Comfy UI",
         tool: null,
-        jobId: null
+        jobId: null,
+        jobNumber: null
       };
     }
 
@@ -251,7 +252,8 @@ export class TelegramDownloadsService {
             job.profileId
           ),
       tool: job.tool,
-      jobId: job.id
+      jobId: job.id,
+      jobNumber: job.jobNumber
     };
   }
 
@@ -259,8 +261,35 @@ export class TelegramDownloadsService {
     reference: string
   ) {
     const clean = cleanReference(reference);
+    let backendJobId: string | null = null;
 
-    if (
+    if (/^\d+$/.test(clean)) {
+      const number = BigInt(clean);
+
+      if (
+        number < 1n ||
+        number > 9223372036854775807n
+      ) {
+        return {
+          kind: "invalid" as const
+        };
+      }
+
+      const job =
+        await this.sources
+          .findByJobNumber(
+            number.toString()
+          );
+
+      if (!job?.backendJobId) {
+        return {
+          kind: "missing" as const
+        };
+      }
+
+      backendJobId = job.backendJobId;
+    }
+    else if (
       clean.length < 4 ||
       !/^[a-zA-Z0-9_-]+$/.test(clean)
     ) {
@@ -284,9 +313,11 @@ export class TelegramDownloadsService {
     const lower = clean.toLowerCase();
     const matches = items.filter(
       item =>
-        item.promptId
-          .toLowerCase()
-          .startsWith(lower)
+        backendJobId !== null
+          ? item.promptId === backendJobId
+          : item.promptId
+              .toLowerCase()
+              .startsWith(lower)
     );
 
     if (matches.length === 0) {
@@ -301,10 +332,25 @@ export class TelegramDownloadsService {
       };
     }
 
+    const item = matches[0]!;
+
     return {
       kind: "resolved" as const,
-      item: matches[0]!
+      item,
+      context: await this.source(
+        item.promptId
+      )
     };
+  }
+
+  private reference(
+    item: ComfyHistoryItem,
+    context: SourceContext
+  ) {
+    return (
+      context.jobNumber ??
+      item.promptId.slice(0, 6)
+    );
   }
 
   private usageHtml() {
@@ -312,8 +358,8 @@ export class TelegramDownloadsService {
       `${title("DOWNLOAD")}\n` +
       `<b>List</b> · <code>/dl</code>\n` +
       `<b>Page</b> · <code>/dl p &lt;page&gt;</code>\n` +
-      `<b>Inspect</b> · <code>/dl i &lt;id&gt;</code>\n` +
-      `<b>Get</b> · <code>/dl g &lt;id&gt;</code>`
+      `<b>Inspect</b> · <code>/dl i &lt;number&gt;</code>\n` +
+      `<b>Get</b> · <code>/dl g &lt;number&gt;</code>`
     );
   }
 
@@ -383,7 +429,7 @@ export class TelegramDownloadsService {
 
           return (
             `<blockquote>` +
-            `<code>${escapeHtml(item.promptId.slice(0, 6))}</code> · ` +
+            `<code>${escapeHtml(this.reference(item, context))}</code> · ` +
             `<b>${escapeHtml(artifactSummary(item))}</b>\n` +
             `<b>${escapeHtml(context.source)}</b> · ` +
             `<i>${escapeHtml(inspection.workflow)}</i>${completed}` +
@@ -394,7 +440,7 @@ export class TelegramDownloadsService {
 
     const footer = [
       `<b>Page</b> · <b>${page}/${totalPages}</b> · <b>${pageItems.length}</b> <i>shown</i>`,
-      `<i>Inspect</i> · <code>/dl i &lt;id&gt;</code>`
+      `<i>Inspect</i> · <code>/dl i &lt;number&gt;</code>`
     ];
 
     const navigation: string[] = [];
@@ -442,16 +488,13 @@ export class TelegramDownloadsService {
       );
 
     const detailLines = [
-      `<b>ID</b> · <code>${escapeHtml(item.promptId.slice(0, 6))}</code>`,
+      `<b>${context.jobNumber ? "Job" : "Comfy"}</b> · <code>${escapeHtml(this.reference(item, context))}</code>`,
       `<b>Source</b> · <b>${escapeHtml(context.source)}</b>`,
       `<b>Files</b> · <b>${item.artifacts.length}</b>`,
       `<b><i>• details •</i></b>`,
       `<b>Workflow</b> · <i>${escapeHtml(inspection.workflow)}</i>`,
       ...(context.tool
         ? [`<b>Tool</b> · <code>${escapeHtml(context.tool)}</code>`]
-        : []),
-      ...(context.jobId
-        ? [`<b>Job</b> · <code>${escapeHtml(shortJobId(context.jobId))}</code>`]
         : []),
       ...(inspection.prompt
         ? [
@@ -472,7 +515,7 @@ export class TelegramDownloadsService {
       ...(item.completedAt
         ? [`<b>Completed</b> · <i>${escapeHtml(formatEventTimestamp(item.completedAt))}</i>`]
         : []),
-      `<b>Prompt ID</b> · <code>${escapeHtml(item.promptId)}</code>`
+      `<b>Comfy Prompt</b> · <code>${escapeHtml(item.promptId)}</code>`
     ];
 
     return (
@@ -482,11 +525,10 @@ export class TelegramDownloadsService {
     );
   }
 
-  private async inspectHtml(
-    item: ComfyHistoryItem
+  private inspectHtml(
+    item: ComfyHistoryItem,
+    context: SourceContext
   ) {
-    const context =
-      await this.source(item.promptId);
     const inspection =
       inspectComfyWorkflow(item.workflow);
 
@@ -497,7 +539,7 @@ export class TelegramDownloadsService {
         context,
         inspection
       ) +
-      `\n<i>Get</i> · <code>/dl g ${escapeHtml(item.promptId.slice(0, 6))}</code>`
+      `\n<i>Get</i> · <code>/dl g ${escapeHtml(this.reference(item, context))}</code>`
     );
   }
 
@@ -510,6 +552,9 @@ export class TelegramDownloadsService {
     const lines = [
       `<b>Source</b> · <b>${escapeHtml(context.source)}</b>`,
       `<b>Workflow</b> · <i>${escapeHtml(inspection.workflow)}</i>`,
+      ...(context.jobNumber
+        ? [`<b>Job</b> · <code>${escapeHtml(context.jobNumber)}</code>`]
+        : []),
       `<b>Files</b> · <b>${fileCount}</b>`,
       ...(inspection.prompt
         ? [`<b>${inspection.promptConfidence === "best_effort" ? "Text" : "Prompt"}</b> · ${escapeHtml(clip(inspection.prompt, 350))}`]
@@ -612,6 +657,7 @@ export class TelegramDownloadsService {
             source: context.source,
             tool: context.tool,
             jobId: context.jobId,
+            jobNumber: context.jobNumber,
             promptId: item.promptId,
             completedAt: item.completedAt,
             workflow: inspection.workflow,
@@ -788,7 +834,8 @@ export class TelegramDownloadsService {
       }
 
       return this.inspectHtml(
-        resolved.item
+        resolved.item,
+        resolved.context
       );
     }
 
@@ -820,8 +867,8 @@ export class TelegramDownloadsService {
         `${title("DOWNLOAD")}\n` +
         (
           started
-            ? `<b>Transfer started.</b> · <code>${escapeHtml(resolved.item.promptId.slice(0, 6))}</code>`
-            : `<b>Transfer already running.</b> · <code>${escapeHtml(resolved.item.promptId.slice(0, 6))}</code>`
+            ? `<b>Transfer started.</b> · <code>${escapeHtml(this.reference(resolved.item, resolved.context))}</code>`
+            : `<b>Transfer already running.</b> · <code>${escapeHtml(this.reference(resolved.item, resolved.context))}</code>`
         )
       );
     }

@@ -5,6 +5,7 @@ import type {
 interface DeliveryRow {
   id: string;
   job_id: string;
+  job_number: string;
 
   artifact_index:
     number;
@@ -46,6 +47,7 @@ interface DeliveryRow {
 export interface ClaimedDelivery {
   id: string;
   jobId: string;
+  jobNumber: string;
 
   artifactIndex:
     number;
@@ -307,6 +309,7 @@ export class DeliveryRepository {
             c.document_message_id,
             j.worker_id,
             j.profile_id,
+            j.job_number,
             j.tool,
             j.started_at,
             j.finished_at
@@ -337,6 +340,9 @@ export class DeliveryRepository {
 
         jobId:
           row.job_id,
+
+        jobNumber:
+          row.job_number,
 
         artifactIndex:
           row.artifact_index,

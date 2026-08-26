@@ -10,6 +10,9 @@ export interface ClaimedOperatorAlert {
   jobId:
     string | null;
 
+  jobNumber:
+    string | null;
+
   payload: unknown;
   attemptCount: number;
 }
@@ -19,6 +22,9 @@ interface AlertRow {
   kind: string;
 
   job_id:
+    string | null;
+
+  job_number:
     string | null;
 
   payload: unknown;
@@ -433,13 +439,17 @@ export class OperatorAlertRepository {
         )
 
         SELECT
-          id,
-          kind,
-          job_id,
-          payload,
-          attempt_count
+          claimed.id,
+          claimed.kind,
+          claimed.job_id,
+          jobs.job_number,
+          claimed.payload,
+          claimed.attempt_count
 
         FROM claimed
+
+        LEFT JOIN media_jobs jobs
+          ON jobs.id = claimed.job_id
         `
       );
 
@@ -456,6 +466,9 @@ export class OperatorAlertRepository {
 
           jobId:
             row.job_id,
+
+          jobNumber:
+            row.job_number,
 
           payload:
             row.payload,

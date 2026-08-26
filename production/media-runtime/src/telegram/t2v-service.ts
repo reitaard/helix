@@ -757,9 +757,9 @@ export class TelegramT2VService {
         });
 
       return (
-        `<b>ID</b> · ` +
+        `<b>Job</b> · ` +
         `<code>${escapeHtml(
-          job.id
+          job.jobNumber
         )}</code>\n` +
 
         `<b>Worker</b> · ` +

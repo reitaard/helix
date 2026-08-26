@@ -235,15 +235,19 @@ private Docker network only
 volume: helix-db-data
 ```
 
-Applied runtime migrations currently provide:
+Applied runtime migrations `0001` through `0011` currently provide:
 
 ```text
-workers
-worker_observations
-media_jobs
-media_job_events
-media_deliveries
+workers + worker_observations
+media_jobs + media_job_events + media_deliveries
+operator alerts/cursors/worker transition state
+operator cancellation, T2V, T2I, and reset pending state
+persisted T2V/T2I settings and T2V generation modes
+logical Production Profile identity on jobs
+unique sequential media_jobs.job_number
 ```
+
+`job_number` is the public Telegram reference. Existing jobs were backfilled chronologically without changing internal Helix IDs, Comfy Prompt IDs, or foreign-key relationships.
 
 PostgreSQL is the durable Helix state. Comfy queue/history remain the execution source of truth used for reconciliation.
 

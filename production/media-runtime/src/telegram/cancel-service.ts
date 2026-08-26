@@ -79,6 +79,7 @@ export class TelegramCancelService {
   private jobHeader(
     job: {
       id: string;
+      jobNumber: string;
       status: string;
       workerId:
         string |
@@ -91,7 +92,7 @@ export class TelegramCancelService {
     return (
       `<b>Job</b> · ` +
       `<code>${escapeHtml(
-        job.id
+        job.jobNumber
       )}</code>\n` +
 
       `<b>Worker</b> · ` +
@@ -209,7 +210,7 @@ export class TelegramCancelService {
     ) {
       return (
         `<b>Usage</b> · ` +
-        `<code>/cancel &lt;id&gt;</code>`
+        `<code>/cancel &lt;number&gt;</code>`
       );
     }
 
@@ -395,6 +396,7 @@ export class TelegramCancelService {
         return (
           `<b>Job</b> · ` +
           `<code>${escapeHtml(
+            current?.jobNumber ??
             pending.jobId
           )}</code>\n` +
           `<b>State</b> · ` +
@@ -410,6 +412,7 @@ export class TelegramCancelService {
       return (
         `<b>Job</b> · ` +
         `<code>${escapeHtml(
+          current?.jobNumber ??
           pending.jobId
         )}</code>\n` +
         `<b>State</b> · ` +

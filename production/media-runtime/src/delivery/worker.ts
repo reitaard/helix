@@ -272,8 +272,8 @@ export class DeliveryWorker {
 
                   workerName,
 
-                  jobId:
-                    delivery.jobId,
+                  jobNumber:
+                    delivery.jobNumber,
 
                   completedAt:
                     delivery.finishedAt

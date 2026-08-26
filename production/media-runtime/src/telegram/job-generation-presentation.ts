@@ -163,7 +163,7 @@ export function renderJobGeneration(
 
   if (backendJobId) {
     lines.push(
-      `<b>Prompt ID</b> · <code>${escapeHtml(
+      `<b>Comfy Prompt</b> · <code>${escapeHtml(
         backendJobId
       )}</code>`
     );

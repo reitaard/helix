@@ -33,6 +33,33 @@ export async function resolveJobReference(
         ""
       );
 
+  if (/^\d+$/.test(clean)) {
+    const number = BigInt(clean);
+
+    if (
+      number < 1n ||
+      number > 9223372036854775807n
+    ) {
+      return {
+        kind: "invalid"
+      };
+    }
+
+    const job =
+      await jobs.findByJobNumber(
+        number.toString()
+      );
+
+    return job
+      ? {
+          kind: "found",
+          job
+        }
+      : {
+          kind: "not_found"
+        };
+  }
+
   if (
     clean.startsWith(
       "job_"

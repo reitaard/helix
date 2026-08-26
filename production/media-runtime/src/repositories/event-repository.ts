@@ -20,6 +20,7 @@ export interface JobEventView {
 
 interface ErrorRow {
   job_id: string;
+  job_number: string;
   tool: string;
   worker_id: string | null;
   profile_id: string | null;
@@ -35,6 +36,7 @@ interface ErrorRow {
 
 export interface RecentErrorView {
   jobId: string;
+  jobNumber: string;
   tool: string;
   workerId: string | null;
   profileId: string | null;
@@ -117,6 +119,7 @@ export class EventRepository {
         `
         SELECT
           job_id,
+          job_number,
           tool,
           worker_id,
           profile_id,
@@ -127,6 +130,7 @@ export class EventRepository {
         FROM (
           SELECT
             e.job_id,
+            j.job_number,
             j.tool,
             j.worker_id,
             j.profile_id,
@@ -173,6 +177,7 @@ export class EventRepository {
 
           SELECT
             e.job_id,
+            j.job_number,
             j.tool,
             j.worker_id,
             j.profile_id,
@@ -225,6 +230,9 @@ export class EventRepository {
       row => ({
         jobId:
           row.job_id,
+
+        jobNumber:
+          row.job_number,
 
         tool: row.tool,
         workerId: row.worker_id,

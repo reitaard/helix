@@ -4,6 +4,7 @@ import type {
 
 interface MediaJobRow {
   id: string;
+  job_number: string;
   tool: string;
   status: string;
 
@@ -30,6 +31,7 @@ interface MediaJobRow {
 
 export interface MediaJob {
   id: string;
+  jobNumber: string;
   tool: string;
   status: string;
 
@@ -59,6 +61,7 @@ function mapJob(
 ): MediaJob {
   return {
     id: row.id,
+    jobNumber: row.job_number,
     tool: row.tool,
     status: row.status,
 
@@ -149,6 +152,7 @@ export class JobRepository {
         `
         SELECT
           id,
+          job_number,
           tool,
           status,
           worker_id,
@@ -187,6 +191,7 @@ export class JobRepository {
         `
         SELECT
           id,
+          job_number,
           tool,
           status,
           worker_id,
@@ -458,8 +463,24 @@ export class JobRepository {
     }
   }
 
+  async count() {
+    const result =
+      await this.db.query<{
+        total: number;
+      }>(
+        `
+        SELECT COUNT(*)::int AS total
+        FROM media_jobs
+        `
+      );
+
+    return result.rows[0]?.total ?? 0;
+  }
+
+
   async listRecent(
-    limit = 5
+    limit = 20,
+    offset = 0
   ): Promise<MediaJob[]> {
     const safeLimit =
       Math.max(
@@ -469,6 +490,11 @@ export class JobRepository {
           Math.floor(limit)
         )
       );
+    const safeOffset =
+      Math.max(
+        0,
+        Math.floor(offset)
+      );
 
     const result =
       await this.db.query<
@@ -477,6 +503,7 @@ export class JobRepository {
         `
         SELECT
           id,
+          job_number,
           tool,
           status,
           worker_id,
@@ -494,13 +521,56 @@ export class JobRepository {
         FROM media_jobs
         ORDER BY created_at DESC
         LIMIT $1
+        OFFSET $2
         `,
-        [safeLimit]
+        [
+          safeLimit,
+          safeOffset
+        ]
       );
 
     return result.rows.map(
       mapJob
     );
+  }
+
+
+  async findByJobNumber(
+    jobNumber: string
+  ): Promise<MediaJob | null> {
+    const result =
+      await this.db.query<
+        MediaJobRow
+      >(
+        `
+        SELECT
+          id,
+          job_number,
+          tool,
+          status,
+          worker_id,
+          profile_id,
+          adapter,
+          backend_job_id,
+          idempotency_key,
+          request,
+          result,
+          error,
+          created_at,
+          updated_at,
+          started_at,
+          finished_at
+        FROM media_jobs
+        WHERE job_number = $1::bigint
+        `,
+        [jobNumber]
+      );
+
+    const row = result.rows[0];
+
+    return row
+      ? mapJob(row)
+      : null;
   }
 
 
@@ -514,6 +584,7 @@ export class JobRepository {
         `
         SELECT
           id,
+          job_number,
           tool,
           status,
           worker_id,
@@ -552,6 +623,7 @@ export class JobRepository {
         `
         SELECT
           id,
+          job_number,
           tool,
           status,
           worker_id,

@@ -12,19 +12,8 @@ interface MetadataInput {
   media: { kind: "video"; value: string; audio: string } | { kind: "image"; value: string };
   tool: string;
   workerName: string;
-  jobId: string;
+  jobNumber: string;
   completedAt: string | null;
-}
-
-function shortJobId(
-  value: string
-) {
-  const id =
-    value.startsWith("job_")
-      ? value.slice(4)
-      : value;
-
-  return `${id.slice(0, 6)}...`;
 }
 
 function escapeHtml(
@@ -174,9 +163,7 @@ export class TelegramDelivery {
 
       `<b>Job</b> · <code>${
         escapeHtml(
-          shortJobId(
-            input.jobId
-          )
+          input.jobNumber
         )
       }</code>`
     ].join("\n");

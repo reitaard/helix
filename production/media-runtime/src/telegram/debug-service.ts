@@ -57,7 +57,7 @@ export class TelegramDebugService {
 
           return (
             `<code>${escapeHtml(
-              item.jobId
+              item.jobNumber
             )}</code> · ` +
 
             `<b>[${type} · ${escapeHtml(
@@ -99,7 +99,7 @@ export class TelegramDebugService {
       return (
         `${title("EVENTS")}\n` +
         `<b>Usage</b> · ` +
-        `<code>/events &lt;id&gt;</code>`
+        `<code>/events &lt;number&gt;</code>`
       );
     }
 
@@ -134,7 +134,7 @@ export class TelegramDebugService {
       return (
         `${title("EVENTS")}\n` +
         `<b>Job</b> · <code>${escapeHtml(
-          resolved.job.id
+          resolved.job.jobNumber
         )}</code>\n` +
         `<b>Tool</b> · <code>${escapeHtml(resolved.job.tool)}</code>\n` +
         `<b>Worker</b> · <b>${escapeHtml(this.workers.profileDisplayName(resolved.job.workerId, resolved.job.profileId))}</b>\n` +
@@ -160,7 +160,7 @@ export class TelegramDebugService {
       `${title("EVENTS")}\n` +
 
       `<b>Job</b> · <code>${escapeHtml(
-        resolved.job.id
+        resolved.job.jobNumber
       )}</code>\n` +
       `<b>Tool</b> · <code>${escapeHtml(resolved.job.tool)}</code>\n` +
       `<b>Worker</b> · <b>${escapeHtml(this.workers.profileDisplayName(resolved.job.workerId, resolved.job.profileId))}</b>\n` +

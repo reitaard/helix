@@ -30,17 +30,6 @@ export function profileTitle(
   );
 }
 
-export function shortJobId(
-  value: string
-) {
-  const id =
-    value.startsWith("job_")
-      ? value.slice(4)
-      : value;
-
-  return `${id.slice(0, 6)}...`;
-}
-
 export function compactError(
   value: unknown
 ) {

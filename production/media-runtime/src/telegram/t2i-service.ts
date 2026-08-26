@@ -215,7 +215,7 @@ export class TelegramT2IService {
             .digest("hex")}`
         });
         await this.pending.remove(this.chatId);
-        return `<b>ID</b> · <code>${escapeHtml(job.id)}</code>\n<b>Worker</b> · <b>${escapeHtml(this.workerName)}</b>\n<b>State</b> · <b>[${escapeHtml(job.status)}]</b>`;
+        return `<b>Job</b> · <code>${escapeHtml(job.jobNumber)}</code>\n<b>Worker</b> · <b>${escapeHtml(this.workerName)}</b>\n<b>State</b> · <b>[${escapeHtml(job.status)}]</b>`;
       }
       catch (error) {
         const message = error instanceof Error ? error.message : String(error);

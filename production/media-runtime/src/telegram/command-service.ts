@@ -31,6 +31,10 @@ import {
 } from "./job-generation-presentation.js";
 
 import {
+  resolveJobReference
+} from "./job-reference.js";
+
+import {
   TelegramT2VService
 } from "./t2v-service.js";
 
@@ -45,6 +49,8 @@ import {
 import {
   ComfyUpdateChecker
 } from "../workers/comfy-update-checker.js";
+
+const JOBS_PAGE_SIZE = 20;
 
 interface TelegramUpdate {
   update_id: number;
@@ -64,6 +70,23 @@ interface TelegramEnvelope<T> {
   description?: string;
 }
 
+function parsePage(
+  value: string | undefined
+) {
+  if (!value || !/^\d+$/.test(value)) {
+    return null;
+  }
+
+  const page = Number(value);
+
+  return (
+    Number.isSafeInteger(page) &&
+    page >= 1
+  )
+    ? page
+    : null;
+}
+
 function escapeHtml(
   value: string
 ) {
@@ -81,17 +104,6 @@ function title(
       value
     )} ]</b>`
   );
-}
-
-function shortJobId(
-  value: string
-) {
-  const id =
-    value.startsWith("job_")
-      ? value.slice(4)
-      : value;
-
-  return `${id.slice(0, 6)}...`;
 }
 
 function formatDuration(
@@ -674,17 +686,17 @@ export class TelegramCommandService {
       `${title("COMMANDS")}\n` +
       `<code>/status</code> <b>-</b> <b>Diagnostics</b>\n` +
       `<code>/queue</code> <b>-</b> <b>Queue check</b>\n` +
-      `<code>/jobs</code> <b>-</b> <b>Recent jobs</b>\n` +
-      `<code>/job &lt;id&gt;</code> <b>-</b> <b>Job details</b>\n` +
+      `<code>/j</code> <b>-</b> <b>Recent jobs</b>\n` +
+      `<code>/job &lt;number&gt;</code> <b>-</b> <b>Job details</b>\n` +
       `<code>/downloads</code> <b>-</b> <b>Recent GPU artifacts</b>\n` +
       `<code>/outbox</code> <b>-</b> <b>Send queue</b>\n` +
       `<code>/errors</code> <b>-</b> <b>Recent failures</b>\n` +
-      `<code>/events &lt;id&gt;</code> <b>-</b> <b>Job events</b>\n` +
+      `<code>/events &lt;number&gt;</code> <b>-</b> <b>Job events</b>\n` +
       `<code>/t2v</code> <b>-</b> <b>Generate video</b>\n` +
       `<code>/t2v settings</code> <b>-</b> <b>T2V settings</b>\n` +
       `<code>/t2i</code> <b>-</b> <b>Generate image</b>\n` +
       `<code>/t2i settings</code> <b>-</b> <b>T2I settings</b>\n` +
-      `<code>/cancel &lt;id&gt;</code> <b>-</b> <b>Cancel job</b>`
+      `<code>/cancel &lt;number&gt;</code> <b>-</b> <b>Cancel job</b>`
     );
   }
 
@@ -1037,7 +1049,7 @@ export class TelegramCommandService {
                 `<blockquote>` +
                 `<code>${
                   escapeHtml(
-                    shortJobId(job.id)
+                    job.jobNumber
                   )
                 }</code> · ` +
                 `<b>[${escapeHtml(job.status)}]</b>\n` +
@@ -1066,17 +1078,41 @@ export class TelegramCommandService {
     );
   }
 
-  private async jobsHtml() {
-    const jobs =
-      await this.jobs
-        .listRecent(5);
+  private async jobsHtml(
+    page = 1
+  ) {
+    const total =
+      await this.jobs.count();
 
-    if (jobs.length === 0) {
+    if (total === 0) {
       return (
         `${title("JOBS")}\n` +
         `<i>No jobs yet.</i>`
       );
     }
+
+    const totalPages =
+      Math.max(
+        1,
+        Math.ceil(
+          total / JOBS_PAGE_SIZE
+        )
+      );
+
+    if (page > totalPages) {
+      return (
+        `${title("JOBS")}\n` +
+        `<i>Page not found.</i>\n` +
+        `<b>Available</b> · <code>1-${totalPages}</code>`
+      );
+    }
+
+    const jobs =
+      await this.jobs.listRecent(
+        JOBS_PAGE_SIZE,
+        (page - 1) *
+          JOBS_PAGE_SIZE
+      );
 
     const blocks =
       jobs.map(
@@ -1096,7 +1132,7 @@ export class TelegramCommandService {
 
           return (
             `<blockquote>` +
-            `<code>${escapeHtml(shortJobId(job.id))}</code> · ` +
+            `<code>${escapeHtml(job.jobNumber)}</code> · ` +
             `<b>[${escapeHtml(job.status)}]</b>` +
             (finished
               ? ` <b><i>(${escapeHtml(finished)})</i></b>`
@@ -1110,62 +1146,112 @@ export class TelegramCommandService {
         }
       );
 
+    const footer = [
+      `<b>Page</b> · <b>${page}/${totalPages}</b> · <b>${jobs.length}</b> <i>shown</i>`,
+      `<i>Inspect</i> · <code>/jb &lt;number&gt;</code>`
+    ];
+    const navigation: string[] = [];
+
+    if (page > 1) {
+      navigation.push(
+        `<i>Prev</i> · <code>/j p ${page - 1}</code>`
+      );
+    }
+
+    if (page < totalPages) {
+      navigation.push(
+        `<i>Next</i> · <code>/j p ${page + 1}</code>`
+      );
+    }
+
+    if (navigation.length > 0) {
+      footer.push(
+        navigation.join(" · ")
+      );
+    }
+
     return (
       `${title("JOBS")}\n` +
-      blocks.join("\n")
+      blocks.join("\n") +
+      `\n${footer.join("\n")}`
     );
+  }
+
+  private jobsUsageHtml() {
+    return (
+      `${title("JOBS")}\n` +
+      `<b>List</b> · <code>/j</code>\n` +
+      `<b>Page</b> · <code>/j p &lt;page&gt;</code>\n` +
+      `<b>Inspect</b> · <code>/jb &lt;number&gt;</code>`
+    );
+  }
+
+  private async handleJobs(
+    args: string[]
+  ) {
+    if (args.length === 0) {
+      return this.jobsHtml(1);
+    }
+
+    const action =
+      args[0]?.toLowerCase();
+
+    if (
+      action !== "p" &&
+      action !== "page"
+    ) {
+      return this.jobsUsageHtml();
+    }
+
+    if (args.length !== 2) {
+      return this.jobsUsageHtml();
+    }
+
+    const page = parsePage(args[1]);
+
+    if (page === null) {
+      return (
+        `${title("JOBS")}\n` +
+        `<i>Page must be a positive integer.</i>\n` +
+        `<i>Use</i> · <code>/j p &lt;page&gt;</code>`
+      );
+    }
+
+    return this.jobsHtml(page);
   }
 
   private async jobHtml(
     reference: string
   ) {
-    let clean =
-      reference
-        .trim()
-        .replace(
-          /\.+$/,
-          ""
-        );
+    const resolved =
+      await resolveJobReference(
+        this.jobs,
+        reference
+      );
 
-    if (
-      clean.startsWith("job_")
-    ) {
-      clean = clean.slice(4);
-    }
-
-    if (
-      clean.length < 4 ||
-      !/^[a-zA-Z0-9_-]+$/
-        .test(clean)
-    ) {
+    if (resolved.kind === "invalid") {
       return (
         `${title("JOB")}\n` +
         `<b>Usage</b> · ` +
-        `<code>/job &lt;id&gt;</code>`
+        `<code>/job &lt;number&gt;</code>`
       );
     }
 
-    const matches =
-      await this.jobs
-        .findByPrefix(
-          `job_${clean}`
-        );
-
-    if (matches.length === 0) {
+    if (resolved.kind === "not_found") {
       return (
         `${title("JOB")}\n` +
         `<i>Job not found.</i>`
       );
     }
 
-    if (matches.length > 1) {
+    if (resolved.kind === "ambiguous") {
       return (
         `${title("JOB")}\n` +
         `<i>Prefix is ambiguous. Use more characters.</i>`
       );
     }
 
-    const job = matches[0]!;
+    const job = resolved.job;
 
     const workerName =
       this.workers.profileDisplayName(
@@ -1185,9 +1271,9 @@ export class TelegramCommandService {
         .listForJob(job.id);
 
     const lines = [
-      `<b>ID</b> · <code>${
+      `<b>Job</b> · <code>${
         escapeHtml(
-          shortJobId(job.id)
+          job.jobNumber
         )
       }</code>`,
       `<b>Status</b> · <b>${
@@ -1357,9 +1443,8 @@ export class TelegramCommandService {
         let line =
           `<code>${
             escapeHtml(
-              shortJobId(
-                item.jobId
-              )
+              job?.jobNumber ??
+              item.jobId
             )
           }</code> · ` +
           `<b>${
@@ -1535,10 +1620,11 @@ export class TelegramCommandService {
           );
           break;
 
+        case "/j":
         case "/jbs":
         case "/jobs":
           await this.sendHtml(
-            await this.jobsHtml()
+            await this.handleJobs(args)
           );
           break;
 

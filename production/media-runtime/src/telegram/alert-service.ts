@@ -202,10 +202,10 @@ export class TelegramAlertService {
         alert.payload
       );
 
-    const jobId =
-      alert.jobId
+    const jobNumber =
+      alert.jobNumber
         ? escapeHtml(
-            alert.jobId
+            alert.jobNumber
           )
         : null;
 
@@ -247,7 +247,7 @@ export class TelegramAlertService {
         return (
           `${title("JOB FAILED")}\n` +
 
-          `<b>Job</b> · <code>${jobId ?? "unknown"}</code>\n` +
+          `<b>Job</b> · <code>${jobNumber ?? "unknown"}</code>\n` +
 
           `<b>Worker</b> · <b><i>${escapeHtml(name)}</i></b>\n` +
 
@@ -309,7 +309,7 @@ export class TelegramAlertService {
         return (
           `${title("JOB TIMED OUT")}\n` +
 
-          `<b>Job</b> · <code>${jobId ?? "unknown"}</code>\n` +
+          `<b>Job</b> · <code>${jobNumber ?? "unknown"}</code>\n` +
 
           `<b>Worker</b> · <b><i>${escapeHtml(name)}</i></b>\n` +
 
@@ -349,7 +349,7 @@ export class TelegramAlertService {
         return (
           `${title("OUTBOX FAILED")}\n` +
 
-          `<b>Job</b> · <code>${jobId ?? "unknown"}</code>\n` +
+          `<b>Job</b> · <code>${jobNumber ?? "unknown"}</code>\n` +
 
           `<b>Provider</b> · <b><i>${escapeHtml(provider)}</i></b>\n` +
 
