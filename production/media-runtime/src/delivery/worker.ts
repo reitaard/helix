@@ -16,6 +16,15 @@ import {
 } from "../repositories/delivery-repository.js";
 
 import {
+  TelegramJobLifecycleRepository
+} from "../repositories/telegram-job-lifecycle-repository.js";
+
+import {
+  deliveryFailedProgressHtml,
+  deliveryRetryProgressHtml
+} from "../telegram/progress-presentation.js";
+
+import {
   WorkerRegistry
 } from "../workers/registry.js";
 
@@ -125,6 +134,9 @@ export class DeliveryWorker {
     private readonly deliveries:
       DeliveryRepository,
 
+    private readonly lifecycles:
+      TelegramJobLifecycleRepository,
+
     private readonly workers:
       WorkerRegistry,
 
@@ -187,6 +199,74 @@ export class DeliveryWorker {
         )
       )
     );
+  }
+
+  private async showDeliveryFailure(
+    delivery: {
+      jobId: string;
+      jobNumber: string;
+      artifactIndex: number;
+      workerId: string;
+      profileId: string | null;
+    },
+    message: string,
+    terminal: boolean,
+    attemptCount: number,
+    retryAfterSeconds: number | null
+  ) {
+    if (delivery.artifactIndex !== 0) {
+      return;
+    }
+
+    try {
+      const lifecycle =
+        await this.lifecycles
+          .get(delivery.jobId);
+
+      if (
+        !lifecycle ||
+        lifecycle.presentationState !==
+          "active"
+      ) {
+        return;
+      }
+
+      const workerName =
+        this.workers.profileDisplayName(
+          delivery.workerId,
+          delivery.profileId
+        );
+
+      await this.telegram.editHtml(
+        lifecycle.messageId,
+        terminal
+          ? deliveryFailedProgressHtml(
+              lifecycle,
+              workerName,
+              message
+            )
+          : deliveryRetryProgressHtml(
+              lifecycle,
+              workerName,
+              attemptCount,
+              retryAfterSeconds ?? 0
+            )
+      );
+
+      await this.lifecycles
+        .markDeliveryPresentation(
+          delivery.jobId,
+          terminal
+            ? "delivery_failed"
+            : "delivery_retrying"
+        );
+    }
+    catch (error) {
+      console.error(
+        `[delivery] ${delivery.jobId} lifecycle failure presentation failed`,
+        error
+      );
+    }
   }
 
   private async tick() {
@@ -285,40 +365,55 @@ export class DeliveryWorker {
               delivery.profileId
             );
 
+          const metadata = {
+            filename:
+              safeFilename,
+
+            runtime:
+              formatRuntime(
+                delivery.startedAt,
+                delivery.finishedAt
+              ),
+
+            media: mediaMetadata,
+
+            tool:
+              delivery.tool,
+
+            workerName,
+
+            jobNumber:
+              delivery.jobNumber,
+
+            completedAt:
+              delivery.finishedAt
+          };
+
+          const lifecycle =
+            delivery.artifactIndex === 0
+              ? await this.lifecycles
+                  .get(delivery.jobId)
+              : null;
+
+          const replaceLifecycle =
+            lifecycle?.presentationState ===
+              "active";
+
           const document =
-            await this.telegram
-              .sendDocument({
-                filePath:
-                  destination,
-
-                filename:
-                  safeFilename,
-
-                metadata: {
-                  filename:
-                    safeFilename,
-
-                  runtime:
-                    formatRuntime(
-                      delivery.startedAt,
-                      delivery.finishedAt
-                    ),
-
-                  media: mediaMetadata,
-
-                  tool:
-                    delivery.tool,
-
-                  workerName,
-
-                  jobNumber:
-                    delivery.jobNumber,
-
-                  completedAt:
-                    delivery.finishedAt
-                },
-                destination: telegramDestination
-              });
+            replaceLifecycle
+              ? await this.telegram.editDocument({
+                  messageId: lifecycle.messageId,
+                  filePath: destination,
+                  filename: safeFilename,
+                  metadata,
+                  destination: { chatId: lifecycle.chatId, threadId: null }
+                })
+              : await this.telegram.sendDocument({
+                  filePath: destination,
+                  filename: safeFilename,
+                  metadata,
+                  destination: telegramDestination
+                });
 
           await this.deliveries
             .markDelivered({
@@ -338,8 +433,15 @@ export class DeliveryWorker {
                 document.messageId
             });
 
+          if (replaceLifecycle) {
+            await this.lifecycles
+              .markDelivered(
+                delivery.jobId
+              );
+          }
+
           console.log(
-            `[delivery] ${delivery.jobId} -> telegram document+caption ${document.messageId}`
+            `[delivery] ${delivery.jobId} -> telegram ${replaceLifecycle ? "lifecycle media" : "document+caption"} ${document.messageId}`
           );
         }
         catch (error) {
@@ -353,6 +455,13 @@ export class DeliveryWorker {
               PermanentDeliveryError ||
             delivery.attemptCount >=
               this.maxAttempts;
+
+          const retryAfterSeconds =
+            terminal
+              ? null
+              : this.retryDelay(
+                  delivery.attemptCount
+                );
 
           await this.deliveries
             .markFailed({
@@ -370,13 +479,16 @@ export class DeliveryWorker {
 
               message,
 
-              retryAfterSeconds:
-                terminal
-                  ? null
-                  : this.retryDelay(
-                      delivery.attemptCount
-                    )
+              retryAfterSeconds
             });
+
+          await this.showDeliveryFailure(
+            delivery,
+            message,
+            terminal,
+            delivery.attemptCount,
+            retryAfterSeconds
+          );
 
           console.error(
             `[delivery] ${delivery.jobId} ` +

@@ -79,6 +79,56 @@ export interface AdapterExecutionStatus {
   error?: string;
 }
 
+export interface AdapterProgressNode {
+  nodeId: string;
+  displayNodeId: string | null;
+  realNodeId: string | null;
+  parentNodeId: string | null;
+  state: string;
+  value: number;
+  max: number;
+}
+
+export type AdapterExecutionEvent =
+  | {
+      kind: "execution_start";
+      backendJobId: string;
+    }
+  | {
+      kind: "executing";
+      backendJobId: string;
+      nodeId: string | null;
+      displayNodeId: string | null;
+    }
+  | {
+      kind: "progress";
+      backendJobId: string;
+      nodeId: string | null;
+      value: number;
+      max: number;
+    }
+  | {
+      kind: "progress_state";
+      backendJobId: string;
+      nodes: AdapterProgressNode[];
+    }
+  | {
+      kind: "execution_success";
+      backendJobId: string;
+    }
+  | {
+      kind: "execution_interrupted";
+      backendJobId: string;
+    }
+  | {
+      kind: "execution_error";
+      backendJobId: string;
+      message: string | null;
+    };
+
+export type AdapterExecutionEventListener =
+  (event: AdapterExecutionEvent) => void;
+
 export interface MediaAdapter {
   readonly kind: MediaAdapterKind;
 
@@ -104,4 +154,8 @@ export interface MediaAdapter {
     artifact: AdapterArtifact,
     destinationPath: string
   ): Promise<void>;
+
+  subscribeExecutionEvents(
+    listener: AdapterExecutionEventListener
+  ): () => void;
 }

@@ -2,7 +2,7 @@
 
 Infrastructure should support proven execution needs rather than speculative architecture.
 
-As of 2026-08-23 the active Production infrastructure is a dedicated standalone ComfyUI GPU worker plus the VPS-side `helix-runtime`, its dedicated PostgreSQL database, and durable Telegram artifact delivery.
+As of 2026-08-26 the active Production infrastructure is a dedicated standalone ComfyUI GPU worker plus the VPS-side `helix-runtime`, its dedicated PostgreSQL database, durable Telegram artifact delivery, and one durable operator-facing media-reference namespace shared by Helix jobs and Comfy-only artifacts.
 
 For the focused worker/runtime roadmap, see:
 
@@ -12,7 +12,7 @@ For the focused worker/runtime roadmap, see:
 ## Current Production execution path
 
 ```text
-caller / n8n
+caller / n8n / Telegram
     ↓
 helix-runtime :8787
     ↓
@@ -21,6 +21,7 @@ WorkerService + JobService
     │   ├── workers
     │   ├── worker_observations
     │   ├── media_jobs
+    │   ├── media_references
     │   ├── media_job_events
     │   └── media_deliveries
     ↓
@@ -58,11 +59,11 @@ Raw ComfyUI is not exposed publicly.
 - production API port: `8188`
 - listen address: `0.0.0.0`
 - worker ID: `helix-rtx4060-01`
-- worker profile: `comfy-video-ltx-stable`
-- currently validated capability: `video.i2v`
+- Production profiles: `nolan` / Christopher Nolan and `leibovitz` / Annie Leibovitz
+- validated capabilities: `video.i2v`, `video.t2v`, `image.t2i`
 - max concurrent GPU jobs: `1`
 
-LTX `2.3` and `2.5` model-family assets are available. LTX `2.5` is the validated standalone execution path.
+LTX `2.3` and `2.5` model-family assets are available. LTX `2.5` is the validated standalone video execution path. FLUX.2 Klein 4B Distilled FP8 is the validated narrow T2I path.
 
 ## Worker filesystem
 
@@ -89,14 +90,15 @@ C:\ComfyMigrationBackup\
 
 Keep `C:\ComfyMigrationBackup` until the standalone worker has been stable for a sustained period and rollback is no longer needed.
 
-The CLI worker currently reads models through `extra_model_paths.yaml` from:
+Heavy model assets are consolidated under:
 
 ```text
-C:\Users\MSP-PC\AppData\Local\Comfy-Desktop\ComfyUI-Shared\models
-C:\ComfyUI\models
+C:\AI\Models\LTX
+C:\AI\Models\WAN
+C:\AI\Models\FLUX
 ```
 
-Do not move these model roots while the worker/workflows are still being validated.
+and exposed to the standalone runtime through `extra_model_paths.yaml`.
 
 ## Frozen known-good environment
 
@@ -106,20 +108,7 @@ ComfyUI core:
 7dde56176efa71fd74ef7b3930ab5882d1926288
 ```
 
-Custom nodes:
-
-```text
-ComfyUI-KJNodes
-3f20054214fec9f9234fd3841ae6f1e4287948f6
-
-ComfyUI-LTXVideo
-15d09abb5a187a8dcaea2fc31fe51ee96e6c9d0d
-
-CGlide/LTX-2.5-Director
-17aa8bc3e6dcebb8ebcd7265a04f3750c12ee1d7
-```
-
-Important package pins include:
+Important known-good package pins include:
 
 ```text
 torch==2.10.0+cu130
@@ -177,7 +166,7 @@ Validated paths:
 - n8n container -> VPS runtime;
 - `helix-runtime` -> worker HTTP + WebSocket.
 
-Validated Comfy surfaces now include:
+Validated Comfy surfaces include:
 
 ```text
 GET  /system_stats
@@ -235,7 +224,7 @@ private Docker network only
 volume: helix-db-data
 ```
 
-Applied runtime migrations `0001` through `0011` currently provide:
+Applied runtime migrations through `0012_media_references.sql` currently provide:
 
 ```text
 workers + worker_observations
@@ -245,11 +234,32 @@ operator cancellation, T2V, T2I, and reset pending state
 persisted T2V/T2I settings and T2V generation modes
 logical Production Profile identity on jobs
 unique sequential media_jobs.job_number
+media_references sharing media_jobs_job_number_seq
 ```
 
-`job_number` is the public Telegram reference. Existing jobs were backfilled chronologically without changing internal Helix IDs, Comfy Prompt IDs, or foreign-key relationships.
+Migration `0011_job_numbers.sql` introduced the public `BIGINT` sequence and backfilled the first 51 Helix jobs chronologically. Migration `0012_media_references.sql` reserves those existing Job numbers in `media_references`, registers future Helix jobs automatically, and lets completed Comfy-only history entries allocate from the same sequence when Helix first discovers them.
 
-PostgreSQL is the durable Helix state. Comfy queue/history remain the execution source of truth used for reconciliation.
+The operator-facing invariant is:
+
+```text
+one number -> one media execution
+```
+
+A number cannot identify a Helix job in one command and a different Comfy artifact in another. Helix-managed jobs remain truthful `media_jobs` rows. Direct ComfyUI generations do not create fake jobs; they persist only a `kind = 'comfy_artifact'` reference mapping to the Comfy Prompt ID.
+
+This allows the same numeric reference to work across Downloads and Job/media detail:
+
+```text
+/dl i 52
+/dl g 52
+/jb 52
+```
+
+Legacy Comfy Prompt prefixes remain accepted for compatibility, but they are no longer the operator-facing identity once an artifact has been registered.
+
+PostgreSQL is the durable Helix state. Comfy queue/history remain the execution source of truth used for reconciliation and live artifact discovery.
+
+Before migration `0012` was applied, a custom-format PostgreSQL backup was created at the VPS and the migration backfilled 51 existing `job` references successfully.
 
 ## Current adapter boundary
 
@@ -271,9 +281,7 @@ ComfyUI
 
 ## Proven job execution
 
-The old "first runtime-controlled generation" milestone is complete.
-
-The runtime now supports:
+The runtime supports:
 
 ```text
 durable job acceptance
@@ -293,26 +301,7 @@ GET /view retrieval
 durable delivery state
 ```
 
-Proven runtime-controlled generations include:
-
-```text
-job_d305b8b3b4aa4336a455b35043e3060a
-  -> af67e3be-d307-4757-89fd-6606304c4c4d
-  -> succeeded
-  -> video/LTX-2.5_i2v_00004_.mp4
-```
-
-and:
-
-```text
-job_e2a4a9efff7a47b8b70cd41c068073ac
-  -> cc8e51f4-1799-4600-8ff0-6226c2e291e4
-  -> running observed live
-  -> succeeded
-  -> video/LTX-2.5_i2v_00005_.mp4
-```
-
-Restart recovery was proven by reconciling an unfinished/completed job after `helix-runtime` restarted.
+Restart recovery has been proven by reconciling unfinished/completed jobs after `helix-runtime` restarted.
 
 ## Cancellation and timeout
 
@@ -353,54 +342,30 @@ VPS temporary spool
     ↓
 ffprobe
     ↓
-Telegram metadata message
+Telegram original file/document
     ↓
-Telegram original MP4 as document
-    ↓
-persist message IDs
+persist message ID
     ↓
 remove VPS temporary copy
 ```
 
 Delivery uses PostgreSQL claiming/retry state, stale-delivery recovery, and exponential backoff. Retries are capped at five attempts. Malformed artifact metadata is treated as a permanent failure immediately. Terminal delivery failures remain visible with no future retry time.
 
-The proven C6 artifact completed Telegram delivery in one attempt and persisted both metadata and document message IDs.
-
 Secrets remain outside Git in deployment environment files.
 
 ## Deferred infrastructure
 
-The following are intentionally deferred rather than missing blockers:
+The following remain deliberately deferred:
 
 - worker output retention cleanup;
 - `/upload/image` staging;
-- broad semantic prompt/relay/sampler bindings;
-- T2V semantic bindings;
-- persistent WebSocket execution tracking.
+- persistent WebSocket execution tracking;
+- production service authentication before broader remote-client exposure;
+- migration ledger/checksum automation and CI enforcement.
 
 Worker-output retention is deferred because the traditional Comfy output path does not currently provide a clean runtime-controlled per-artifact delete primitive. Do not sweep the whole Comfy output tree, because manual/experimental outputs may coexist with Helix outputs.
 
-Persistent WebSocket execution tracking remains optional because queue/history reconciliation already provides correctness and restart recovery.
-
-## Current infrastructure checkpoint
-
-Workflow-independent runtime infrastructure is complete enough to pause.
-
-The next Production work is not another infrastructure layer. It is:
-
-```text
-continue I2V workflow optimization
-        ↓
-validate simple LTX 2.5 T2V
-        ↓
-discover the useful controls
-        ↓
-freeze stable workflow families later
-        ↓
-add semantic Helix bindings afterward
-```
-
-Raw Comfy API-format graphs remain the temporary execution contract while workflow research continues.
+Persistent WebSocket execution tracking remains optional because queue/history reconciliation already provides correctness after a backend Prompt ID has been persisted.
 
 ## Operational rules
 
@@ -414,5 +379,5 @@ Raw Comfy API-format graphs remain the temporary execution contract while workfl
 8. Do not move model storage or delete migration backups while this execution path is being stabilized.
 9. Do not let n8n own low-level Comfy job tracking.
 10. Do not commit runtime/database/Telegram secrets.
-11. Do not freeze/package the experimental I2V graph until a stable baseline is explicitly chosen.
-12. Do not force semantic input bindings while the workflow control surface is still changing.
+11. Preserve one global numeric media-reference namespace; never introduce a second independent operator ID sequence.
+12. Do not represent direct ComfyUI history as fake Helix lifecycle jobs.

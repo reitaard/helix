@@ -22,6 +22,14 @@ import {
 
 import WebSocket from "ws";
 
+import type {
+  AdapterExecutionEventListener
+} from "../../domain/media-adapter.js";
+
+import {
+  parseComfyExecutionEvent
+} from "./events.js";
+
 export interface ComfySystemStats {
   system?: {
     comfyui_version?: string;
@@ -57,8 +65,22 @@ export interface ComfyPromptResponse {
 }
 
 export class ComfyClient {
+  private readonly executionListeners =
+    new Set<AdapterExecutionEventListener>();
+
+  private executionSocket:
+    WebSocket | null = null;
+
+  private executionReconnectTimer:
+    ReturnType<typeof setTimeout> | null =
+      null;
+
   constructor(
-    private readonly baseUrl: string
+    private readonly baseUrl: string,
+    private readonly executionClientId =
+      `helix-runtime-${crypto
+        .randomUUID()
+        .replaceAll("-", "")}`
   ) {}
 
   private async getJson<T>(
@@ -131,6 +153,27 @@ export class ComfyClient {
     }
 
     return response.json() as Promise<T>;
+  }
+
+  private websocketUrl(
+    clientId: string
+  ) {
+    const websocketBase =
+      this.baseUrl
+        .replace(
+          /^http:/,
+          "ws:"
+        )
+        .replace(
+          /^https:/,
+          "wss:"
+        );
+
+    return (
+      `${websocketBase}` +
+      `/ws?clientId=` +
+      encodeURIComponent(clientId)
+    );
   }
 
   systemStats() {
@@ -277,7 +320,12 @@ export class ComfyClient {
     >(
       "/prompt",
       {
-        prompt: workflow
+        prompt: workflow,
+        client_id:
+          this.executionClientId,
+        extra_data: {
+          preview_method: "none"
+        }
       }
     );
   }
@@ -309,31 +357,164 @@ export class ComfyClient {
     return response.cancelled;
   }
 
+  private scheduleExecutionReconnect() {
+    if (
+      this.executionListeners.size === 0 ||
+      this.executionReconnectTimer
+    ) {
+      return;
+    }
+
+    this.executionReconnectTimer =
+      setTimeout(
+        () => {
+          this.executionReconnectTimer =
+            null;
+          this.ensureExecutionSocket();
+        },
+        1000
+      );
+
+    this.executionReconnectTimer.unref();
+  }
+
+  private ensureExecutionSocket() {
+    if (
+      this.executionListeners.size === 0
+    ) {
+      return;
+    }
+
+    if (
+      this.executionSocket &&
+      (
+        this.executionSocket.readyState ===
+          WebSocket.OPEN ||
+        this.executionSocket.readyState ===
+          WebSocket.CONNECTING
+      )
+    ) {
+      return;
+    }
+
+    const ws =
+      new WebSocket(
+        this.websocketUrl(
+          this.executionClientId
+        )
+      );
+
+    this.executionSocket = ws;
+
+    ws.on(
+      "message",
+      (data, isBinary) => {
+        if (isBinary) {
+          return;
+        }
+
+        const event =
+          parseComfyExecutionEvent(
+            data.toString()
+          );
+
+        if (!event) {
+          return;
+        }
+
+        for (
+          const listener of
+          this.executionListeners
+        ) {
+          try {
+            listener(event);
+          }
+          catch (error) {
+            console.error(
+              "[comfy-events] listener failed",
+              error
+            );
+          }
+        }
+      }
+    );
+
+    ws.once(
+      "error",
+      error => {
+        console.error(
+          "[comfy-events] socket error",
+          error
+        );
+      }
+    );
+
+    ws.once(
+      "close",
+      () => {
+        if (
+          this.executionSocket === ws
+        ) {
+          this.executionSocket = null;
+        }
+
+        this.scheduleExecutionReconnect();
+      }
+    );
+  }
+
+  private stopExecutionSocket() {
+    if (this.executionReconnectTimer) {
+      clearTimeout(
+        this.executionReconnectTimer
+      );
+      this.executionReconnectTimer =
+        null;
+    }
+
+    const ws = this.executionSocket;
+    this.executionSocket = null;
+
+    if (
+      ws &&
+      (
+        ws.readyState === WebSocket.OPEN ||
+        ws.readyState === WebSocket.CONNECTING
+      )
+    ) {
+      ws.close();
+    }
+  }
+
+  subscribeExecutionEvents(
+    listener: AdapterExecutionEventListener
+  ) {
+    this.executionListeners.add(listener);
+    this.ensureExecutionSocket();
+
+    return () => {
+      this.executionListeners.delete(
+        listener
+      );
+
+      if (
+        this.executionListeners.size === 0
+      ) {
+        this.stopExecutionSocket();
+      }
+    };
+  }
+
   statusSocket(
     timeoutMs = 5000
   ): Promise<unknown> {
     const clientId =
-      `helix-runtime-${crypto
+      `helix-probe-${crypto
         .randomUUID()
         .replaceAll("-", "")}`;
 
-    const websocketBase =
-      this.baseUrl
-        .replace(
-          /^http:/,
-          "ws:"
-        )
-        .replace(
-          /^https:/,
-          "wss:"
-        );
-
     const url =
-      `${websocketBase}` +
-      `/ws?clientId=` +
-      encodeURIComponent(
-        clientId
-      );
+      this.websocketUrl(clientId);
 
     return new Promise(
       (resolve, reject) => {

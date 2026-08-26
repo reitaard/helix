@@ -7,6 +7,7 @@ import {
 } from "./execution-status.js";
 
 import type {
+  AdapterExecutionEventListener,
   AdapterLiveness,
   AdapterReadiness,
   MediaAdapter
@@ -45,10 +46,14 @@ export class ComfyAdapter
     ComfyClient;
 
   constructor(
-    endpoint: string
+    endpoint: string,
+    executionClientId?: string
   ) {
     this.client =
-      new ComfyClient(endpoint);
+      new ComfyClient(
+        endpoint,
+        executionClientId
+      );
   }
 
   async liveness():
@@ -161,6 +166,15 @@ export class ComfyAdapter
       .downloadArtifact(
         artifact,
         destinationPath
+      );
+  }
+
+  subscribeExecutionEvents(
+    listener: AdapterExecutionEventListener
+  ) {
+    return this.client
+      .subscribeExecutionEvents(
+        listener
       );
   }
 
