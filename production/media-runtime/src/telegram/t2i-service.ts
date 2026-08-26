@@ -268,8 +268,7 @@ export class TelegramT2IService {
 
       const confirmation = await this.telegram.sendHtml(
         this.confirmationHtml(answer, settings),
-        context ? { chatId: context.chatId, threadId: context.threadId } : undefined,
-        context?.messageId
+        context ? { chatId: context.chatId, threadId: context.threadId } : undefined
       );
 
       const captured =

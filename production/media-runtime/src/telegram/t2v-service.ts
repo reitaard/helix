@@ -498,8 +498,7 @@ export class TelegramT2VService {
             hasDevOverrides(effective.base),
             effective.mode
           ),
-          context ? { chatId: context.chatId, threadId: context.threadId } : undefined,
-          context?.messageId
+          context ? { chatId: context.chatId, threadId: context.threadId } : undefined
         );
 
       const captured =
