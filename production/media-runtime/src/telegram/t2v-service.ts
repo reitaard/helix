@@ -7,6 +7,10 @@ import type {
 } from "../jobs/service.js";
 
 import {
+  TelegramDelivery
+} from "../delivery/telegram.js";
+
+import {
   T2VPendingRepository
 } from "../repositories/t2v-pending-repository.js";
 
@@ -75,11 +79,6 @@ import {
   queuedProgressHtml
 } from "./progress-presentation.js";
 
-import {
-  editResponse,
-  type TelegramInteractionResponse
-} from "./interaction-response.js";
-
 function isDevFlag(
   value: string | undefined
 ): boolean {
@@ -113,6 +112,7 @@ export class TelegramT2VService {
     private readonly jobs: JobService,
     private readonly pending: T2VPendingRepository,
     private readonly lifecycles: TelegramJobLifecycleRepository,
+    private readonly telegram: TelegramDelivery,
     private readonly profile: T2VProfileService,
     private readonly modes: T2VModeService,
     private readonly modeUi: TelegramT2VModeService,
@@ -177,6 +177,30 @@ export class TelegramT2VService {
       `${title("CANCELLED")}\n\n` +
       `<i>Generation not submitted.</i>`
     );
+  }
+
+  private async editOrFallback(
+    messageId: string | null,
+    html: string
+  ): Promise<string | null> {
+    if (!messageId) {
+      return html;
+    }
+
+    try {
+      await this.telegram.editHtml(
+        messageId,
+        html
+      );
+      return null;
+    }
+    catch (error) {
+      console.error(
+        `[telegram] T2V lifecycle edit ${messageId} failed`,
+        error
+      );
+      return html;
+    }
   }
 
   private settingsUsageHtml() {
@@ -318,15 +342,6 @@ export class TelegramT2VService {
     return (await this.pending.get(this.chatId)) !== null;
   }
 
-  async captureConfirmationMessage(
-    messageId: string
-  ) {
-    return this.pending.captureConfirmationMessage(
-      this.chatId,
-      messageId
-    );
-  }
-
   async abandonPendingForCommand() {
     await Promise.all([
       this.pending.remove(this.chatId),
@@ -410,7 +425,7 @@ export class TelegramT2VService {
 
   async handlePlainText(
     text: string
-  ): Promise<TelegramInteractionResponse> {
+  ): Promise<string | null> {
     const resetResponse =
       await this.reset.handlePlainText(text);
 
@@ -456,12 +471,30 @@ export class TelegramT2VService {
         return this.noPendingHtml();
       }
 
-      return this.confirmationHtml(
-        answer,
-        effective.settings,
-        hasDevOverrides(effective.base),
-        effective.mode
-      );
+      const confirmation =
+        await this.telegram.sendHtml(
+          this.confirmationHtml(
+            answer,
+            effective.settings,
+            hasDevOverrides(effective.base),
+            effective.mode
+          )
+        );
+
+      const captured =
+        await this.pending
+          .captureConfirmationMessage(
+            this.chatId,
+            confirmation.messageId
+          );
+
+      if (!captured) {
+        throw new Error(
+          "T2V confirmation message could not be attached to pending state"
+        );
+      }
+
+      return null;
     }
 
     if (
@@ -474,16 +507,18 @@ export class TelegramT2VService {
 
     if (lower === "no") {
       await this.pending.remove(this.chatId);
-      return editResponse(
+      return this.editOrFallback(
         state.confirmationMessageId,
         this.cancelledHtml()
       );
     }
 
     if (lower === "yes") {
-      let generation: Awaited<
-        ReturnType<TelegramT2VService["pendingGeneration"]>
-      >;
+      let generation: {
+        mode: T2VMode;
+        version: number;
+        settings: ResolvedT2VSettings;
+      };
       let workflow: T2VWorkflow;
 
       try {
@@ -502,7 +537,7 @@ export class TelegramT2VService {
             : String(error);
 
         await this.pending.remove(this.chatId);
-        return editResponse(
+        return this.editOrFallback(
           state.confirmationMessageId,
           this.failedHtml(message)
         );
@@ -555,11 +590,13 @@ export class TelegramT2VService {
             : String(error);
 
         await this.pending.remove(this.chatId);
-        return editResponse(
+        return this.editOrFallback(
           state.confirmationMessageId,
           this.failedHtml(message)
         );
       }
+
+      let lifecycleAttached = false;
 
       if (state.confirmationMessageId) {
         try {
@@ -569,6 +606,7 @@ export class TelegramT2VService {
             messageId:
               state.confirmationMessageId
           });
+          lifecycleAttached = true;
         }
         catch (error) {
           console.error(
@@ -580,13 +618,33 @@ export class TelegramT2VService {
 
       await this.pending.remove(this.chatId);
 
-      return editResponse(
-        state.confirmationMessageId,
+      const queued =
         queuedProgressHtml(
           job,
           this.workerName
-        )
-      );
+        );
+
+      if (!state.confirmationMessageId) {
+        return queued;
+      }
+
+      try {
+        await this.telegram.editHtml(
+          state.confirmationMessageId,
+          queued
+        );
+        return null;
+      }
+      catch (error) {
+        console.error(
+          `[telegram] T2V queued lifecycle edit failed for ${job.id}`,
+          error
+        );
+
+        return lifecycleAttached
+          ? null
+          : queued;
+      }
     }
 
     const updated =
@@ -603,7 +661,7 @@ export class TelegramT2VService {
       this.maxInvalid
     ) {
       await this.pending.remove(this.chatId);
-      return editResponse(
+      return this.editOrFallback(
         updated.confirmationMessageId,
         this.cancelledHtml()
       );
