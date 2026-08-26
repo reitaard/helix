@@ -1,8 +1,8 @@
-# Licon MSR research — LTX 2.5
+# Licon MSR research and local validation — LTX 2.5
 
-Status: **researched, not yet locally validated**.
+Status: **installed and locally validated for one-subject reference-driven scene generation; stronger viewpoint retention and multi-subject separation remain unvalidated**.
 
-This note records the current understanding of LiconStudio's LTX 2.5 Multiple Subject Reference (MSR) system before installing or benchmarking it on the Helix worker.
+This note records both the mechanism of LiconStudio's LTX 2.5 Multiple Subject Reference (MSR) system and the first controlled Helix local test.
 
 ## What MSR is
 
@@ -24,21 +24,44 @@ Current public weight:
 
 ```text
 LTX-2.5-Licon-MSR-V1.safetensors
-~1.31 GB
+~1.31 GB decimal / ~1.22 GiB on the worker
 base model: Lightricks/LTX-2.5
 license: Apache-2.0
+SHA256: d45cedd720e5819ccbe200a4b0ae01f7ae0e0d2966d700a24ebd4c7739515d4f
 ```
 
-Official model repository:
+Official repositories:
 
 ```text
-LiconStudio/LTX-2.5-Multiple-Subject-Reference
+model:  LiconStudio/LTX-2.5-Multiple-Subject-Reference
+plugin: liconstudio/ComfyUI-LTX2.5-MSR
 ```
 
-ComfyUI node repository:
+## Local installation checkpoint
+
+Active runtime:
 
 ```text
-liconstudio/ComfyUI-LTX2.5-MSR
+C:\AI\ComfyUI-CLI
+```
+
+Installed plugin:
+
+```text
+C:\AI\ComfyUI-CLI\custom_nodes\ComfyUI-LTX2.5-MSR
+```
+
+Installed LoRA:
+
+```text
+C:\AI\Models\LTX\loras\LTX-2.5-Licon-MSR-V1.safetensors
+```
+
+The plugin imports successfully, ComfyUI exposes both nodes, and the loader sees the verified LoRA:
+
+```text
+ComfyUILTX25MSRICLoRALoader
+ComfyUILTX25MSRMultiReferenceGuide
 ```
 
 ## Mechanism
@@ -49,8 +72,8 @@ The Licon description and node implementation use the following approach:
 2. The MSR LoRA contains learned `reference_slot_embedding` tensors.
 3. Each connected reference is assigned a stable slot ID.
 4. A learned Fourier/MLP embedding for that slot is added to the encoded reference latent.
-5. Reference latents are prepended to the generation latent using distinct **negative temporal positions**.
-6. The LTX model can retrieve those reference details through its normal self-attention path during generation.
+5. Reference latents are prepended using distinct **negative temporal positions**.
+6. LTX retrieves reference details through its native self-attention path during generation.
 
 Conceptually:
 
@@ -63,11 +86,11 @@ Image 3 -> latent + learned slot 3 -> negative reference time
                target video generation
 ```
 
-This is not a face-swap step and not a post-processing identity repair. The references participate in diffusion as latent guide tokens.
+This is not face swap and not a post-generation identity repair step.
 
 ## Stable reference slots
 
-The current ComfyUI node accepts references in this order:
+Current input order:
 
 ```text
 1. pic1
@@ -77,15 +100,9 @@ The current ComfyUI node accepts references in this order:
 5. background
 ```
 
-Missing optional references are skipped and connected references receive consecutive slot IDs.
+Missing optional references are skipped. Connected references receive consecutive slot IDs. Batch size is currently one.
 
-The loader checks that the selected LoRA actually contains MSR slot-embedding weights. A normal LoRA without the required `reference_slot_embedding` tensors is rejected.
-
-The current implementation requires batch size 1.
-
-## Reference preparation
-
-The guide supports:
+Reference controls:
 
 ```text
 reference_frames: 25 or 33
@@ -93,141 +110,249 @@ strength:         0.0-1.0
 optional tiled VAE encoding
 ```
 
-Subject images and background images are treated differently when resizing:
+Subject references preserve the complete source image and may be white-padded during resize. Background references use cover/center-crop behavior.
 
-- subject references try to preserve the complete source image and may use white padding;
-- background references are resized to cover the target and center-cropped.
+The prompt should identify references explicitly using stable labels such as `Image 1`, `Image 2`, etc.
 
-The model card recommends describing each reference explicitly in the prompt with stable labels such as `Image 1`, `Image 2`, `Image 3`, and clearly assigning character/object/clothing/background responsibilities.
+## Native two-stage LTX 2.5 integration
 
-## Native LTX workflow integration
-
-The new LTX 2.5 plugin is intentionally narrow. It leaves base model loading, text encoding, prompt enhancement, samplers, sigma schedules, audio, latent upscaling and decode to native ComfyUI nodes.
-
-Basic topology:
+The plugin fits the native Helix two-stage T2V topology.
 
 ```text
 Native LTX model
     ↓
 MSR IC-LoRA Loader
     ↓
-model used by native guider/sampler
+model used by both sampling stages
+```
 
-positive + negative conditioning
-video VAE
+Stage 1:
+
+```text
 empty VIDEO latent
-reference image(s)
-MSR parameters
-    ↓
-MSR Multi-Reference Guide
-    ↓
-LTXVConcatAVLatent
-    ↓
-native LTX sampling
-    ↓
-LTXVSeparateAVLatent
-    ↓
-LTXVCropGuides
-    ↓
-decode
-```
-
-The guide must receive a **video-only** LTX latent before `LTXVConcatAVLatent`. It does not accept the already-combined AV latent.
-
-After sampling, appended reference slots must be cropped before decoding. Otherwise reference guide frames/tokens can remain in the decoded result.
-
-## Two-stage LTX 2.5 integration
-
-The published plugin explicitly supports the native two-stage latent-upscale pattern.
-
-Recommended topology:
-
-```text
-empty video latent
-    ↓
++ positive / negative
++ video VAE
++ reference image(s)
++ MSR parameters
+        ↓
 MSR Guide #1
-    ↓
+        ↓
 concat audio
-    ↓
+        ↓
 stage 1 sampling
-    ↓
+        ↓
 separate AV
-    ↓
+        ↓
 crop stage-1 reference guides
-    ↓
+```
+
+Stage 2:
+
+```text
+cropped stage-1 video latent
+        ↓
 spatial latent upscale
-    ↓
+        ↓
 MSR Guide #2 using the SAME references
-    ↓
-rejoin audio
-    ↓
+        ↓
+rejoin stage-1 audio
+        ↓
 stage 2 low-noise refinement
-    ↓
+        ↓
+separate AV
+        ↓
 crop stage-2 reference guides
-    ↓
+        ↓
 decode
 ```
 
-This is important for Helix because our validated native T2V workflow is also two-stage.
+MSR references must be re-encoded/reintroduced after spatial upscale because the reference latents depend on the current spatial latent grid.
 
-Unlike Kijai Prompt Relay, which could patch one model and feed both sampling stages, MSR reference latents are spatial-resolution-dependent. The documented two-stage path therefore **re-applies the references after spatial upscale**.
+## Standard fallback behavior — important control detail
 
-Do not replace the second MSR guide with `LTXVImgToVideoInplace`; that path re-encodes/overwrites latent frames rather than retaining the upscaled generated latent and rebuilding high-resolution reference conditions.
+The same `MultiReferenceGuide` node can run with `msr_parameters` disconnected.
 
-## Current implementation caveat
-
-The plugin preserves MSR slot embeddings and negative reference positions, but its current ComfyUI compatibility path forces:
+That mode is **not MSR**. The source explicitly treats it as standard LTX guide conditioning:
 
 ```text
-reference_temporal_scale_factor = 1
+MSR enabled
+-> learned slot embedding
+-> negative temporal reference position
+
+msr_parameters omitted
+-> no slot embedding
+-> standard reference starts at frame_offset 0
 ```
 
-rather than blindly honoring another temporal scale recorded by a checkpoint.
+This distinction became important in the first local test because the frame-0 fallback was much more composition-anchoring than MSR.
 
-This is an implementation-specific compatibility choice and is one reason the first local test should use the author's current V1 model + current plugin together rather than mixing older 2.3 workflows/nodes.
+## First local one-subject commercial test — 2026-08-26
 
-## Maturity / confidence
-
-The LTX 2.5 plugin is very new compared with the older LTX 2.3 Licon MSR ecosystem.
-
-Current evidence:
-
-- dedicated LTX 2.5 model card and weight exist;
-- dedicated standalone LTX 2.5 ComfyUI plugin exists;
-- author provides a sample two-stage workflow;
-- author publishes several validation examples with three references;
-- at least one independent recent ComfyUI test reports successful LTX 2.5 MSR generation;
-- the older 2.3 MSR implementation has substantially more community history, but its workflows/nodes should not be assumed equivalent to the new 2.5 implementation.
-
-Therefore MSR is promising enough to test, but not yet a Helix-validated Production capability.
-
-## What MSR is likely to help
-
-Primary hypothesis:
-
-- recurring character likeness;
-- wardrobe/clothing consistency;
-- specific object/vehicle appearance;
-- multiple distinct subjects in one shot;
-- subject + object composition;
-- optional environment/background reference consistency.
-
-Potential Helix use:
+Reference:
 
 ```text
-Story entity: JOHN
-reference asset: john_reference.png
-
-Shot 01 contains JOHN -> attach John's MSR reference
-Shot 02 no JOHN          -> do not attach it
-Shot 03 contains JOHN -> attach same reference again
+clean chest-up portrait of one man
+clear frontal face
+brown tousled hair
+trimmed beard
+dark charcoal knit sweater
+plain blue-grey studio background
+source image: 736x1097 portrait
 ```
 
-The important semantic concept for Helix is therefore not "always use MSR" but **continuity groups / story entities with selective reference attachment**.
+The source aspect ratio did not need manual conversion. The Licon guide handled subject resize/padding internally.
+
+Creative brief:
+
+```text
+premium kitchen food commercial
+same man
+same charcoal sweater
+speaks / gestures
+looks down
+sprinkles herbs over plated food
+camera gently pushes closer
+returns gaze to camera with a smile
+```
+
+Controlled generation settings:
+
+```text
+duration:        8 s
+frames:          193
+fps:             24
+output:          1280x704
+prompt enhance:  OFF
+stage-1 seed:    558811532553686 fixed
+stage-2 seed:    42 fixed
+reference:       pic1 only
+reference_frames: 33
+strength:        1.0
+```
+
+Outputs:
+
+```text
+LTX_2.5_t2v_ref_control_00001_.mp4
+LTX_2.5_t2v_msr_00001_.mp4
+```
+
+Both were native 193-frame / 24-fps / ~8.04-second / 1280x704 artifacts.
+
+## First-test observations
+
+### Standard fallback control
+
+The fallback guide preserved the portrait identity extremely strongly, but it also preserved the original portrait composition/background for almost the whole clip.
+
+Observed behavior:
+
+- blue-grey studio background remained dominant;
+- framing stayed close to the source portrait;
+- the man gestured, changed expression and smiled;
+- the requested kitchen, counter and food-commercial world mostly failed to materialize.
+
+Interpretation:
+
+```text
+standard frame-0 reference guide
+-> excellent source-image anchoring
+-> poor freedom to reinterpret the portrait into the requested new scene at this strength/setup
+```
+
+Therefore this run should **not** be used to claim that MSR has higher pixel-level identity similarity than the standard guide. The two methods are solving the reference problem differently.
+
+### MSR run
+
+The MSR video immediately constructed a new kitchen-commercial environment while retaining the referenced man's appearance.
+
+Observed behavior:
+
+- credible modern kitchen appeared instead of the studio background;
+- charcoal sweater remained stable;
+- brown tousled hair, beard pattern, general face shape and age remained recognizably tied to the reference;
+- the man spoke/gestured, looked down, interacted with the plated dish and performed the garnish action;
+- the camera moved substantially closer by the end;
+- final close-up remained recognizably the same person although fine facial proportions and expression became somewhat more polished/commercialized.
+
+The biggest result is not perfect face matching. It is the separation of **reference identity** from **generated composition**:
+
+```text
+portrait supplies WHO
+prompt supplies WHERE / WHAT / CAMERA
+```
+
+This is exactly the behavior needed for commercials and recurring-story characters.
+
+## First-test verdict
+
+```text
+plugin / inference works                 PASS
+LoRA / slot parameters work             PASS
+one-person reference affects identity   PASS
+new-scene freedom                       STRONG PASS
+hair / beard / sweater continuity       PASS
+commercial usefulness                   PASS
+exact facial likeness                   GOOD, not perfect
+strong profile / viewpoint retention    NOT TESTED
+multi-subject slot separation           NOT TESTED
+subject + object reference separation   NOT TESTED
+```
+
+Working conclusion:
+
+> Licon MSR has now shown genuine local Production value: it can use a portrait as an appearance source while allowing LTX to construct a substantially different prompted scene, rather than forcing the reference image to behave like frame zero.
+
+This is enough to continue testing MSR, but not enough to lock Helix to Licon as the final reference-conditioning backend.
+
+## Next Licon experiment
+
+Before two-subject testing, run one stronger one-person viewpoint stress test:
+
+```text
+front-facing
+-> turn 60-90 degrees into clear three-quarter/profile view
+-> perform a short side-on action
+-> turn back toward camera
+```
+
+Use the same portrait, same fixed seeds/settings, no Prompt Relay.
+
+Goal: determine whether identity survives a real viewpoint change rather than mostly frontal/downward motion.
+
+If successful, mark **one-subject Licon MSR** locally validated and proceed to two-person slot separation.
+
+## Two-subject test
+
+```text
+Image 1 = person A
+Image 2 = person B
+```
+
+Use visually different people/wardrobe and explicitly assign positions/actions in the prompt.
+
+Evaluate:
+
+- identity mixing;
+- wardrobe swapping;
+- one reference dominating;
+- slot separation through motion;
+- prompt/action degradation caused by stronger reference conditioning.
+
+## Subject + object test
+
+After two-human separation, test:
+
+```text
+Image 1 = person
+Image 2 = distinctive product / vehicle / prop
+```
+
+This is directly relevant to Helix commercial/story continuity.
 
 ## What MSR should not be assumed to solve
 
-Before testing, do not claim that MSR guarantees:
+Even after the first success, do not claim MSR guarantees:
 
 - exact pose;
 - exact blocking/spatial location;
@@ -238,126 +363,72 @@ Before testing, do not claim that MSR guarantees:
 - cross-shot continuity when references are not supplied consistently;
 - reliable interaction among many subjects under dense action.
 
-Those remain experiment questions.
+Those remain separate experiment questions.
 
 ## Relationship to Prompt Relay
 
-The two controls attack different dimensions:
-
 ```text
 MSR
--> reference identity / appearance retrieval
+-> WHO / WHAT stays visually anchored to references
 
 Prompt Relay
--> temporal semantic routing / scene progression
+-> WHEN semantic beats dominate
 ```
 
-A future combination is conceptually attractive:
+They remain conceptually complementary, but do not combine them until MSR's independent reference behavior is understood.
+
+## Broader reference-backend decision
+
+Licon is **not locked** as Helix's final reference solution.
+
+The first local result is strong enough to keep it in the leading group, while a separate comparison now tracks:
 
 ```text
-same woman reference
-same man reference
-        ↓
-MSR maintains who they are
+Lightricks Ingredients IC-LoRA
+-> same LTX ecosystem; reference sheet for character + wardrobe + prop + location
 
-wait -> arrival -> approach -> payoff
-        ↓
-Prompt Relay manages when each beat dominates
+LTX-Best-Face-ID
+-> LTX 2.3 human-identity specialist with ArcFace-supervised training
+
+Phantom-Wan
+-> alternate-stack single/multi-subject challenger
 ```
 
-But do **not** combine them in the first test. If a combined generation fails, attribution becomes impossible.
+See `REFERENCE_CONDITIONING_ALTERNATIVES.md` for the comparison and test order.
 
-First validate MSR independently against native LTX.
+## Current Helix semantic implication
 
-## Recommended first local benchmark
+Do not expose Licon-specific slot wiring upstream.
 
-Start with **one reference subject**, even though MSR supports multiple.
-
-Reason: establish whether the LTX 2.5 LoRA/plugin preserves identity at all on our worker before testing slot separation between several references.
-
-### Test A — native I2V/reference baseline
-
-Use one clean portrait/full-body character reference with our already validated native LTX path, where appropriate.
-
-### Test B — MSR one-subject
-
-Same creative prompt, same model family/settings/seed where the workflow allows a meaningful comparison, but provide the subject through MSR.
-
-Evaluation:
+The useful semantic abstraction remains generic:
 
 ```text
-face / hair
-wardrobe
-body silhouette
-colors/materials
-identity through camera movement
-motion quality
-prompt adherence
-finished visual quality
-runtime / VRAM / RAM
+reference_entities[]
+  entity_id
+  role
+  reference_assets[]
+  continuity_priority
+  shot_scope
 ```
 
-### Test C — two-subject slot separation
-
-Only after Test B works:
-
-```text
-Image 1 = woman A
-Image 2 = man B
-```
-
-Prompt must explicitly label/reference both subjects and assign distinct actions/positions.
-
-Evaluate:
-
-- whether identities mix;
-- whether wardrobe swaps;
-- whether one reference dominates;
-- whether each subject remains distinct through motion;
-- whether reference conditioning reduces action quality.
-
-### Test D — subject + object
-
-If two-human separation works, test a character plus a distinctive vehicle/object. This is more directly useful to Helix recurring-story continuity.
-
-## Installation plan for the Helix standalone ComfyUI
-
-Active runtime discovered during current research:
-
-```text
-C:\AI\ComfyUI-CLI
-```
-
-Central model library:
-
-```text
-C:\AI\Models\LTX
-```
-
-Recommended placement:
-
-```text
-custom node:
-C:\AI\ComfyUI-CLI\custom_nodes\ComfyUI-LTX2.5-MSR
-
-LoRA:
-C:\AI\Models\LTX\loras\LTX-2.5-Licon-MSR-V1.safetensors
-```
-
-`C:\AI\Models\LTX\loras` is already exposed to the active ComfyUI through `extra_model_paths.yaml`, so the LoRA does not need to live inside the runtime folder.
-
-Do not install the older `ComfyUI-Licon-MSR` LTX 2.3 package for this experiment unless a separate 2.3 comparison is explicitly desired.
+Production should choose the concrete reference backend later.
 
 ## Decision gate
 
-MSR earns a place in Helix Production only if local tests show a meaningful identity/reference gain without unacceptable damage to motion, framing, action completion or runtime stability.
+Licon earns a stable Production role only if the next tests show that its scene freedom survives stronger viewpoint changes and multiple references without unacceptable identity mixing, action loss, motion degradation or runtime instability.
 
-If validated, likely Production role:
+For now:
 
 ```text
-native LTX
-+ optional MSR references for continuity-critical entities
-+ optional Prompt Relay for scene progression
-```
+one-subject new-scene generation
+-> promising / locally demonstrated
 
-Each layer remains opt-in and justified by the creative requirement.
+exact viewpoint identity
+-> pending
+
+multi-subject
+-> pending
+
+final Helix reference backend
+-> deliberately open
+```
