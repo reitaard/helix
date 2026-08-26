@@ -86,6 +86,25 @@ Worker > Christopher Nolan
 - Use actual Helix tool names such as `video.t2v` and `video.i2v`, not generic labels such as `COMFY • GEN`.
 - Generation behavior is called a **Mode**, not a profile. Current modes are Manual, Fast, and Quality. There is no Auto mode.
 
+## Generation lifecycle cards
+
+T2I and T2V lifecycle cards use the same compact grammar in the private operator chat and the forum topics. Do not insert blank lines between rows.
+
+```html
+<b>[ GENERATING ]</b>
+<b>Annie Leibovitz</b> <b>//</b> Job · <code>60</code>
+└ <code>image.t2i</code>
+<code>Workflow  █░░░░░░░░░  13%</code>
+CLIP Text Encode (Positive) · <b><i>Running (15s)</i></b>
+```
+
+- The second row is always `<worker> // Job · <number>`.
+- The third row is always `└ <tool>`; use `image.t2i` for Annie Leibovitz and `video.t2v` for Christopher Nolan.
+- `Workflow` is always shown.
+- Add `Sampling` only while Comfy reports numeric sampler progress; place it between Workflow and the stage row.
+- The stage row owns the elapsed timer. Do not append a separate `Running`/timer row.
+- Queued, uploading, retry, failure, and cancellation lifecycle states retain this same title, worker/job, and tool hierarchy.
+
 ## IDs and states
 
 Each Helix job has a durable sequential numeric Job number. This is the operator-facing reference in every Telegram view and command:

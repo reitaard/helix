@@ -188,12 +188,12 @@ A new slash command should clear pending state only for that same `(chat, thread
 
 Do not depend on the bot being an administrator or on receiving all group conversation. Keep compatibility with Telegram privacy mode.
 
-The bot's “send prompt” and confirmation messages must request a reply using both:
+The initial “send prompt” message must request a reply using both:
 
 - `reply_parameters` referencing the initiating user's message; and
 - `reply_markup: { force_reply: true, selective: true }`.
 
-Add `expected_reply_message_id TEXT` to the four pending tables. Persist the returned bot message ID after every prompt/confirmation send, and accept plain-text input only when it comes from the same conversation key and replies to that exact expected bot message. Replace the expected ID whenever a new ForceReply prompt is emitted.
+The confirmation card must remain editable so it can become the lifecycle/progress/final-media message. Telegram rejects edits to messages carrying `ForceReply` markup; therefore confirmation has no reply markup. It is still privacy-safe: persist its returned message ID as `expected_reply_message_id` and accept plain text only when it comes from the same conversation key and replies to that exact confirmation message. Replace the expected ID whenever a new prompt or confirmation is emitted.
 
 Group handling must fail closed while the expected ID is unset. Define transaction/state recovery for partial failures: if Telegram send fails, remove/abort the newly created pending state; if Telegram send succeeds but persisting its message ID fails, log privately, attempt to delete the orphaned bot message, and abort the pending state. Never leave a group interaction accepting arbitrary text.
 
