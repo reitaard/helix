@@ -1228,7 +1228,9 @@ export class TelegramCommandService {
 
     const generation =
       renderJobGeneration(
-        job.request
+        job.request,
+        job.backendJobId,
+        job.result
       );
 
     if (generation) {

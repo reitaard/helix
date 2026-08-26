@@ -76,8 +76,41 @@ function displayWord(
       value.slice(1);
 }
 
+function clip(
+  value: string,
+  limit: number
+) {
+  const compact = value
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return compact.length <= limit
+    ? compact
+    : `${compact.slice(0, Math.max(0, limit - 3))}...`;
+}
+
+function artifactFiles(
+  result: unknown
+) {
+  const artifacts = asRecord(result)?.artifacts;
+
+  if (!Array.isArray(artifacts)) {
+    return [];
+  }
+
+  return artifacts
+    .map(artifact =>
+      readString(asRecord(artifact), "filename")
+    )
+    .filter((filename): filename is string =>
+      filename !== null
+    );
+}
+
 export function renderJobGeneration(
-  request: unknown
+  request: unknown,
+  backendJobId: string | null,
+  result: unknown
 ) {
   const root =
     asRecord(request);
@@ -104,6 +137,38 @@ export function renderJobGeneration(
     "<b><i>• generation •</i></b>"
   ];
 
+  const prompt = readString(generation, "prompt");
+  const workflowVariant = readString(
+    generation,
+    "workflowVariant"
+  );
+  const files = artifactFiles(result);
+
+  lines.push(
+    `<b>Workflow</b> · <i>${escapeHtml(
+      workflowVariant ??
+      (kind === "t2i"
+        ? "FLUX.2 Klein 4B Distilled"
+        : "LTX 2.5 T2V")
+    )}</i>`
+  );
+
+  if (prompt) {
+    lines.push(
+      `<b>Prompt</b> · ${escapeHtml(
+        clip(prompt, 1200)
+      )}`
+    );
+  }
+
+  if (backendJobId) {
+    lines.push(
+      `<b>Prompt ID</b> · <code>${escapeHtml(
+        backendJobId
+      )}</code>`
+    );
+  }
+
   if (kind === "t2i") {
     const model = readString(generation, "model");
     const aspect = readString(settings, "aspect");
@@ -114,6 +179,7 @@ export function renderJobGeneration(
     if (aspect) lines.push(`<b>Aspect</b> · <b>⦗${escapeHtml(aspect)}⦘</b>`);
     if (width !== null && height !== null) lines.push(`<b>Image</b> · <b>${width}×${height}</b>`);
     if (seed !== null) lines.push(`<b>Seed</b> · <code>${seed}</code>`);
+    appendFiles(lines, files);
     return `<blockquote expandable>${lines.join("\n")}</blockquote>`;
   }
 
@@ -313,7 +379,9 @@ export function renderJobGeneration(
           DEFAULT_NEGATIVE_PROMPT
           ? "default"
           : "custom"
-      }</b>`
+      }</b> · ${escapeHtml(
+        clip(negative, 500)
+      )}`
     );
   }
 
@@ -345,9 +413,40 @@ export function renderJobGeneration(
     );
   }
 
+  appendFiles(lines, files);
+
   return (
     `<blockquote expandable>${
       lines.join("\n")
     }</blockquote>`
   );
+}
+
+function appendFiles(
+  lines: string[],
+  files: string[]
+) {
+  if (files.length === 0) {
+    return;
+  }
+
+  lines.push(
+    `<b>Files</b> · <b>${files.length}</b>`
+  );
+
+  for (const [index, filename] of files
+    .slice(0, 8)
+    .entries()) {
+    lines.push(
+      `<b>File ${index + 1}</b> · <code>${escapeHtml(
+        clip(filename, 120)
+      )}</code>`
+    );
+  }
+
+  if (files.length > 8) {
+    lines.push(
+      `<b>More</b> · <i>+${files.length - 8} files</i>`
+    );
+  }
 }
