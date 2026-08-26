@@ -4,7 +4,8 @@ import test from "node:test";
 import {
   nodeStageLabel,
   runningProgressHtml,
-  workflowNodeCount
+  workflowNodeCount,
+  workflowProgressPercent
 } from "../dist/telegram/progress-presentation.js";
 
 const request = {
@@ -45,6 +46,37 @@ test("workflow progress uses the submitted API workflow node count", () => {
   assert.equal(
     workflowNodeCount(request),
     4
+  );
+});
+
+test("workflow progress ignores expanded internal nodes outside the submitted workflow", () => {
+  assert.equal(
+    workflowProgressPercent(
+      request,
+      [
+        {
+          nodeId: "1",
+          displayNodeId: "1",
+          state: "finished"
+        },
+        {
+          nodeId: "2:internal:7",
+          displayNodeId: "2",
+          state: "finished"
+        },
+        {
+          nodeId: "2:internal:8",
+          displayNodeId: "2",
+          state: "finished"
+        },
+        {
+          nodeId: "not-submitted",
+          displayNodeId: null,
+          state: "finished"
+        }
+      ]
+    ),
+    50
   );
 });
 
