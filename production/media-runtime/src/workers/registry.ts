@@ -51,7 +51,10 @@ export class WorkerRegistry {
       if (worker.adapter === "comfy") {
         this.adapters.set(
           worker.id,
-          new ComfyAdapter(worker.endpoint)
+          new ComfyAdapter(
+            worker.endpoint,
+            `helix-runtime-${worker.id}`
+          )
         );
       }
     }
