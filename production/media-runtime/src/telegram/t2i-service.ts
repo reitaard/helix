@@ -9,6 +9,10 @@ import type {
 } from "../jobs/service.js";
 
 import {
+  TelegramDelivery
+} from "../delivery/telegram.js";
+
+import {
   T2IPendingRepository
 } from "../repositories/t2i-pending-repository.js";
 
@@ -52,11 +56,6 @@ import {
 } from "./progress-presentation.js";
 
 import {
-  editResponse,
-  type TelegramInteractionResponse
-} from "./interaction-response.js";
-
-import {
   TelegramT2ISettingsService
 } from "./t2i-settings-service.js";
 
@@ -75,6 +74,7 @@ export class TelegramT2IService {
     private readonly jobs: JobService,
     private readonly pending: T2IPendingRepository,
     private readonly lifecycles: TelegramJobLifecycleRepository,
+    private readonly telegram: TelegramDelivery,
     private readonly profile: T2IProfileService,
     private readonly settings: TelegramT2ISettingsService,
     private readonly reset: TelegramT2IResetService,
@@ -145,6 +145,30 @@ export class TelegramT2IService {
     );
   }
 
+  private async editOrFallback(
+    messageId: string | null,
+    html: string
+  ): Promise<string | null> {
+    if (!messageId) {
+      return html;
+    }
+
+    try {
+      await this.telegram.editHtml(
+        messageId,
+        html
+      );
+      return null;
+    }
+    catch (error) {
+      console.error(
+        `[telegram] T2I lifecycle edit ${messageId} failed`,
+        error
+      );
+      return html;
+    }
+  }
+
   async handleCommand(args: string[]) {
     const action = args[0]?.toLowerCase();
     if (!action) return this.begin();
@@ -178,16 +202,6 @@ export class TelegramT2IService {
     return (await this.pending.get(this.chatId)) !== null;
   }
 
-  async captureConfirmationMessage(
-    messageId: string
-  ) {
-    return this.pending
-      .captureConfirmationMessage(
-        this.chatId,
-        messageId
-      );
-  }
-
   async abandonPendingForCommand() {
     await Promise.all([this.pending.remove(this.chatId), this.reset.abandonPendingForCommand()]);
   }
@@ -207,7 +221,7 @@ export class TelegramT2IService {
     return bindT2IWorkflow(parsed as T2IWorkflow, prompt, settings);
   }
 
-  async handlePlainText(text: string): Promise<TelegramInteractionResponse> {
+  async handlePlainText(text: string): Promise<string | null> {
     const resetResponse = await this.reset.handlePlainText(text);
     if (resetResponse !== null) return resetResponse;
 
@@ -222,7 +236,30 @@ export class TelegramT2IService {
       if (answer.length > this.maxPromptLength) return `<b><i>Prompt is too long.</i></b>`;
       const settings = resolveT2ISettings(await this.profile.get());
       const stored = await this.pending.setPrompt(this.chatId, answer, settings, new Date(Date.now() + this.confirmSeconds * 1000));
-      return stored ? this.confirmationHtml(answer, settings) : this.noPendingHtml();
+      if (!stored) return this.noPendingHtml();
+
+      const confirmation =
+        await this.telegram.sendHtml(
+          this.confirmationHtml(
+            answer,
+            settings
+          )
+        );
+
+      const captured =
+        await this.pending
+          .captureConfirmationMessage(
+            this.chatId,
+            confirmation.messageId
+          );
+
+      if (!captured) {
+        throw new Error(
+          "T2I confirmation message could not be attached to pending state"
+        );
+      }
+
+      return null;
     }
 
     if (state.phase !== "awaiting_confirmation" || !state.prompt) {
@@ -232,7 +269,7 @@ export class TelegramT2IService {
 
     if (lower === "no") {
       await this.pending.remove(this.chatId);
-      return editResponse(
+      return this.editOrFallback(
         state.confirmationMessageId,
         this.cancelledHtml()
       );
@@ -249,16 +286,17 @@ export class TelegramT2IService {
       catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         await this.pending.remove(this.chatId);
-        return editResponse(
+        return this.editOrFallback(
           state.confirmationMessageId,
           this.failedHtml(message)
         );
       }
 
       const image = dimensionsForT2IAspect(settings.aspect);
+      let job;
 
       try {
-        const job = await this.jobs.create({
+        job = await this.jobs.create({
           tool: "image.t2i", workerId: this.workerId, profileId: "leibovitz", workflow, inputs: {},
           generation: {
             kind: "t2i", model: T2I_MODEL, workflowVariant: T2I_WORKFLOW_VARIANT, prompt: state.prompt,
@@ -269,32 +307,63 @@ export class TelegramT2IService {
             .update(`${state.chatId}\u0000${state.createdAt}\u0000${state.prompt}\u0000${JSON.stringify(settings)}`)
             .digest("hex")}`
         });
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await this.pending.remove(this.chatId);
+        return this.editOrFallback(
+          state.confirmationMessageId,
+          this.failedHtml(message)
+        );
+      }
 
-        if (state.confirmationMessageId) {
+      let lifecycleAttached = false;
+
+      if (state.confirmationMessageId) {
+        try {
           await this.lifecycles.attach({
             jobId: job.id,
             chatId: this.chatId,
             messageId: state.confirmationMessageId
           });
+          lifecycleAttached = true;
         }
+        catch (error) {
+          console.error(
+            `[telegram] T2I lifecycle attach failed for ${job.id}`,
+            error
+          );
+        }
+      }
 
-        await this.pending.remove(this.chatId);
+      await this.pending.remove(this.chatId);
 
-        return editResponse(
-          state.confirmationMessageId,
-          queuedProgressHtml(
-            job,
-            this.workerName
-          )
+      const queued =
+        queuedProgressHtml(
+          job,
+          this.workerName
         );
+
+      if (!state.confirmationMessageId) {
+        return queued;
+      }
+
+      try {
+        await this.telegram.editHtml(
+          state.confirmationMessageId,
+          queued
+        );
+        return null;
       }
       catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        await this.pending.remove(this.chatId);
-        return editResponse(
-          state.confirmationMessageId,
-          this.failedHtml(message)
+        console.error(
+          `[telegram] T2I queued lifecycle edit failed for ${job.id}`,
+          error
         );
+
+        return lifecycleAttached
+          ? null
+          : queued;
       }
     }
 
@@ -305,7 +374,7 @@ export class TelegramT2IService {
 
     if (updated.invalidAttempts >= this.maxInvalid) {
       await this.pending.remove(this.chatId);
-      return editResponse(
+      return this.editOrFallback(
         updated.confirmationMessageId,
         this.cancelledHtml()
       );
