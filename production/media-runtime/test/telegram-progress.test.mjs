@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  deliveryFailedProgressHtml,
+  deliveryRetryProgressHtml,
   nodeStageLabel,
   runningProgressHtml,
   workflowNodeCount,
@@ -107,4 +109,37 @@ test("dual loader renders workflow and active-node percentages separately", () =
   assert.match(html, /50%/);
   assert.match(html, /Sampling/);
   assert.match(html, /25%/);
+});
+
+test("delivery retry stays inside the lifecycle card", () => {
+  const html = deliveryRetryProgressHtml(
+    {
+      ...job,
+      status: "succeeded"
+    },
+    "Christopher Nolan",
+    2,
+    60
+  );
+
+  assert.match(html, /COMPLETE/);
+  assert.match(html, /delivery retrying/i);
+  assert.match(html, /attempt 2/i);
+  assert.match(html, /Retry/);
+  assert.match(html, /1m 0s/);
+});
+
+test("terminal automatic-delivery failure keeps manual retrieval on the same Job reference", () => {
+  const html = deliveryFailedProgressHtml(
+    {
+      ...job,
+      status: "succeeded"
+    },
+    "Christopher Nolan",
+    "Telegram upload failed"
+  );
+
+  assert.match(html, /DELIVERY FAILED/);
+  assert.match(html, /Telegram upload failed/);
+  assert.match(html, /\/dl g 57/);
 });
