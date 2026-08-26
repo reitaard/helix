@@ -222,6 +222,25 @@ export class TelegramJobLifecycleRepository {
     );
   }
 
+  async markDeliveryPresentation(
+    jobId: string,
+    state:
+      | "delivery_retrying"
+      | "delivery_failed"
+  ) {
+    await this.db.query(
+      `
+      UPDATE telegram_job_lifecycles
+      SET
+        last_job_status = $2,
+        updated_at = NOW()
+      WHERE job_id = $1
+        AND presentation_state = 'active'
+      `,
+      [jobId, state]
+    );
+  }
+
   async markTerminal(
     jobId: string,
     status: string
