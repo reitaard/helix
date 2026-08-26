@@ -217,6 +217,47 @@ export class TelegramDelivery {
     );
   }
 
+  async editHtml(
+    messageId: string,
+    html: string
+  ): Promise<TelegramMessageResult> {
+    const response =
+      await fetch(
+        this.endpoint(
+          "editMessageText"
+        ),
+        {
+          method: "POST",
+          headers: {
+            "content-type":
+              "application/json"
+          },
+          body:
+            JSON.stringify({
+              chat_id:
+                this.chatId,
+              message_id:
+                messageId,
+              text: html,
+              parse_mode:
+                "HTML",
+              link_preview_options: {
+                is_disabled: true
+              }
+            }),
+          signal:
+            AbortSignal.timeout(
+              30_000
+            )
+        }
+      );
+
+    return parseMessageResult(
+      await response.json(),
+      "Telegram editMessageText"
+    );
+  }
+
   async sendDocumentFile(
     input: {
       filePath: string;
@@ -284,6 +325,74 @@ export class TelegramDelivery {
     );
   }
 
+  async editDocumentFile(
+    input: {
+      messageId: string;
+      filePath: string;
+      filename: string;
+      caption: string;
+    }
+  ): Promise<TelegramMessageResult> {
+    const blob =
+      await openAsBlob(
+        input.filePath,
+        {
+          type:
+            "application/octet-stream"
+        }
+      );
+
+    const form =
+      new FormData();
+
+    form.set(
+      "chat_id",
+      this.chatId
+    );
+
+    form.set(
+      "message_id",
+      input.messageId
+    );
+
+    form.set(
+      "media",
+      JSON.stringify({
+        type: "document",
+        media: "attach://document",
+        caption: input.caption,
+        parse_mode: "HTML",
+        disable_content_type_detection: true
+      })
+    );
+
+    form.set(
+      "document",
+      blob,
+      input.filename
+    );
+
+    const response =
+      await fetch(
+        this.endpoint(
+          "editMessageMedia"
+        ),
+        {
+          method: "POST",
+          body: form,
+          signal:
+            AbortSignal.timeout(
+              10 * 60 * 1000
+            )
+        }
+      );
+
+    return parseMessageResult(
+      await response.json(),
+      "Telegram editMessageMedia"
+    );
+  }
+
   async sendDocument(
     input: {
       filePath: string;
@@ -292,6 +401,28 @@ export class TelegramDelivery {
     }
   ): Promise<TelegramMessageResult> {
     return this.sendDocumentFile({
+      filePath:
+        input.filePath,
+      filename:
+        input.filename,
+      caption:
+        this.metadataHtml(
+          input.metadata
+        )
+    });
+  }
+
+  async editDocument(
+    input: {
+      messageId: string;
+      filePath: string;
+      filename: string;
+      metadata: MetadataInput;
+    }
+  ): Promise<TelegramMessageResult> {
+    return this.editDocumentFile({
+      messageId:
+        input.messageId,
       filePath:
         input.filePath,
       filename:
