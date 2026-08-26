@@ -21,6 +21,12 @@ export interface ProgressSnapshot {
   stage: string | null;
 }
 
+export interface WorkflowProgressNode {
+  nodeId: string;
+  displayNodeId: string | null;
+  state: string;
+}
+
 function asRecord(
   value: unknown
 ): Record<string, unknown> | null {
@@ -60,6 +66,51 @@ export function workflowNodeCount(
   return Object.keys(
     workflowRecord(request) ?? {}
   ).length;
+}
+
+export function workflowProgressPercent(
+  request: unknown,
+  nodes: WorkflowProgressNode[]
+) {
+  const workflow = workflowRecord(request);
+
+  if (!workflow) {
+    return null;
+  }
+
+  const submitted =
+    new Set(Object.keys(workflow));
+
+  if (submitted.size === 0) {
+    return null;
+  }
+
+  const finished =
+    new Set<string>();
+
+  for (const node of nodes) {
+    if (node.state !== "finished") {
+      continue;
+    }
+
+    if (submitted.has(node.nodeId)) {
+      finished.add(node.nodeId);
+      continue;
+    }
+
+    if (
+      node.displayNodeId &&
+      submitted.has(node.displayNodeId)
+    ) {
+      finished.add(node.displayNodeId);
+    }
+  }
+
+  return (
+    finished.size /
+    submitted.size *
+    100
+  );
 }
 
 export function nodeStageLabel(
