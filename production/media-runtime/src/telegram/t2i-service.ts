@@ -13,6 +13,10 @@ import {
 } from "../repositories/t2i-pending-repository.js";
 
 import {
+  TelegramJobLifecycleRepository
+} from "../repositories/telegram-job-lifecycle-repository.js";
+
+import {
   dimensionsForT2IAspect,
   resolveStoredT2ISettings,
   resolveT2ISettings,
@@ -37,9 +41,20 @@ import type {
 } from "../t2i/workflow-binder.js";
 
 import {
+  compactError,
   escapeHtml,
-  profileTitle
+  profileTitle,
+  title
 } from "./presentation.js";
+
+import {
+  queuedProgressHtml
+} from "./progress-presentation.js";
+
+import {
+  editResponse,
+  type TelegramInteractionResponse
+} from "./interaction-response.js";
 
 import {
   TelegramT2ISettingsService
@@ -59,6 +74,7 @@ export class TelegramT2IService {
     private readonly workflowPath: string,
     private readonly jobs: JobService,
     private readonly pending: T2IPendingRepository,
+    private readonly lifecycles: TelegramJobLifecycleRepository,
     private readonly profile: T2IProfileService,
     private readonly settings: TelegramT2ISettingsService,
     private readonly reset: TelegramT2IResetService,
@@ -112,6 +128,23 @@ export class TelegramT2IService {
     );
   }
 
+  private failedHtml(
+    message: string
+  ) {
+    return (
+      `${title("FAILED")}\n\n` +
+      `<b>Image generation was not submitted.</b>\n` +
+      `<blockquote>${escapeHtml(compactError(message))}</blockquote>`
+    );
+  }
+
+  private cancelledHtml() {
+    return (
+      `${title("CANCELLED")}\n\n` +
+      `<i>Generation not submitted.</i>`
+    );
+  }
+
   async handleCommand(args: string[]) {
     const action = args[0]?.toLowerCase();
     if (!action) return this.begin();
@@ -145,6 +178,16 @@ export class TelegramT2IService {
     return (await this.pending.get(this.chatId)) !== null;
   }
 
+  async captureConfirmationMessage(
+    messageId: string
+  ) {
+    return this.pending
+      .captureConfirmationMessage(
+        this.chatId,
+        messageId
+      );
+  }
+
   async abandonPendingForCommand() {
     await Promise.all([this.pending.remove(this.chatId), this.reset.abandonPendingForCommand()]);
   }
@@ -164,7 +207,7 @@ export class TelegramT2IService {
     return bindT2IWorkflow(parsed as T2IWorkflow, prompt, settings);
   }
 
-  async handlePlainText(text: string): Promise<string | null> {
+  async handlePlainText(text: string): Promise<TelegramInteractionResponse> {
     const resetResponse = await this.reset.handlePlainText(text);
     if (resetResponse !== null) return resetResponse;
 
@@ -186,22 +229,34 @@ export class TelegramT2IService {
       await this.pending.remove(this.chatId);
       return this.noPendingHtml();
     }
+
     if (lower === "no") {
       await this.pending.remove(this.chatId);
-      return `<b>Generation aborted.</b>\n<b><i>No job was submitted.</i></b>`;
+      return editResponse(
+        state.confirmationMessageId,
+        this.cancelledHtml()
+      );
     }
+
     if (lower === "yes") {
       let settings: ResolvedT2ISettings;
       let workflow: T2IWorkflow;
+
       try {
         settings = resolveStoredT2ISettings(state.settingsSnapshot);
         workflow = await this.workflowFor(state.prompt, settings);
       }
       catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return `<b>Workflow unavailable.</b>\n<blockquote>${escapeHtml(message)}</blockquote>`;
+        await this.pending.remove(this.chatId);
+        return editResponse(
+          state.confirmationMessageId,
+          this.failedHtml(message)
+        );
       }
+
       const image = dimensionsForT2IAspect(settings.aspect);
+
       try {
         const job = await this.jobs.create({
           tool: "image.t2i", workerId: this.workerId, profileId: "leibovitz", workflow, inputs: {},
@@ -214,20 +269,48 @@ export class TelegramT2IService {
             .update(`${state.chatId}\u0000${state.createdAt}\u0000${state.prompt}\u0000${JSON.stringify(settings)}`)
             .digest("hex")}`
         });
+
+        if (state.confirmationMessageId) {
+          await this.lifecycles.attach({
+            jobId: job.id,
+            chatId: this.chatId,
+            messageId: state.confirmationMessageId
+          });
+        }
+
         await this.pending.remove(this.chatId);
-        return `<b>Job</b> · <code>${escapeHtml(job.jobNumber)}</code>\n<b>Worker</b> · <b>${escapeHtml(this.workerName)}</b>\n<b>State</b> · <b>[${escapeHtml(job.status)}]</b>`;
+
+        return editResponse(
+          state.confirmationMessageId,
+          queuedProgressHtml(
+            job,
+            this.workerName
+          )
+        );
       }
       catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return `<b>Image job was not submitted.</b>\n<blockquote>${escapeHtml(message)}</blockquote>`;
+        await this.pending.remove(this.chatId);
+        return editResponse(
+          state.confirmationMessageId,
+          this.failedHtml(message)
+        );
       }
     }
 
     const updated = await this.pending.incrementInvalid(this.chatId);
-    if (!updated || updated.invalidAttempts >= this.maxInvalid) {
-      await this.pending.remove(this.chatId);
-      return `<b>Generation aborted after 3 invalid responses.</b>\n<b><i>No job was submitted.</i></b>`;
+    if (!updated) {
+      return this.noPendingHtml();
     }
+
+    if (updated.invalidAttempts >= this.maxInvalid) {
+      await this.pending.remove(this.chatId);
+      return editResponse(
+        updated.confirmationMessageId,
+        this.cancelledHtml()
+      );
+    }
+
     return `<b>Invalid response!</b>\n<b><i>Type</i></b> ‘<code>yes</code>’ <b><i>or</i></b> ‘<code>no</code>’ <b><i>(Attempt · ${updated.invalidAttempts}/${this.maxInvalid})</i></b>`;
   }
 }
