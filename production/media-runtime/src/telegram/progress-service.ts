@@ -234,11 +234,10 @@ export class TelegramProgressService {
         state.lifecycle.messageId,
         runningProgressHtml(
           state.lifecycle,
-          this.workerName(
-            state.lifecycle
-          ),
+          this.workerName(state.lifecycle),
           state.snapshot
-        )
+        ),
+        { chatId: state.lifecycle.chatId, threadId: null }
       );
 
       state.lastRenderedWorkflow =
@@ -378,7 +377,8 @@ export class TelegramProgressService {
     try {
       await this.telegram.editHtml(
         lifecycle.messageId,
-        html
+        html,
+        { chatId: lifecycle.chatId, threadId: null }
       );
 
       if (terminal) {

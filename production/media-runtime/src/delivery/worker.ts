@@ -240,17 +240,14 @@ export class DeliveryWorker {
       await this.telegram.editHtml(
         lifecycle.messageId,
         terminal
-          ? deliveryFailedProgressHtml(
-              lifecycle,
-              workerName,
-              message
-            )
+          ? deliveryFailedProgressHtml(lifecycle, workerName, message)
           : deliveryRetryProgressHtml(
               lifecycle,
               workerName,
               attemptCount,
               retryAfterSeconds ?? 0
-            )
+            ),
+        { chatId: lifecycle.chatId, threadId: null }
       );
 
       await this.lifecycles
