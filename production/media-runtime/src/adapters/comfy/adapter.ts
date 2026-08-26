@@ -46,10 +46,14 @@ export class ComfyAdapter
     ComfyClient;
 
   constructor(
-    endpoint: string
+    endpoint: string,
+    executionClientId?: string
   ) {
     this.client =
-      new ComfyClient(endpoint);
+      new ComfyClient(
+        endpoint,
+        executionClientId
+      );
   }
 
   async liveness():
