@@ -8,6 +8,7 @@ import {
 
 export interface ProgressJobView {
   jobNumber: string;
+  tool?: string;
   status: string;
   request: unknown;
   error: unknown | null;
@@ -219,16 +220,25 @@ function elapsed(
   );
 }
 
+function lifecycleHeader(
+  job: ProgressJobView,
+  workerName: string
+) {
+  return [
+    `<b>${escapeHtml(workerName)}</b> <b>//</b> Job · <code>${escapeHtml(job.jobNumber)}</code>`,
+    `└ <code>${escapeHtml(job.tool ?? "generation")}</code>`
+  ];
+}
+
 export function queuedProgressHtml(
   job: ProgressJobView,
   workerName: string
 ) {
-  return (
-    `${title("QUEUED")}\n\n` +
-    `<b>Job</b> · <code>${escapeHtml(job.jobNumber)}</code> · ` +
-    `<b>${escapeHtml(workerName)}</b>\n\n` +
+  return [
+    title("QUEUED"),
+    ...lifecycleHeader(job, workerName),
     `<i>Waiting for GPU</i>`
-  );
+  ].join("\n");
 }
 
 export function runningProgressHtml(
@@ -243,32 +253,20 @@ export function runningProgressHtml(
 
   const lines = [
     title("GENERATING"),
-    "",
-    `<b>Job</b> · <code>${escapeHtml(job.jobNumber)}</code> · <b>${escapeHtml(workerName)}</b>`,
-    "",
+    ...lifecycleHeader(job, workerName),
     `<code>Workflow  ${progressBar(workflowPercent)}  ${workflowPercent}%</code>`
   ];
 
   if (snapshot.nodePercent !== null) {
     const nodePercent =
       clampPercent(snapshot.nodePercent);
-    const stage =
-      clip(snapshot.stage ?? "Processing", 10)
-        .padEnd(10, " ");
-
     lines.push(
-      `<code>${escapeHtml(stage)} ${progressBar(nodePercent)}  ${nodePercent}%</code>`
-    );
-  }
-  else if (snapshot.stage) {
-    lines.push(
-      `<b>${escapeHtml(snapshot.stage)}</b> · <i>Running</i>`
+      `<code>Sampling  ${progressBar(nodePercent)}  ${nodePercent}%</code>`
     );
   }
 
   lines.push(
-    "",
-    `<i>Running · ${escapeHtml(elapsed(job))}</i>`
+    `${escapeHtml(clip(snapshot.stage ?? "Processing"))} · <b><i>Running (${escapeHtml(elapsed(job))})</i></b>`
   );
 
   return lines.join("\n");
@@ -278,13 +276,12 @@ export function deliveringProgressHtml(
   job: ProgressJobView,
   workerName: string
 ) {
-  return (
-    `${title("COMPLETE")}\n\n` +
-    `<b>Job</b> · <code>${escapeHtml(job.jobNumber)}</code> · ` +
-    `<b>${escapeHtml(workerName)}</b>\n\n` +
-    `<code>Workflow  ${progressBar(100)}  100%</code>\n\n` +
+  return [
+    title("COMPLETE"),
+    ...lifecycleHeader(job, workerName),
+    `<code>Workflow  ${progressBar(100)}  100%</code>`,
     `<i>Uploading artifact…</i>`
-  );
+  ].join("\n");
 }
 
 export function deliveryRetryProgressHtml(
@@ -293,19 +290,13 @@ export function deliveryRetryProgressHtml(
   attemptCount: number,
   retryAfterSeconds: number
 ) {
-  return (
-    `${title("COMPLETE")}\n\n` +
-    `<b>Job</b> · <code>${escapeHtml(job.jobNumber)}</code> · ` +
-    `<b>${escapeHtml(workerName)}</b>\n\n` +
-    `<code>Workflow  ${progressBar(100)}  100%</code>\n\n` +
-    `<b>Artifact delivery retrying</b> · ` +
-    `<i>attempt ${Math.max(1, attemptCount)}</i>\n` +
-    `<b>Retry</b> · <i>${escapeHtml(
-      formatDuration(
-        Math.max(0, retryAfterSeconds)
-      )
-    )}</i>`
-  );
+  return [
+    title("COMPLETE"),
+    ...lifecycleHeader(job, workerName),
+    `<code>Workflow  ${progressBar(100)}  100%</code>`,
+    `<b>Artifact delivery retrying</b> · <i>attempt ${Math.max(1, attemptCount)}</i>`,
+    `<b>Retry</b> · <i>${escapeHtml(formatDuration(Math.max(0, retryAfterSeconds)))}</i>`
+  ].join("\n");
 }
 
 export function deliveryFailedProgressHtml(
@@ -313,14 +304,13 @@ export function deliveryFailedProgressHtml(
   workerName: string,
   message: string
 ) {
-  return (
-    `${title("DELIVERY FAILED")}\n\n` +
-    `<b>Job</b> · <code>${escapeHtml(job.jobNumber)}</code> · ` +
-    `<b>${escapeHtml(workerName)}</b>\n\n` +
-    `<i>Generation completed, but automatic artifact delivery failed.</i>\n` +
-    `<blockquote>${escapeHtml(compactError(message))}</blockquote>\n` +
+  return [
+    title("DELIVERY FAILED"),
+    ...lifecycleHeader(job, workerName),
+    `<i>Generation completed, but automatic artifact delivery failed.</i>`,
+    `<blockquote>${escapeHtml(compactError(message))}</blockquote>`,
     `<b>Get</b> · <code>/dl g ${escapeHtml(job.jobNumber)}</code>`
-  );
+  ].join("\n");
 }
 
 export function terminalProgressHtml(
@@ -336,13 +326,11 @@ export function terminalProgressHtml(
 
   const lines = [
     title(heading),
-    "",
-    `<b>Job</b> · <code>${escapeHtml(job.jobNumber)}</code> · <b>${escapeHtml(workerName)}</b>`
+    ...lifecycleHeader(job, workerName)
   ];
 
   if (job.status === "failed") {
     lines.push(
-      "",
       `<blockquote>${escapeHtml(compactError(job.error))}</blockquote>`
     );
   }

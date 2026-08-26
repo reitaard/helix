@@ -36,6 +36,7 @@ const request = {
 
 const job = {
   jobNumber: "57",
+  tool: "video.t2v",
   status: "running",
   request,
   error: null,
@@ -104,11 +105,14 @@ test("dual loader renders workflow and active-node percentages separately", () =
   );
 
   assert.match(html, /GENERATING/);
-  assert.match(html, /Job<\/b> · <code>57<\/code>/);
+  assert.match(html, /Christopher Nolan<\/b> <b>\/\/<\/b> Job · <code>57<\/code>/);
+  assert.match(html, /└ <code>video.t2v<\/code>/);
   assert.match(html, /Workflow/);
   assert.match(html, /50%/);
   assert.match(html, /Sampling/);
   assert.match(html, /25%/);
+  assert.match(html, /Running \(/);
+  assert.doesNotMatch(html, /\n\n/);
 });
 
 test("delivery retry stays inside the lifecycle card", () => {
