@@ -271,6 +271,20 @@ Primary commands:
 
 Telegram remains a bounded operator surface, not a shell/control plane. Restart, package-update, arbitrary worker mutation and raw command execution remain outside its scope.
 
+## Telegram forum and lifecycle checkpoint
+
+`Absolute Cinema` is live through the existing single bot, one `helix-runtime`, one Comfy worker, and one GPU queue:
+
+```text
+forum chat: -1004369617758
+Image topic: thread 5 -> /t2i
+Video topic: thread 7 -> /t2v
+```
+
+Forum routing migration `0013_telegram_forum_topics.sql` is applied in production. The runtime validates configured routes, isolates prompt/reset state by `(chatId, threadId, userId)`, binds forum replies to the expected selective ForceReply message, persists Telegram delivery destinations, and returns completed media to the originating allowed topic. Private operator commands and T2V developer controls remain private-chat-only.
+
+The lifecycle/progress implementation is merged into `main` at `cf07d25` and passed the combined VPS suite (`51/51`). It adds a durable confirmation-to-artifact lifecycle card, Comfy execution event correlation, throttled Workflow/Sampling progress, in-place retry/failure state, and same-message primary-document delivery. It is **not live** yet: migration `0014_telegram_job_lifecycle.sql` has not been applied and the production runtime has not been rebuilt/restarted with that code. See `TELEGRAM_LIFECYCLE_PROGRESS_IMPLEMENTATION.md` for the deployment gate and smoke-test criteria.
+
 ## T2V Production checkpoint
 
 Christopher Nolan owns the validated `video.t2v` path.

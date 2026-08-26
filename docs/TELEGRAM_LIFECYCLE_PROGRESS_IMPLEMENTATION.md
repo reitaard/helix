@@ -1,11 +1,13 @@
 # Telegram lifecycle progress implementation
 
-Status: **feature branch implemented; VPS build/test, migration 0014, runtime deployment, and Telegram smoke test still pending.**
+Status: **implemented, merged to `main`, and locally VPS-validated (`npm test`: 51/51); migration `0014`, runtime deployment, and live lifecycle smoke tests remain pending.**
 
-Branch:
+Integration commits:
 
 ```text
-feature/telegram-lifecycle-progress
+b01141e  forum-topic routing
+ca7bb2f  lifecycle/progress integration
+cf07d25  preserve forum target for lifecycle edits
 ```
 
 This document records the implementation checkpoint for the locked Telegram lifecycle decision in `docs/DECISIONS.md`. It is intentionally explicit about what is implemented in code versus what is actually deployed.
@@ -130,7 +132,7 @@ telegram_job_lifecycles
 
 Pending T2V/T2I state clears any old confirmation message ID whenever a new prompt flow begins, preventing stale-message ownership.
 
-**Migration 0014 is not applied to Production at this checkpoint.** Production remains at migration 0012 until branch validation is complete.
+**Migration 0014 is not applied to Production at this checkpoint.** Production has forum migration `0013_telegram_forum_topics.sql` applied and runs the forum-topic runtime; it does not yet have the lifecycle schema or runtime code deployed.
 
 ## Final artifact behavior
 
@@ -196,7 +198,7 @@ DeliveryWorker
 
 `TelegramCommandService` was intentionally not rewritten for this feature. T2V/T2I are already Telegram-specific services and own their confirmation/lifecycle card directly, reducing the blast radius for `/status`, `/j`, `/jb`, `/dl`, diagnostics, cancellation, and other commands.
 
-## Regression coverage added on the feature branch
+## Regression coverage merged to main
 
 Tests now cover:
 
@@ -218,18 +220,25 @@ Tests now cover:
 
 ## Validation/deployment checkpoint
 
-Not yet completed:
+Completed:
 
 ```text
-VPS npm build/test for feature branch
-PostgreSQL backup before 0013
-migration 0014 apply + verification
-merge/fast-forward to main
-runtime image rebuild/restart
-live /t2v smoke test
-live /t2i smoke test
-same-message final artifact confirmation
-WebSocket reconnect observation
+forum migration 0013 applied and forum runtime deployed
+lifecycle branch merged to main
+combined VPS npm test: 51/51 passing
+forum-target lifecycle edit integration reviewed and tested
+```
+
+Still required before this lifecycle feature is live:
+
+```text
+PostgreSQL backup before 0014
+apply and verify migration 0014_telegram_job_lifecycle.sql
+rebuild/restart the single helix-runtime
+live /t2v smoke test in Video topic
+live /t2i smoke test in Image topic
+confirm the same lifecycle message becomes the final document
+observe/reconnect the persistent Comfy execution WebSocket
 ```
 
 Do not describe this feature as live until those steps have passed.

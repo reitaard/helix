@@ -1,8 +1,8 @@
 # Telegram Forum Topics — Autonomous Implementation Plan
 
-Status: ready for implementation
+Status: implemented and deployed for forum routing; lifecycle/progress integration is merged to `main` but not yet deployed.
 Date: 2026-08-26
-Target branch: create `feature/telegram-forum-topics` from `main`
+Integration branch: `feature/telegram-forum-lifecycle-integration` (merged into `main` at `cf07d25`)
 Runtime: `production/media-runtime`
 
 ## 1. Mission
