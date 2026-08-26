@@ -1,5 +1,7 @@
 # Inspected Production Contract
 
+> **Research status:** POSTPONED AND LOCKED — this source map is frozen evidence and may be stale when research resumes; see `RESEARCH_LOCK.md`.
+
 **Inspected:** 2026-08-25
 
 **Repository branch at inspection:** `research/qwen-production-settings`, merged with the latest `feature/t2v-settings`

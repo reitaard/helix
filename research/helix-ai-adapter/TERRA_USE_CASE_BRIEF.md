@@ -1,5 +1,7 @@
 # Terra Brief — Detached Qwen Use-Case Benchmarks
 
+> **Research status:** POSTPONED AND LOCKED — historical handoff only; see `RESEARCH_LOCK.md`.
+
 ## Objective
 
 Run and report three independent, read-only Qwen experiments that may support future Helix Production research without controlling Production:

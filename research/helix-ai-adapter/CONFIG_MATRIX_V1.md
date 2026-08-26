@@ -1,5 +1,7 @@
 # Qwen3 0.6B Configuration Matrix V1
 
+**Research status:** **POSTPONED AND LOCKED** — see [`RESEARCH_LOCK.md`](RESEARCH_LOCK.md)
+
 **Run:** 2026-08-26
 
 **Model:** Qwen3 0.6B Q8_0 (`helix-qwen3-0.6b`)

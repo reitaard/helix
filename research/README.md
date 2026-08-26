@@ -18,6 +18,6 @@ Every meaningful note should distinguish:
 
 For niche/content research, preserve enough provenance that Intelligence can later separate what was observed from what was inferred.
 
-## Active technical research
+## Postponed technical research
 
-- [`helix-ai-adapter/`](helix-ai-adapter/) — detached Qwen3 0.6B evaluation for narrow Production semantic tasks. It contains its own inspected source map, agent handoff, gold cases, benchmark runner, and guardrails. This is research only and is not wired into Helix runtime or Telegram.
+- [`helix-ai-adapter/`](helix-ai-adapter/) — **postponed and locked on 2026-08-26**. The detached Qwen3 0.6B evaluation and configuration matrix are preserved as read-only evidence. Do not resume benchmarks or integration work without an explicit Creator request; see [`helix-ai-adapter/RESEARCH_LOCK.md`](helix-ai-adapter/RESEARCH_LOCK.md). It is not wired into Helix runtime or Telegram.

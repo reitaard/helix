@@ -263,6 +263,9 @@ def summarize(task: str, records: list[dict[str, Any]]) -> dict[str, Any]:
 
 def main() -> int:
     global ARGS
+    if (ROOT / "RESEARCH_LOCKED").exists():
+        raise SystemExit("Research is postponed and locked; see RESEARCH_LOCK.md")
+
     ARGS = parse_args()
     if ARGS.repeat < 1:
         raise SystemExit("--repeat must be >= 1")

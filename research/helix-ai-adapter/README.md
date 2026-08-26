@@ -1,6 +1,8 @@
 # Helix AI Adapter — Production Settings Research
 
-**Status:** detached research only
+**Status:** **POSTPONED AND LOCKED** — do not resume without an explicit Creator request
+
+**Lock instructions:** [`RESEARCH_LOCK.md`](RESEARCH_LOCK.md)
 
 **Primary branch:** `research/qwen-production-settings`
 
@@ -15,11 +17,12 @@ It is not an integration and must not add AI to Telegram, `media-runtime`, the d
 
 ## Start here
 
-1. Read [`AGENT_BRIEF.md`](AGENT_BRIEF.md).
-2. Read [`INSPECTED_CONTRACT.md`](INSPECTED_CONTRACT.md).
-3. Review [`TEST_PLAN.md`](TEST_PLAN.md).
-4. Inspect or extend [`cases/production-settings-v1.json`](cases/production-settings-v1.json).
-5. Run:
+1. Read [`RESEARCH_LOCK.md`](RESEARCH_LOCK.md) and stop unless the Creator explicitly requested resumption.
+2. Read [`AGENT_BRIEF.md`](AGENT_BRIEF.md).
+3. Read [`INSPECTED_CONTRACT.md`](INSPECTED_CONTRACT.md).
+4. Review [`TEST_PLAN.md`](TEST_PLAN.md).
+5. Inspect [`cases/production-settings-v1.json`](cases/production-settings-v1.json) without changing it.
+6. Only after explicit resumption approval, run:
 
 ```bash
 python3 research/helix-ai-adapter/benchmark.py
@@ -43,7 +46,8 @@ The benchmark performs no database writes, Telegram calls, Comfy calls, workflow
 
 ## Files
 
-- `AGENT_BRIEF.md` — exact continuation instructions and guardrails.
+- `RESEARCH_LOCK.md` — authoritative postponement, frozen conclusion, and resume procedure.
+- `AGENT_BRIEF.md` — historical continuation instructions and guardrails; subordinate to the lock.
 - `INSPECTED_CONTRACT.md` — source-backed map of the current branch.
 - `TEST_PLAN.md` — hypotheses, metrics, gates, and experiment sequence.
 - `cases/production-settings-v1.json` — versioned gold cases.

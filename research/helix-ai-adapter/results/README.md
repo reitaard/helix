@@ -1,6 +1,8 @@
 # Local Benchmark Results
 
-Raw benchmark results are generated here and ignored by Git.
+**Status:** research postponed and locked on 2026-08-26. Do not generate new runs without explicit Creator approval; see `../RESEARCH_LOCK.md`.
+
+Existing raw benchmark results are stored here and ignored by Git.
 
 Do not commit large raw runs automatically. After human review, preserve only a concise research note containing:
 

@@ -1,0 +1,4 @@
+POSTPONED 2026-08-26
+
+Benchmark runners must refuse execution while this sentinel exists.
+Remove it only in a Creator-approved research-resumption commit.

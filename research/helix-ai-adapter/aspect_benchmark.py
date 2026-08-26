@@ -176,6 +176,9 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def main() -> int:
+    if (ROOT / "RESEARCH_LOCKED").exists():
+        raise SystemExit("Research is postponed and locked; see RESEARCH_LOCK.md")
+
     args = parse_args()
     if args.repeat < 1:
         raise SystemExit("--repeat must be at least 1")

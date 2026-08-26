@@ -1,5 +1,7 @@
 # Baseline V1 Observation
 
+> **Research status:** POSTPONED AND LOCKED — preserved evidence; see `RESEARCH_LOCK.md`.
+
 **Run:** 2026-08-25
 
 **Model:** `helix-qwen3-0.6b` (Qwen3 0.6B Q8_0)

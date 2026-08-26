@@ -1,5 +1,7 @@
 # Production Settings Test Plan
 
+> **Research status:** POSTPONED AND LOCKED — do not execute this plan without explicit Creator approval; see `RESEARCH_LOCK.md`.
+
 ## Question
 
 Can the detached Qwen3 0.6B semantic adapter reliably translate a short natural-language settings instruction into a safe typed delta for the current T2V core settings?

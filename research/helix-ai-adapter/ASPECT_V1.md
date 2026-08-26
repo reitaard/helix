@@ -1,5 +1,7 @@
 # Aspect V1 Observation
 
+> **Research status:** POSTPONED AND LOCKED — preserved evidence; see `RESEARCH_LOCK.md`.
+
 **Run:** 2026-08-25  
 **Git commit:** `92181a9c50b88bb98c46e42065495ea976b849cc`  
 **Model:** `helix-qwen3-0.6b` (Qwen3 0.6B Q8_0)  

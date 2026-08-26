@@ -1,5 +1,7 @@
 # AI Agent Brief
 
+> **POSTPONED / LOCKED — 2026-08-26:** Read `RESEARCH_LOCK.md`. Do not perform the work below unless the Creator explicitly requests that this research resume. The remaining brief is preserved as historical handoff context.
+
 ## Objective
 
 Determine whether Qwen3 0.6B Q8_0 can safely assist with natural-language interpretation of the **existing core T2V Production settings**.
@@ -31,6 +33,8 @@ Do not:
 - change gold expectations merely to improve a model score.
 
 ## Allowed work
+
+While the research lock is active, this section authorizes no work. After explicit Creator approval to resume:
 
 - extend or correct research documentation;
 - add well-justified benchmark cases;
