@@ -59,3 +59,73 @@ test("ComfyClient history preserves transport timeout failures", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("ComfyClient prompt correlates execution events with one stable client id", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+
+  globalThis.fetch = async (url, options) => {
+    requests.push({
+      url: String(url),
+      body: JSON.parse(String(options?.body ?? "{}"))
+    });
+
+    return new Response(
+      JSON.stringify({
+        prompt_id: `prompt-${requests.length}`,
+        number: requests.length,
+        node_errors: {}
+      }),
+      {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      }
+    );
+  };
+
+  try {
+    const client = new ComfyClient(
+      "http://comfy.test:8188",
+      "helix-runtime-worker-1"
+    );
+
+    await client.prompt({
+      "1": {
+        class_type: "TestNode",
+        inputs: {}
+      }
+    });
+
+    await client.prompt({
+      "2": {
+        class_type: "TestNode",
+        inputs: {}
+      }
+    });
+
+    assert.equal(requests.length, 2);
+
+    for (const request of requests) {
+      assert.equal(
+        request.url,
+        "http://comfy.test:8188/prompt"
+      );
+      assert.equal(
+        request.body.client_id,
+        "helix-runtime-worker-1"
+      );
+      assert.deepEqual(
+        request.body.extra_data,
+        {
+          preview_method: "none"
+        }
+      );
+      assert.ok(request.body.prompt);
+    }
+  }
+  finally {
+    globalThis.fetch = originalFetch;
+  }
+});
