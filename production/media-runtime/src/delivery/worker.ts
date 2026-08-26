@@ -20,6 +20,11 @@ import {
 } from "../repositories/telegram-job-lifecycle-repository.js";
 
 import {
+  deliveryFailedProgressHtml,
+  deliveryRetryProgressHtml
+} from "../telegram/progress-presentation.js";
+
+import {
   WorkerRegistry
 } from "../workers/registry.js";
 
@@ -162,6 +167,74 @@ export class DeliveryWorker {
         )
       )
     );
+  }
+
+  private async showDeliveryFailure(
+    delivery: {
+      jobId: string;
+      jobNumber: string;
+      artifactIndex: number;
+      workerId: string;
+      profileId: string | null;
+    },
+    message: string,
+    terminal: boolean,
+    attemptCount: number,
+    retryAfterSeconds: number | null
+  ) {
+    if (delivery.artifactIndex !== 0) {
+      return;
+    }
+
+    try {
+      const lifecycle =
+        await this.lifecycles
+          .get(delivery.jobId);
+
+      if (
+        !lifecycle ||
+        lifecycle.presentationState !==
+          "active"
+      ) {
+        return;
+      }
+
+      const workerName =
+        this.workers.profileDisplayName(
+          delivery.workerId,
+          delivery.profileId
+        );
+
+      await this.telegram.editHtml(
+        lifecycle.messageId,
+        terminal
+          ? deliveryFailedProgressHtml(
+              lifecycle,
+              workerName,
+              message
+            )
+          : deliveryRetryProgressHtml(
+              lifecycle,
+              workerName,
+              attemptCount,
+              retryAfterSeconds ?? 0
+            )
+      );
+
+      await this.lifecycles
+        .markDeliveryPresentation(
+          delivery.jobId,
+          terminal
+            ? "delivery_failed"
+            : "delivery_retrying"
+        );
+    }
+    catch (error) {
+      console.error(
+        `[delivery] ${delivery.jobId} lifecycle failure presentation failed`,
+        error
+      );
+    }
   }
 
   private async tick() {
@@ -349,6 +422,13 @@ export class DeliveryWorker {
             delivery.attemptCount >=
               this.maxAttempts;
 
+          const retryAfterSeconds =
+            terminal
+              ? null
+              : this.retryDelay(
+                  delivery.attemptCount
+                );
+
           await this.deliveries
             .markFailed({
               id:
@@ -365,13 +445,16 @@ export class DeliveryWorker {
 
               message,
 
-              retryAfterSeconds:
-                terminal
-                  ? null
-                  : this.retryDelay(
-                      delivery.attemptCount
-                    )
+              retryAfterSeconds
             });
+
+          await this.showDeliveryFailure(
+            delivery,
+            message,
+            terminal,
+            delivery.attemptCount,
+            retryAfterSeconds
+          );
 
           console.error(
             `[delivery] ${delivery.jobId} ` +
