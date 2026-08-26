@@ -45,6 +45,15 @@ const envSchema = z.object({
   HELIX_TELEGRAM_CHAT_ID:
     z.string().min(1).optional(),
 
+  HELIX_TELEGRAM_FORUM_CHAT_ID:
+    z.string().regex(/^-\d+$/).optional(),
+
+  HELIX_TELEGRAM_T2I_THREAD_ID:
+    z.string().regex(/^\d+$/).optional(),
+
+  HELIX_TELEGRAM_T2V_THREAD_ID:
+    z.string().regex(/^\d+$/).optional(),
+
   HELIX_SPOOL_DIR:
     z.string()
       .min(1)
@@ -75,17 +84,33 @@ const envSchema = z.object({
 const env =
   envSchema.parse(process.env);
 
-if (
-  Boolean(
-    env.HELIX_TELEGRAM_BOT_TOKEN
-  ) !==
-  Boolean(
-    env.HELIX_TELEGRAM_CHAT_ID
-  )
-) {
-  throw new Error(
-    "Telegram token and chat ID must be configured together"
-  );
+if (Boolean(env.HELIX_TELEGRAM_BOT_TOKEN) !== Boolean(env.HELIX_TELEGRAM_CHAT_ID)) {
+  throw new Error("Telegram token and chat ID must be configured together");
+}
+
+const forumValues = [
+  env.HELIX_TELEGRAM_FORUM_CHAT_ID,
+  env.HELIX_TELEGRAM_T2I_THREAD_ID,
+  env.HELIX_TELEGRAM_T2V_THREAD_ID
+];
+
+if (forumValues.some(Boolean) && !forumValues.every(Boolean)) {
+  throw new Error("Telegram forum chat and both topic IDs must be configured together");
+}
+
+if (forumValues.every(Boolean)) {
+  if (!env.HELIX_TELEGRAM_BOT_TOKEN || !env.HELIX_TELEGRAM_CHAT_ID) {
+    throw new Error("Telegram forum routing requires the Telegram bot and private operator chat");
+  }
+  if (env.HELIX_TELEGRAM_T2I_THREAD_ID === "0" || env.HELIX_TELEGRAM_T2V_THREAD_ID === "0") {
+    throw new Error("Telegram forum thread IDs must be positive");
+  }
+  if (env.HELIX_TELEGRAM_T2I_THREAD_ID === env.HELIX_TELEGRAM_T2V_THREAD_ID) {
+    throw new Error("Telegram image and video thread IDs must differ");
+  }
+  if (env.HELIX_TELEGRAM_FORUM_CHAT_ID === env.HELIX_TELEGRAM_CHAT_ID) {
+    throw new Error("Telegram forum and private operator chat IDs must differ");
+  }
 }
 
 export const config = {
@@ -105,7 +130,15 @@ export const config = {
             env.HELIX_TELEGRAM_BOT_TOKEN,
 
           chatId:
-            env.HELIX_TELEGRAM_CHAT_ID
+            env.HELIX_TELEGRAM_CHAT_ID,
+
+          forum: env.HELIX_TELEGRAM_FORUM_CHAT_ID && env.HELIX_TELEGRAM_T2I_THREAD_ID && env.HELIX_TELEGRAM_T2V_THREAD_ID
+            ? {
+                chatId: env.HELIX_TELEGRAM_FORUM_CHAT_ID,
+                imageThreadId: env.HELIX_TELEGRAM_T2I_THREAD_ID,
+                videoThreadId: env.HELIX_TELEGRAM_T2V_THREAD_ID
+              }
+            : null
         }
       : null,
 

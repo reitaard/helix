@@ -65,6 +65,9 @@ import {
   profileTitle
 } from "./presentation.js";
 
+import type { TelegramConversationKey } from "./conversation.js";
+import type { TelegramContext } from "./context.js";
+
 function isDevFlag(
   value: string | undefined
 ): boolean {
@@ -229,10 +232,16 @@ export class TelegramT2VService {
   }
 
   async handleCommand(
-    args: string[]
+    args: string[],
+    key: TelegramConversationKey | string = this.chatId,
+    allowDev = true
   ) {
     if (args.length === 0) {
-      return this.begin();
+      return this.begin(key);
+    }
+
+    if (!allowDev && args.some(isDevFlag)) {
+      return `<b><i>Developer settings are available in the private operator chat only.</i></b>`;
     }
 
     const mode =
@@ -263,7 +272,8 @@ export class TelegramT2VService {
     if (mode === "reset") {
       if (args.length === 1) {
         return this.reset.begin(
-          false
+          false,
+          key
         );
       }
 
@@ -272,7 +282,8 @@ export class TelegramT2VService {
         isDevFlag(args[1])
       ) {
         return this.reset.begin(
-          true
+          true,
+          key
         );
       }
 
@@ -408,10 +419,10 @@ export class TelegramT2VService {
     this.timer = null;
   }
 
-  async begin() {
+  async begin(key: TelegramConversationKey | string = this.chatId) {
     await this.pending
       .beginPrompt(
-        this.chatId,
+        key,
         new Date(
           Date.now() +
           this.promptSeconds *
@@ -425,33 +436,23 @@ export class TelegramT2VService {
     );
   }
 
-  async hasPending() {
-    if (
-      await this.reset.hasPending()
-    ) {
-      return true;
-    }
-
-    await this.pending
-      .expireDue(
-        this.chatId
-      );
-
-    return (
-      await this.pending.get(
-        this.chatId
-      )
-    ) !== null;
+  async hasPending(key: TelegramConversationKey | string = this.chatId) {
+    if (await this.reset.hasPending(key)) return true;
+    await this.pending.expireDue(key);
+    return (await this.pending.get(key)) !== null;
   }
 
-  async abandonPendingForCommand() {
-    await Promise.all([
-      this.pending.remove(
-        this.chatId
-      ),
-      this.reset
-        .abandonPendingForCommand()
-    ]);
+  async abandonPendingForCommand(key: TelegramConversationKey | string = this.chatId) {
+    await this.pending.remove(key);
+    await this.reset.abandonPendingForCommand(key);
+  }
+
+  async setExpectedReply(key: TelegramConversationKey, messageId: string) {
+    await Promise.all([this.pending.setExpectedReply(key, messageId), this.reset.setExpectedReply(key, messageId)]);
+  }
+  async acceptsGroupReply(key: TelegramConversationKey, replyToMessageId: string | null) {
+    if (!replyToMessageId) return false;
+    return (await this.pending.get(key))?.expectedReplyMessageId === replyToMessageId || await this.reset.acceptsGroupReply(key, replyToMessageId);
   }
 
   private async workflowFor(
@@ -553,20 +554,12 @@ export class TelegramT2VService {
   }
 
   async handlePlainText(
-    text: string
-  ): Promise<
-    string |
-    null
-  > {
-    const resetResponse =
-      await this.reset
-        .handlePlainText(
-          text
-        );
-
-    if (resetResponse !== null) {
-      return resetResponse;
-    }
+    text: string,
+    key: TelegramConversationKey | string = this.chatId,
+    context?: TelegramContext
+  ): Promise<string | null> {
+    const resetResponse = await this.reset.handlePlainText(text, key);
+    if (resetResponse !== null) return resetResponse;
 
     const answer =
       text
@@ -575,15 +568,9 @@ export class TelegramT2VService {
     const lower =
       answer.toLowerCase();
 
-    await this.pending
-      .expireDue(
-        this.chatId
-      );
+    await this.pending.expireDue(key);
 
-    const state =
-      await this.pending.get(
-        this.chatId
-      );
+    const state = await this.pending.get(key);
 
     if (!state) {
       if (
@@ -617,7 +604,7 @@ export class TelegramT2VService {
       const stored =
         await this.pending
           .setPrompt(
-            this.chatId,
+            key,
             answer,
             {
               mode:
@@ -653,19 +640,13 @@ export class TelegramT2VService {
         "awaiting_confirmation" ||
       !state.prompt
     ) {
-      await this.pending
-        .remove(
-          this.chatId
-        );
+      await this.pending.remove(key);
 
       return this.noPendingHtml();
     }
 
     if (lower === "no") {
-      await this.pending
-        .remove(
-          this.chatId
-        );
+      await this.pending.remove(key);
 
       return (
         `<b>Generation aborted.</b>\n` +
@@ -684,11 +665,6 @@ export class TelegramT2VService {
 
       const settings =
         generation.settings;
-
-      await this.pending
-        .remove(
-          this.chatId
-        );
 
       const workflow =
         await this.workflowFor(
@@ -752,9 +728,11 @@ export class TelegramT2VService {
             }
           },
 
-          idempotencyKey:
-            null
+          ...(context ? { deliveryContext: { provider: "telegram" as const, chatId: context.chatId, threadId: context.threadId, userId: context.userId } } : {}),
+          idempotencyKey: context ? `telegram-${context.botId}-${context.updateId}` : null
         });
+
+      await this.pending.remove(key);
 
       return (
         `<b>Job</b> · ` +
@@ -774,11 +752,7 @@ export class TelegramT2VService {
       );
     }
 
-    const updated =
-      await this.pending
-        .incrementInvalid(
-          this.chatId
-        );
+    const updated = await this.pending.incrementInvalid(key);
 
     if (!updated) {
       return this.noPendingHtml();
@@ -788,10 +762,7 @@ export class TelegramT2VService {
       updated.invalidAttempts >=
       this.maxInvalid
     ) {
-      await this.pending
-        .remove(
-          this.chatId
-        );
+      await this.pending.remove(key);
 
       return (
         `<b>Generation aborted after 3 invalid responses.</b>\n` +

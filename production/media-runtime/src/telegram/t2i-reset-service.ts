@@ -21,6 +21,8 @@ import {
   profileTitle
 } from "./presentation.js";
 
+import type { TelegramConversationKey } from "./conversation.js";
+
 export class TelegramT2IResetService {
   constructor(
     private readonly chatId: string,
@@ -29,7 +31,7 @@ export class TelegramT2IResetService {
     private readonly pending: T2IResetPendingRepository
   ) {}
 
-  async begin() {
+  async begin(key: TelegramConversationKey | string = this.chatId) {
     const current = await this.profile.get();
 
     if (
@@ -40,7 +42,7 @@ export class TelegramT2IResetService {
     }
 
     await this.pending.begin(
-      this.chatId,
+      key,
       DEFAULT_T2I_SETTINGS,
       new Date(Date.now() + 60_000)
     );
@@ -52,28 +54,20 @@ export class TelegramT2IResetService {
     );
   }
 
-  async expireDue() {
-    return this.pending.expireDue(this.chatId);
-  }
-
-  async hasPending() {
-    await this.expireDue();
-    return (await this.pending.get(this.chatId)) !== null;
-  }
-
-  async abandonPendingForCommand() {
-    await this.pending.remove(this.chatId);
-  }
-
-  async handlePlainText(text: string): Promise<string | null> {
-    await this.pending.expireDue(this.chatId);
-    const state = await this.pending.get(this.chatId);
+  async expireDue(key: TelegramConversationKey | string = this.chatId) { return this.pending.expireDue(key); }
+  async hasPending(key: TelegramConversationKey | string = this.chatId) { await this.expireDue(key); return (await this.pending.get(key)) !== null; }
+  async abandonPendingForCommand(key: TelegramConversationKey | string = this.chatId) { await this.pending.remove(key); }
+  async setExpectedReply(key: TelegramConversationKey, messageId: string) { await this.pending.setExpectedReply(key, messageId); }
+  async acceptsGroupReply(key: TelegramConversationKey, replyToMessageId: string | null) { return (await this.pending.get(key))?.expected_reply_message_id === replyToMessageId && replyToMessageId !== null; }
+  async handlePlainText(text: string, key: TelegramConversationKey | string = this.chatId): Promise<string | null> {
+    await this.pending.expireDue(key);
+    const state = await this.pending.get(key);
     if (!state) return null;
 
     const answer = text.trim().toLowerCase();
 
     if (answer === "no") {
-      await this.pending.remove(this.chatId);
+      await this.pending.remove(key);
       return `<b><i>Reset cancelled.</i></b>`;
     }
 
@@ -83,13 +77,13 @@ export class TelegramT2IResetService {
         T2I_TOOL,
         normalizeStoredT2ISettings(state.target_settings)
       );
-      await this.pending.remove(this.chatId);
+      await this.pending.remove(key);
       return `<b><i>Settings reset.</i></b>`;
     }
 
-    const updated = await this.pending.incrementInvalid(this.chatId);
+    const updated = await this.pending.incrementInvalid(key);
     if (!updated || updated.invalid_attempts >= 3) {
-      await this.pending.remove(this.chatId);
+      await this.pending.remove(key);
       return `<b><i>Reset aborted after 3 invalid responses.</i></b>`;
     }
 

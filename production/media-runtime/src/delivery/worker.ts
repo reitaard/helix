@@ -23,6 +23,11 @@ import {
   TelegramDelivery
 } from "./telegram.js";
 
+import type {
+  TelegramDestination,
+  TelegramForumConfig
+} from "../telegram/context.js";
+
 import {
   formatBytes,
   formatDuration,
@@ -32,6 +37,30 @@ import {
 
 class PermanentDeliveryError
   extends Error {}
+
+export function parseDestination(
+  value: unknown,
+  tool: string,
+  privateChatId: string,
+  forum: TelegramForumConfig | null
+): TelegramDestination {
+  if (value === null) return { chatId: privateChatId, threadId: null };
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new PermanentDeliveryError("Invalid Telegram delivery destination");
+  }
+  const destination = value as Record<string, unknown>;
+  if (destination.provider !== "telegram" || typeof destination.chatId !== "string" || (destination.threadId !== null && typeof destination.threadId !== "string")) {
+    throw new PermanentDeliveryError("Invalid Telegram delivery destination");
+  }
+  const parsed = { chatId: destination.chatId, threadId: destination.threadId as string | null };
+  if (parsed.chatId === privateChatId && parsed.threadId === null) return parsed;
+  if (!forum || parsed.chatId !== forum.chatId) throw new PermanentDeliveryError("Unapproved Telegram delivery destination");
+  const expectedThread = tool === "image.t2i" ? forum.imageThreadId : tool === "video.t2v" ? forum.videoThreadId : null;
+  if (!expectedThread || parsed.threadId !== expectedThread) {
+    throw new PermanentDeliveryError("Telegram delivery destination does not match job tool");
+  }
+  return parsed;
+}
 
 function parseArtifact(
   value: unknown
@@ -104,6 +133,9 @@ export class DeliveryWorker {
 
     private readonly spoolDir:
       string,
+
+    private readonly privateChatId: string,
+    private readonly forum: TelegramForumConfig | null,
 
     private readonly intervalMs =
       3000,
@@ -189,6 +221,13 @@ export class DeliveryWorker {
               "Delivery attempt limit already exceeded"
             );
           }
+
+          const telegramDestination = parseDestination(
+            delivery.destination,
+            delivery.tool,
+            this.privateChatId,
+            this.forum
+          );
 
           const artifact =
             parseArtifact(
@@ -277,7 +316,8 @@ export class DeliveryWorker {
 
                   completedAt:
                     delivery.finishedAt
-                }
+                },
+                destination: telegramDestination
               });
 
           await this.deliveries

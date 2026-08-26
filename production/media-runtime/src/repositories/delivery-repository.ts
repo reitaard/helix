@@ -16,6 +16,8 @@ interface DeliveryRow {
   provider:
     string;
 
+  destination: unknown | null;
+
   status:
     string;
 
@@ -57,6 +59,8 @@ export interface ClaimedDelivery {
 
   provider:
     string;
+
+  destination: unknown | null;
 
   attemptCount:
     number;
@@ -303,6 +307,7 @@ export class DeliveryRepository {
             c.artifact_index,
             c.artifact,
             c.provider,
+            c.destination,
             c.status,
             c.attempt_count,
             c.metadata_message_id,
@@ -352,6 +357,9 @@ export class DeliveryRepository {
 
         provider:
           row.provider,
+
+        destination:
+          row.destination,
 
         attemptCount:
           row.attempt_count,

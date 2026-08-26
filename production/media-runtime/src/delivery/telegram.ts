@@ -2,6 +2,10 @@ import {
   openAsBlob
 } from "node:fs";
 
+import type {
+  TelegramDestination
+} from "../telegram/context.js";
+
 export interface TelegramMessageResult {
   messageId: string;
 }
@@ -180,7 +184,8 @@ export class TelegramDelivery {
   }
 
   async sendHtml(
-    html: string
+    html: string,
+    destination: TelegramDestination = { chatId: this.chatId, threadId: null }
   ): Promise<TelegramMessageResult> {
     const response =
       await fetch(
@@ -195,8 +200,8 @@ export class TelegramDelivery {
           },
           body:
             JSON.stringify({
-              chat_id:
-                this.chatId,
+              chat_id: destination.chatId,
+              ...(destination.threadId ? { message_thread_id: destination.threadId } : {}),
               text: html,
               parse_mode:
                 "HTML",
@@ -222,6 +227,7 @@ export class TelegramDelivery {
       filePath: string;
       filename: string;
       caption: string;
+      destination?: TelegramDestination;
     }
   ): Promise<TelegramMessageResult> {
     const blob =
@@ -236,10 +242,16 @@ export class TelegramDelivery {
     const form =
       new FormData();
 
+    const destination = input.destination ?? { chatId: this.chatId, threadId: null };
+
     form.set(
       "chat_id",
-      this.chatId
+      destination.chatId
     );
+
+    if (destination.threadId) {
+      form.set("message_thread_id", destination.threadId);
+    }
 
     form.set(
       "document",
@@ -289,6 +301,7 @@ export class TelegramDelivery {
       filePath: string;
       filename: string;
       metadata: MetadataInput;
+      destination?: TelegramDestination;
     }
   ): Promise<TelegramMessageResult> {
     return this.sendDocumentFile({
@@ -299,7 +312,8 @@ export class TelegramDelivery {
       caption:
         this.metadataHtml(
           input.metadata
-        )
+        ),
+      ...(input.destination ? { destination: input.destination } : {})
     });
   }
 }

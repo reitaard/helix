@@ -16,6 +16,10 @@ import {
   applyImageInput
 } from "./workflow-inputs.js";
 
+import type {
+  TelegramDestination
+} from "../telegram/context.js";
+
 export interface CreateMediaJobInput {
   tool: string;
 
@@ -35,6 +39,11 @@ export interface CreateMediaJobInput {
 
   generation?:
     Record<string, unknown>;
+
+  deliveryContext?: TelegramDestination & {
+    provider: "telegram";
+    userId: string;
+  };
 
   idempotencyKey:
     string | null;
@@ -314,6 +323,10 @@ export class JobService {
 
         idempotencyKey:
           input.idempotencyKey,
+
+        ...(input.deliveryContext
+          ? { deliveryContext: input.deliveryContext }
+          : {}),
 
         request: {
           tool:

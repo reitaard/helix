@@ -231,6 +231,7 @@ export class JobRepository {
       idempotencyKey:
         string | null;
 
+      deliveryContext?: unknown;
       request: unknown;
     }
   ) {
@@ -252,6 +253,7 @@ export class JobRepository {
           profile_id,
           adapter,
           idempotency_key,
+          delivery_context,
           request
         )
         VALUES (
@@ -262,7 +264,8 @@ export class JobRepository {
           $4,
           $5,
           $6,
-          $7::jsonb
+          $7::jsonb,
+          $8::jsonb
         )
         `,
         [
@@ -272,6 +275,7 @@ export class JobRepository {
           input.profileId,
           input.adapter,
           input.idempotencyKey,
+          input.deliveryContext ? JSON.stringify(input.deliveryContext) : null,
           JSON.stringify(
             input.request
           )
@@ -805,15 +809,16 @@ export class JobRepository {
     try {
       await client.query("BEGIN");
 
-      await client.query(
+      const locked = await client.query<{ delivery_context: unknown | null }>(
         `
-        SELECT id
+        SELECT id, delivery_context
         FROM media_jobs
         WHERE id = $1
         FOR UPDATE
         `,
         [id]
       );
+      const deliveryContext = locked.rows[0]?.delivery_context ?? null;
 
       const updated =
         await client.query(
@@ -895,13 +900,15 @@ export class JobRepository {
                 job_id,
                 artifact_index,
                 artifact,
-                provider
+                provider,
+                destination
               )
             VALUES (
               $1,
               $2,
               $3::jsonb,
-              $4
+              $4,
+              $5::jsonb
             )
             ON CONFLICT (
               job_id,
@@ -916,7 +923,8 @@ export class JobRepository {
               JSON.stringify(
                 artifact
               ),
-              provider
+              provider,
+              deliveryContext ? JSON.stringify(deliveryContext) : null
             ]
           );
         }

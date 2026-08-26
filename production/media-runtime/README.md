@@ -145,7 +145,15 @@ This avoids status flapping while preserving visibility into the event channel. 
 
 ## Telegram operator commands
 
-`TelegramCommandService` is a narrow operator surface inside `helix-runtime`. It uses Telegram `getUpdates` long polling and accepts messages only from the configured `HELIX_TELEGRAM_CHAT_ID`; other chats are ignored.
+`TelegramCommandService` is a narrow operator surface inside `helix-runtime`. It uses Telegram `getUpdates` long polling. `HELIX_TELEGRAM_CHAT_ID` remains the private operator route. An optional all-or-none forum configuration enables two production-only forum routes:
+
+```text
+HELIX_TELEGRAM_FORUM_CHAT_ID=-1004369617758
+HELIX_TELEGRAM_T2I_THREAD_ID=5
+HELIX_TELEGRAM_T2V_THREAD_ID=7
+```
+
+Forum traffic is accepted only from those exact supergroup topics; private operator commands and T2V developer settings remain unavailable there. Generated artifacts carry a durable Telegram destination and are returned to their originating topic after restart.
 
 Diagnostics and debugging remain read-only. The only write-capable media actions in this checkpoint are explicitly confirmed cancellation, native T2V generation, the Distilled-FP8 T2I workflow integration, and explicit artifact retrieval through Downloads.
 

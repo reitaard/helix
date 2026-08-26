@@ -47,6 +47,20 @@ import {
 } from "../workers/registry.js";
 
 import {
+  classifyTelegramRoute,
+  commandForBot
+} from "./context.js";
+
+import type {
+  TelegramDestination,
+  TelegramForumConfig
+} from "./context.js";
+
+import {
+  TelegramPollOffsetRepository
+} from "../repositories/telegram-poll-offset-repository.js";
+
+import {
   ComfyUpdateChecker
 } from "../workers/comfy-update-checker.js";
 
@@ -57,9 +71,14 @@ interface TelegramUpdate {
 
   message?: {
     text?: string;
-
+    message_id?: number | string;
+    message_thread_id?: number | string;
+    is_topic_message?: boolean;
+    reply_to_message?: { message_id?: number | string };
+    from?: { id: number | string };
     chat?: {
       id: number | string;
+      type?: string;
     };
   };
 }
@@ -476,6 +495,10 @@ export class TelegramCommandService {
   private offset:
     number | undefined;
 
+  private bot: { id: string; username: string } | null = null;
+
+  private replyDestination: TelegramDestination | null = null;
+
   constructor(
     private readonly botToken:
       string,
@@ -509,7 +532,10 @@ export class TelegramCommandService {
       TelegramT2VService,
 
     private readonly t2i:
-      TelegramT2IService
+      TelegramT2IService,
+
+    private readonly forum: TelegramForumConfig | null = null,
+    private readonly pollOffsets: TelegramPollOffsetRepository | null = null
   ) {}
 
   private endpoint(
@@ -597,18 +623,24 @@ export class TelegramCommandService {
   }
 
   private sendHtml(
-    html: string
+    html: string,
+    destination: TelegramDestination = this.replyDestination ?? { chatId: this.chatId, threadId: null },
+    forceReplyTo?: string
   ) {
     return this.postJson(
       "sendMessage",
       {
-        chat_id:
-          this.chatId,
+        chat_id: destination.chatId,
+        ...(destination.threadId ? { message_thread_id: destination.threadId } : {}),
         text: html,
         parse_mode: "HTML",
         link_preview_options: {
           is_disabled: true
-        }
+        },
+        ...(forceReplyTo ? {
+          reply_parameters: { message_id: forceReplyTo },
+          reply_markup: { force_reply: true, selective: true }
+        } : {})
       }
     );
   }
@@ -630,7 +662,14 @@ export class TelegramCommandService {
     );
   }
 
-  private async discardPending() {
+  private async initializeOffset() {
+    if (!this.bot) throw new Error("Telegram bot identity is not initialized");
+    const stored = await this.pollOffsets?.get(this.bot.id);
+    if (stored !== undefined && stored !== null) {
+      this.offset = stored;
+      return;
+    }
+
     const updates =
       await this.postJson<
         TelegramUpdate[]
@@ -649,10 +688,16 @@ export class TelegramCommandService {
     const latest =
       updates.at(-1);
 
-    if (latest) {
-      this.offset =
-        latest.update_id + 1;
+    this.offset = latest ? latest.update_id + 1 : 0;
+    await this.pollOffsets?.save(this.bot.id, this.offset);
+  }
+
+  private async resolveBotIdentity() {
+    const me = await this.postJson<{ id?: number | string; username?: string }>("getMe", {});
+    if ((typeof me.id !== "number" && typeof me.id !== "string") || !me.username) {
+      throw new Error("Telegram getMe did not return a bot ID and username");
     }
+    this.bot = { id: String(me.id), username: me.username };
   }
 
   private async poll() {
@@ -1513,24 +1558,46 @@ export class TelegramCommandService {
     const message =
       update.message;
 
-    if (
-      !message?.text ||
-      !message.chat
-    ) {
-      return;
-    }
+    if (!message?.text || !message.chat || !message.from || !message.message_id || !this.bot) return;
 
-    if (
-      String(message.chat.id) !==
-      this.chatId
-    ) {
-      return;
-    }
+    const route = classifyTelegramRoute(message, this.chatId, this.forum);
+    if (route.kind === "ignored") return;
 
-    const text =
-      message.text.trim();
+    const context = {
+      botId: this.bot.id,
+      botUsername: this.bot.username,
+      updateId: update.update_id,
+      chatId: String(message.chat.id),
+      threadId: message.message_thread_id === undefined ? null : String(message.message_thread_id),
+      userId: String(message.from.id),
+      messageId: String(message.message_id)
+    };
+    this.replyDestination = { chatId: context.chatId, threadId: context.threadId };
+    const text = message.text.trim();
 
     try {
+      if (route.kind === "forum_image" && !text.startsWith("/")) {
+        const key = { chatId: context.chatId, threadId: context.threadId ?? "0", userId: context.userId };
+        const replyTo = message.reply_to_message?.message_id === undefined ? null : String(message.reply_to_message.message_id);
+        if (!await this.t2i.acceptsGroupReply(key, replyTo)) return;
+        const response = await this.t2i.handlePlainText(text, key, context);
+        if (response) {
+          const sent = await this.sendHtml(response, undefined, context.messageId) as { message_id?: number | string };
+          if (sent.message_id !== undefined) await this.t2i.setExpectedReply(key, String(sent.message_id));
+        }
+        return;
+      }
+      if (route.kind === "forum_video" && !text.startsWith("/")) {
+        const key = { chatId: context.chatId, threadId: context.threadId ?? "0", userId: context.userId };
+        const replyTo = message.reply_to_message?.message_id === undefined ? null : String(message.reply_to_message.message_id);
+        if (!await this.t2v.acceptsGroupReply(key, replyTo)) return;
+        const response = await this.t2v.handlePlainText(text, key, context);
+        if (response) {
+          const sent = await this.sendHtml(response, undefined, context.messageId) as { message_id?: number | string };
+          if (sent.message_id !== undefined) await this.t2v.setExpectedReply(key, String(sent.message_id));
+        }
+        return;
+      }
       if (!text.startsWith("/")) {
         const pending = await Promise.all([
           this.cancel.hasPending(),
@@ -1591,17 +1658,45 @@ export class TelegramCommandService {
       const parts =
         text.split(/\s+/);
 
-      const rawCommand =
-        parts[0]
-          ?.toLowerCase() ??
-        "";
-
-      const command =
-        rawCommand
-          .split("@")[0];
+      const rawCommand = parts[0]?.toLowerCase() ?? "";
+      const command = commandForBot(rawCommand, this.bot.username);
+      if (!command) return;
 
       const args =
         parts.slice(1);
+
+      if (route.kind === "forum_image" || route.kind === "forum_video") {
+        const wanted = route.kind === "forum_image" ? "/t2i" : "/t2v";
+        const other = route.kind === "forum_image" ? "/t2v" : "/t2i";
+        if (command === other) {
+          await this.sendHtml(`<b><i>Use ${wanted} in the ${route.kind === "forum_image" ? "Video" : "Image"} Generation topic.</i></b>`);
+          return;
+        }
+        if (command !== wanted && command !== "/h" && command !== "/help") {
+          await this.sendHtml(`<b><i>This command is available in the private operator chat only.</i></b>`);
+          return;
+        }
+        if (route.kind === "forum_image") {
+          if (command === "/h" || command === "/help") {
+            await this.sendHtml(`${title("IMAGE GENERATION")}\n<code>/t2i</code> <b>-</b> <b>Generate image</b>\n<code>/t2i settings</code> <b>-</b> <b>Settings</b>`);
+          } else {
+            const key = { chatId: context.chatId, threadId: context.threadId ?? "0", userId: context.userId };
+            const response = await this.t2i.handleCommand(args, key);
+            const sent = await this.sendHtml(response, undefined, context.messageId) as { message_id?: number | string };
+            if (sent.message_id !== undefined) await this.t2i.setExpectedReply(key, String(sent.message_id));
+          }
+          return;
+        }
+        if (command === "/h" || command === "/help") {
+          await this.sendHtml(`${title("VIDEO GENERATION")}\n<code>/t2v</code> <b>-</b> <b>Generate video</b>\n<code>/t2v mode</code> <b>-</b> <b>Production mode</b>\n<code>/t2v settings</code> <b>-</b> <b>Settings</b>`);
+        } else {
+          const key = { chatId: context.chatId, threadId: context.threadId ?? "0", userId: context.userId };
+          const response = await this.t2v.handleCommand(args, key, false);
+          const sent = await this.sendHtml(response, undefined, context.messageId) as { message_id?: number | string };
+          if (sent.message_id !== undefined) await this.t2v.setExpectedReply(key, String(sent.message_id));
+        }
+        return;
+      }
 
       switch (command) {
         case "/st":
@@ -1710,24 +1805,25 @@ export class TelegramCommandService {
       }
     }
     catch (error) {
-      const detail =
-        error instanceof Error
-          ? error.message
-          : String(error);
-
-      await this.sendHtml(
-        `<code>HELIX • ERROR</code>\n` +
-        `<blockquote>${
-          escapeHtml(detail)
-        }</blockquote>`
-      );
+      if (route.kind === "forum_image" || route.kind === "forum_video") {
+        console.error("[telegram] forum command failed", error);
+        await this.sendHtml(`<b><i>Unable to process that request. Please try again.</i></b>`);
+      }
+      else {
+        const detail = error instanceof Error ? error.message : String(error);
+        await this.sendHtml(`<code>HELIX • ERROR</code>\n<blockquote>${escapeHtml(detail)}</blockquote>`);
+      }
+    }
+    finally {
+      this.replyDestination = null;
     }
   }
 
   private async run() {
     try {
+      await this.resolveBotIdentity();
       await this.clearCommands();
-      await this.discardPending();
+      await this.initializeOffset();
 
       console.log(
         "[telegram] command service ready"
@@ -1746,12 +1842,9 @@ export class TelegramCommandService {
           await this.poll();
 
         for (const update of updates) {
-          this.offset =
-            update.update_id + 1;
-
-          await this.handleUpdate(
-            update
-          );
+          await this.handleUpdate(update);
+          this.offset = update.update_id + 1;
+          if (this.bot) await this.pollOffsets?.save(this.bot.id, this.offset);
         }
       }
       catch (error) {

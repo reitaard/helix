@@ -75,6 +75,10 @@ import {
 } from "./repositories/t2i-settings-repository.js";
 
 import {
+  TelegramPollOffsetRepository
+} from "./repositories/telegram-poll-offset-repository.js";
+
+import {
   T2VModeService
 } from "./t2v/mode-service.js";
 
@@ -251,6 +255,9 @@ const t2vSettingsRepository =
     db
   );
 
+const telegramPollOffsetRepository =
+  new TelegramPollOffsetRepository(db);
+
 const t2vModeService =
   new T2VModeService(
     t2vSettingsRepository
@@ -413,7 +420,9 @@ const deliveryWorker =
         deliveryRepository,
         registry,
         telegramDelivery,
-        config.spoolDir
+        config.spoolDir,
+        telegramDelivery ? config.telegram?.chatId ?? "" : "",
+        config.telegram?.forum ?? null
       )
     : null;
 
@@ -472,7 +481,9 @@ const telegramCommandService =
         telegramDownloadsService,
         telegramCancelService,
         telegramT2VService,
-        telegramT2IService
+        telegramT2IService,
+        config.telegram.forum,
+        telegramPollOffsetRepository
       )
     : null;
 
