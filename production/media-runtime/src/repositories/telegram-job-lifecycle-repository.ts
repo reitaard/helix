@@ -195,7 +195,15 @@ export class TelegramJobLifecycleRepository {
     const result =
       await this.db.query<LifecycleRow>(
         `${SELECT_LIFECYCLE}
-        WHERE l.presentation_state = 'active'
+        WHERE
+          l.presentation_state = 'active'
+          AND COALESCE(
+            l.last_job_status,
+            ''
+          ) NOT IN (
+            'delivery_retrying',
+            'delivery_failed'
+          )
         ORDER BY l.updated_at, l.job_id
         LIMIT $1
         `,
