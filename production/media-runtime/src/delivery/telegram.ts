@@ -285,6 +285,28 @@ export class TelegramDelivery {
     );
   }
 
+  async deleteMessage(
+    messageId: string,
+    destination: TelegramDestination = { chatId: this.chatId, threadId: null }
+  ): Promise<void> {
+    const response = await fetch(
+      this.endpoint("deleteMessage"),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          chat_id: destination.chatId,
+          message_id: telegramMessageId(messageId)
+        }),
+        signal: AbortSignal.timeout(30_000)
+      }
+    );
+    const body = await response.json() as { ok?: boolean; description?: string };
+    if (body.ok !== true) {
+      throw new Error(`Telegram deleteMessage failed: ${body.description ?? "unknown Telegram error"}`);
+    }
+  }
+
   async sendHtmlWithInlineKeyboard(
     html: string,
     destination: TelegramDestination,

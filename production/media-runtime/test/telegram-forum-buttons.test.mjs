@@ -19,6 +19,7 @@ function forumT2I() {
     updatedAt: "2026-08-26T13:00:00.000Z"
   };
   let sent = null;
+  const deleted = [];
 
   const pending = {
     async expireDue() {},
@@ -41,6 +42,9 @@ function forumT2I() {
     async sendHtmlWithInlineKeyboard(html, destination, buttons) {
       sent = { html, destination, buttons };
       return { messageId: "77" };
+    },
+    async deleteMessage(messageId, destination) {
+      deleted.push({ messageId, destination });
     }
   };
   const reset = {
@@ -57,11 +61,12 @@ function forumT2I() {
     {}, reset
   );
 
-  return { service, state, getSent: () => sent };
+  return { service, state, getSent: () => sent, deleted };
 }
 
-test("forum T2I confirmation uses Generate and Cancel buttons without text instructions", async () => {
+test("forum T2I confirmation uses buttons and removes the consumed ForceReply card", async () => {
   const fixture = forumT2I();
+  fixture.state.expectedReplyMessageId = "75";
   await fixture.service.handlePlainText(
     "premium studio perfume bottle",
     { chatId: "-1004369617758", threadId: "5", userId: "5759927190" },
@@ -86,6 +91,10 @@ test("forum T2I confirmation uses Generate and Cancel buttons without text instr
   assert.doesNotMatch(sent.html, /Type/);
   assert.equal(fixture.state.confirmationMessageId, "77");
   assert.equal(fixture.state.expectedReplyMessageId, "77");
+  assert.deepEqual(fixture.deleted, [{
+    messageId: "75",
+    destination: { chatId: "-1004369617758", threadId: "5" }
+  }]);
 });
 
 test("forum plain-text replies are accepted only while capturing a prompt", async () => {

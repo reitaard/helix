@@ -107,7 +107,7 @@ CLIP Text Encode (Positive) · <b><i>Running (15s)</i></b>
 
 ### Forum generation interaction
 
-In Image and Video forum topics, selective ForceReply is used only by bare `/t2i` and `/t2v` commands to capture the free-text generation prompt. Image generation also accepts `/t2i <prompt>` directly and proceeds to confirmation without ForceReply. Settings panels, setting changes, modes, help, usage, and result/toast messages must not force a reply.
+In Image and Video forum topics, selective ForceReply is used only by bare `/t2i` and `/t2v` commands to capture the free-text generation prompt. Delete the consumed ForceReply card immediately after prompt capture so Telegram cannot reactivate it when the user switches topics; confirmation buttons then own the interaction. Image generation also accepts `/t2i <prompt>` directly and proceeds to confirmation without ForceReply. Settings panels, setting changes, modes, help, usage, and result/toast messages must not force a reply.
 
 After forum prompt capture, use inline `[ Generate ] [ Cancel ]` buttons. Forum reset confirmation uses `[ Reset ] [ Cancel ]`. Bind callbacks to the originating `(chatId, threadId, userId)` and exact confirmation message, remove the keyboard after the first valid action, and reject expired, repeated, wrong-user, wrong-topic, and mismatched-action callbacks. Private operator chat retains direct `yes` / `no` text confirmation without buttons.
 

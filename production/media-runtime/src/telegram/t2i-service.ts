@@ -283,6 +283,7 @@ export class TelegramT2IService {
     if (!state) return lower === "yes" || lower === "no" ? this.noPendingHtml() : null;
 
     if (state.phase === "awaiting_prompt") {
+      const consumedForceReplyMessageId = state.expectedReplyMessageId;
       if (!answer) return `<b><i>Prompt cannot be empty.</i></b>`;
       if (answer.length > this.maxPromptLength) return `<b><i>Prompt is too long.</i></b>`;
       const settings = resolveT2ISettings(await this.profile.get());
@@ -318,6 +319,19 @@ export class TelegramT2IService {
       }
 
       await this.pending.setExpectedReply(key, confirmation.messageId);
+
+      if (isForum && consumedForceReplyMessageId) {
+        try {
+          await this.telegram.deleteMessage(
+            consumedForceReplyMessageId,
+            destination
+          );
+        }
+        catch (error) {
+          console.error("[telegram] unable to remove consumed T2I ForceReply", error);
+        }
+      }
+
       return null;
     }
 

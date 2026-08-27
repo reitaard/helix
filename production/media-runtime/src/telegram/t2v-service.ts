@@ -482,6 +482,7 @@ export class TelegramT2VService {
     }
 
     if (state.phase === "awaiting_prompt") {
+      const consumedForceReplyMessageId = state.expectedReplyMessageId;
       if (!answer) {
         return `<b><i>Prompt cannot be empty.</i></b>`;
       }
@@ -545,6 +546,19 @@ export class TelegramT2VService {
       }
 
       await this.pending.setExpectedReply(key, confirmation.messageId);
+
+      if (isForum && consumedForceReplyMessageId) {
+        try {
+          await this.telegram.deleteMessage(
+            consumedForceReplyMessageId,
+            destination
+          );
+        }
+        catch (error) {
+          console.error("[telegram] unable to remove consumed T2V ForceReply", error);
+        }
+      }
+
       return null;
     }
 
