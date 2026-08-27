@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   classifyTelegramRoute,
-  commandForBot
+  commandForBot,
+  isDirectT2IPrompt
 } from "../dist/telegram/context.js";
 
 const forum = {
@@ -39,4 +40,12 @@ test("Telegram command suffixes only accept this bot", () => {
   assert.equal(commandForBot("/t2i@christolanbot prompt", "christolanbot"), "/t2i");
   assert.equal(commandForBot("/t2i@otherbot prompt", "christolanbot"), null);
   assert.equal(commandForBot("prompt", "christolanbot"), null);
+});
+
+test("forum T2I distinguishes direct prompts from control commands", () => {
+  assert.equal(isDirectT2IPrompt([]), false);
+  assert.equal(isDirectT2IPrompt(["settings"]), false);
+  assert.equal(isDirectT2IPrompt(["set", "aspect", "16:9"]), false);
+  assert.equal(isDirectT2IPrompt(["reset"]), false);
+  assert.equal(isDirectT2IPrompt(["A", "widescreen", "landscape"]), true);
 });

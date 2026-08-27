@@ -48,7 +48,8 @@ import {
 
 import {
   classifyTelegramRoute,
-  commandForBot
+  commandForBot,
+  isDirectT2IPrompt
 } from "./context.js";
 
 import type {
@@ -1828,6 +1829,11 @@ export class TelegramCommandService {
             await this.sendHtml(`${title("IMAGE GENERATION")}\n<code>/t2i</code> <b>-</b> <b>Generate image</b>\n<code>/t2i settings</code> <b>-</b> <b>Settings</b>`);
           } else {
             const key = { chatId: context.chatId, threadId: context.threadId ?? "0", userId: context.userId };
+            if (isDirectT2IPrompt(args)) {
+              await this.t2i.begin(key);
+              await this.t2i.handlePlainText(args.join(" "), key, context);
+              return;
+            }
             const response = await this.t2i.handleCommand(args, key, true);
             const promptInput = args.length === 0;
             const resetConfirmation = args[0]?.toLowerCase() === "reset" && args.length === 1 && await this.t2i.hasPending(key);

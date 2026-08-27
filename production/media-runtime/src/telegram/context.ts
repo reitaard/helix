@@ -58,6 +58,18 @@ export function commandForBot(text: string, botUsername: string): string | null 
   return command ?? null;
 }
 
+const T2I_CONTROL_ACTIONS = new Set([
+  "reset",
+  "settings",
+  "setting",
+  "set",
+  "s"
+]);
+
+export function isDirectT2IPrompt(args: string[]): boolean {
+  return args.length > 0 && !T2I_CONTROL_ACTIONS.has(args[0]!.toLowerCase());
+}
+
 export function isReplyTo(message: TelegramMessageLike, expectedMessageId: string | null): boolean {
   return expectedMessageId !== null && String(message.reply_to_message?.message_id ?? "") === expectedMessageId;
 }
