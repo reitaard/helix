@@ -1592,8 +1592,7 @@ export class TelegramCommandService {
   ) {
     await this.postJson("editMessageReplyMarkup", {
       chat_id: chatId,
-      message_id: messageId,
-      reply_markup: { inline_keyboard: [] }
+      message_id: messageId
     });
   }
 
@@ -1607,8 +1606,7 @@ export class TelegramCommandService {
       message_id: messageId,
       text: html,
       parse_mode: "HTML",
-      link_preview_options: { is_disabled: true },
-      reply_markup: { inline_keyboard: [] }
+      link_preview_options: { is_disabled: true }
     });
   }
 
