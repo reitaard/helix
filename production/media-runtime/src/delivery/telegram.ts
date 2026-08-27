@@ -243,8 +243,7 @@ export class TelegramDelivery {
 
   async sendHtml(
     html: string,
-    destination: TelegramDestination = { chatId: this.chatId, threadId: null },
-    forceReplyTo?: string
+    destination: TelegramDestination = { chatId: this.chatId, threadId: null }
   ): Promise<TelegramMessageResult> {
     const response =
       await fetch(
@@ -266,11 +265,7 @@ export class TelegramDelivery {
                 "HTML",
               link_preview_options: {
                 is_disabled: true
-              },
-              ...(forceReplyTo ? {
-                reply_parameters: { message_id: telegramMessageId(forceReplyTo) },
-                reply_markup: { force_reply: true, selective: true }
-              } : {})
+              }
             }),
           signal:
             AbortSignal.timeout(

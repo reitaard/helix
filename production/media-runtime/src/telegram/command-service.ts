@@ -644,7 +644,7 @@ export class TelegramCommandService {
   private sendHtml(
     html: string,
     destination: TelegramDestination = this.replyDestination ?? { chatId: this.chatId, threadId: null },
-    forceReplyTo?: string,
+    replyTo?: string,
     inlineKeyboard?: Array<Array<{ text: string; callback_data: string }>>
   ) {
     return this.postJson(
@@ -657,10 +657,10 @@ export class TelegramCommandService {
         link_preview_options: {
           is_disabled: true
         },
-        ...(forceReplyTo ? {
-          reply_parameters: { message_id: forceReplyTo },
-          reply_markup: { force_reply: true, selective: true }
-        } : inlineKeyboard ? {
+        ...(replyTo ? {
+          reply_parameters: { message_id: replyTo }
+        } : {}),
+        ...(inlineKeyboard ? {
           reply_markup: { inline_keyboard: inlineKeyboard }
         } : {})
       }
@@ -1736,7 +1736,7 @@ export class TelegramCommandService {
           String(repliedMessage?.from?.id ?? "") === this.bot.id &&
           repliedMessage?.text?.includes("Send the generation prompt.") === true;
         const accepted = await this.t2i.acceptsGroupReply(key, replyTo, repliesToPromptCard);
-        console.info("[telegram] T2I ForceReply", {
+        console.info("[telegram] T2I prompt capture", {
           updateId: update.update_id,
           chatId: context.chatId,
           threadId: context.threadId,
@@ -1843,10 +1843,11 @@ export class TelegramCommandService {
           return;
         }
         if (route.kind === "forum_image") {
+          const key = { chatId: context.chatId, threadId: context.threadId ?? "0", userId: context.userId };
+          await this.t2i.abandonPendingForCommand(key, this.replyDestination ?? undefined);
           if (command === "/h" || command === "/help") {
             await this.sendHtml(`${title("IMAGE GENERATION")}\n<code>/t2i</code> <b>-</b> <b>Generate image</b>\n<code>/t2i settings</code> <b>-</b> <b>Settings</b>`);
           } else {
-            const key = { chatId: context.chatId, threadId: context.threadId ?? "0", userId: context.userId };
             if (isDirectT2IPrompt(args)) {
               await this.t2i.begin(key);
               await this.t2i.handlePlainText(args.join(" "), key, context);
@@ -1870,10 +1871,11 @@ export class TelegramCommandService {
           }
           return;
         }
+        const key = { chatId: context.chatId, threadId: context.threadId ?? "0", userId: context.userId };
+        await this.t2v.abandonPendingForCommand(key, this.replyDestination ?? undefined);
         if (command === "/h" || command === "/help") {
           await this.sendHtml(`${title("VIDEO GENERATION")}\n<code>/t2v</code> <b>-</b> <b>Generate video</b>\n<code>/t2v mode</code> <b>-</b> <b>Production mode</b>\n<code>/t2v settings</code> <b>-</b> <b>Settings</b>`);
         } else {
-          const key = { chatId: context.chatId, threadId: context.threadId ?? "0", userId: context.userId };
           const response = await this.t2v.handleCommand(args, key, false, true);
           const promptInput = args.length === 0;
           const resetConfirmation = args[0]?.toLowerCase() === "reset" && args.length === 1 && await this.t2v.hasPending(key);

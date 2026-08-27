@@ -64,7 +64,7 @@ function forumT2I() {
   return { service, state, getSent: () => sent, deleted };
 }
 
-test("forum T2I confirmation uses buttons and removes the consumed ForceReply card", async () => {
+test("forum T2I confirmation uses buttons and removes the consumed prompt card", async () => {
   const fixture = forumT2I();
   fixture.state.expectedReplyMessageId = "75";
   await fixture.service.handlePlainText(
@@ -97,13 +97,13 @@ test("forum T2I confirmation uses buttons and removes the consumed ForceReply ca
   }]);
 });
 
-test("forum plain-text replies are accepted only while capturing a prompt", async () => {
+test("forum next-message capture accepts plain text without requiring a reply", async () => {
   const fixture = forumT2I();
   fixture.state.expectedReplyMessageId = "76";
   const key = { chatId: "-1004369617758", threadId: "5", userId: "5759927190" };
   assert.equal(await fixture.service.acceptsGroupReply(key, "76"), true);
-  assert.equal(await fixture.service.acceptsGroupReply(key, null), false);
-  assert.equal(await fixture.service.acceptsGroupReply(key, "unexpected", true), true);
+  assert.equal(await fixture.service.acceptsGroupReply(key, null), true);
+  assert.equal(await fixture.service.acceptsGroupReply(key, "unexpected", false), true);
 
   fixture.state.phase = "awaiting_confirmation";
   fixture.state.confirmationMessageId = "77";

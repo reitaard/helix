@@ -356,18 +356,30 @@ export class TelegramT2VService {
     return (await this.pending.get(key)) !== null;
   }
 
-  async abandonPendingForCommand(key: TelegramConversationKey | string = this.chatId) {
+  async abandonPendingForCommand(
+    key: TelegramConversationKey | string = this.chatId,
+    destination?: { chatId: string; threadId: string | null }
+  ) {
+    const state = await this.pending.get(key);
     await Promise.all([this.pending.remove(key), this.reset.abandonPendingForCommand(key)]);
+
+    if (destination && state?.phase === "awaiting_prompt" && state.expectedReplyMessageId) {
+      try {
+        await this.telegram.deleteMessage(state.expectedReplyMessageId, destination);
+      }
+      catch (error) {
+        console.error("[telegram] unable to remove abandoned T2V prompt card", error);
+      }
+    }
   }
 
   async setExpectedReply(key: TelegramConversationKey, messageId: string) {
     await Promise.all([this.pending.setExpectedReply(key, messageId), this.reset.setExpectedReply(key, messageId)]);
   }
 
-  async acceptsGroupReply(key: TelegramConversationKey, replyToMessageId: string | null) {
-    if (!replyToMessageId) return false;
+  async acceptsGroupReply(key: TelegramConversationKey, _replyToMessageId: string | null) {
     const state = await this.pending.get(key);
-    return state?.phase === "awaiting_prompt" && state.expectedReplyMessageId === replyToMessageId;
+    return state?.phase === "awaiting_prompt";
   }
 
   async acceptsGroupCallback(
@@ -482,7 +494,7 @@ export class TelegramT2VService {
     }
 
     if (state.phase === "awaiting_prompt") {
-      const consumedForceReplyMessageId = state.expectedReplyMessageId;
+      const consumedPromptCardMessageId = state.expectedReplyMessageId;
       if (!answer) {
         return `<b><i>Prompt cannot be empty.</i></b>`;
       }
@@ -547,15 +559,15 @@ export class TelegramT2VService {
 
       await this.pending.setExpectedReply(key, confirmation.messageId);
 
-      if (isForum && consumedForceReplyMessageId) {
+      if (isForum && consumedPromptCardMessageId) {
         try {
           await this.telegram.deleteMessage(
-            consumedForceReplyMessageId,
+            consumedPromptCardMessageId,
             destination
           );
         }
         catch (error) {
-          console.error("[telegram] unable to remove consumed T2V ForceReply", error);
+          console.error("[telegram] unable to remove consumed T2V prompt card", error);
         }
       }
 

@@ -82,6 +82,35 @@ test("progress status sweep excludes delivery-owned retry and terminal-delivery 
   );
 });
 
+test("Telegram message transport never emits ForceReply markup", async () => {
+  const originalFetch = globalThis.fetch;
+  let body = null;
+
+  globalThis.fetch = async (_url, options) => {
+    body = JSON.parse(String(options?.body ?? "{}"));
+    return new Response(
+      JSON.stringify({ ok: true, result: { message_id: 12 } }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  };
+
+  try {
+    const telegram = new TelegramDelivery("test-token", "123");
+    await telegram.sendHtml("<b>Send the generation prompt.</b>", {
+      chatId: "-1004369617758",
+      threadId: "5"
+    });
+
+    assert.equal(body.chat_id, "-1004369617758");
+    assert.equal(body.message_thread_id, "5");
+    assert.equal(body.reply_markup, undefined);
+    assert.doesNotMatch(JSON.stringify(body), /force_reply|selective/);
+  }
+  finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Telegram text edits use the original message id and tolerate idempotent retry", async () => {
   const originalFetch = globalThis.fetch;
   let body = null;

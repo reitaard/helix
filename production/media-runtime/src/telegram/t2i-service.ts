@@ -217,9 +217,22 @@ export class TelegramT2IService {
     return (await this.pending.get(key)) !== null;
   }
 
-  async abandonPendingForCommand(key: TelegramConversationKey | string = this.chatId) {
+  async abandonPendingForCommand(
+    key: TelegramConversationKey | string = this.chatId,
+    destination?: { chatId: string; threadId: string | null }
+  ) {
+    const state = await this.pending.get(key);
     await this.pending.remove(key);
     await this.reset.abandonPendingForCommand(key);
+
+    if (destination && state?.phase === "awaiting_prompt" && state.expectedReplyMessageId) {
+      try {
+        await this.telegram.deleteMessage(state.expectedReplyMessageId, destination);
+      }
+      catch (error) {
+        console.error("[telegram] unable to remove abandoned T2I prompt card", error);
+      }
+    }
   }
 
   async setExpectedReply(key: TelegramConversationKey, messageId: string) {
@@ -231,14 +244,11 @@ export class TelegramT2IService {
 
   async acceptsGroupReply(
     key: TelegramConversationKey,
-    replyToMessageId: string | null,
-    repliesToPromptCard = false
+    _replyToMessageId: string | null,
+    _repliesToPromptCard = false
   ) {
     const state = await this.pending.get(key);
-    return state?.phase === "awaiting_prompt" && (
-      (replyToMessageId !== null && state.expectedReplyMessageId === replyToMessageId) ||
-      repliesToPromptCard
-    );
+    return state?.phase === "awaiting_prompt";
   }
 
   async acceptsGroupCallback(
@@ -283,7 +293,7 @@ export class TelegramT2IService {
     if (!state) return lower === "yes" || lower === "no" ? this.noPendingHtml() : null;
 
     if (state.phase === "awaiting_prompt") {
-      const consumedForceReplyMessageId = state.expectedReplyMessageId;
+      const consumedPromptCardMessageId = state.expectedReplyMessageId;
       if (!answer) return `<b><i>Prompt cannot be empty.</i></b>`;
       if (answer.length > this.maxPromptLength) return `<b><i>Prompt is too long.</i></b>`;
       const settings = resolveT2ISettings(await this.profile.get());
@@ -320,15 +330,15 @@ export class TelegramT2IService {
 
       await this.pending.setExpectedReply(key, confirmation.messageId);
 
-      if (isForum && consumedForceReplyMessageId) {
+      if (isForum && consumedPromptCardMessageId) {
         try {
           await this.telegram.deleteMessage(
-            consumedForceReplyMessageId,
+            consumedPromptCardMessageId,
             destination
           );
         }
         catch (error) {
-          console.error("[telegram] unable to remove consumed T2I ForceReply", error);
+          console.error("[telegram] unable to remove consumed T2I prompt card", error);
         }
       }
 
