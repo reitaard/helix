@@ -229,10 +229,16 @@ export class TelegramT2IService {
     ]);
   }
 
-  async acceptsGroupReply(key: TelegramConversationKey, replyToMessageId: string | null) {
-    if (!replyToMessageId) return false;
+  async acceptsGroupReply(
+    key: TelegramConversationKey,
+    replyToMessageId: string | null,
+    repliesToPromptCard = false
+  ) {
     const state = await this.pending.get(key);
-    return state?.phase === "awaiting_prompt" && state.expectedReplyMessageId === replyToMessageId;
+    return state?.phase === "awaiting_prompt" && (
+      (replyToMessageId !== null && state.expectedReplyMessageId === replyToMessageId) ||
+      repliesToPromptCard
+    );
   }
 
   async acceptsGroupCallback(

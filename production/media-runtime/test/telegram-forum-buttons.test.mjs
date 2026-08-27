@@ -91,13 +91,10 @@ test("forum T2I confirmation uses Generate and Cancel buttons without text instr
 test("forum plain-text replies are accepted only while capturing a prompt", async () => {
   const fixture = forumT2I();
   fixture.state.expectedReplyMessageId = "76";
-  assert.equal(
-    await fixture.service.acceptsGroupReply(
-      { chatId: "-1004369617758", threadId: "5", userId: "5759927190" },
-      "76"
-    ),
-    true
-  );
+  const key = { chatId: "-1004369617758", threadId: "5", userId: "5759927190" };
+  assert.equal(await fixture.service.acceptsGroupReply(key, "76"), true);
+  assert.equal(await fixture.service.acceptsGroupReply(key, null), false);
+  assert.equal(await fixture.service.acceptsGroupReply(key, "unexpected", true), true);
 
   fixture.state.phase = "awaiting_confirmation";
   fixture.state.confirmationMessageId = "77";

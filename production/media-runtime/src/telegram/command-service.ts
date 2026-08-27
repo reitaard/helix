@@ -89,7 +89,11 @@ interface TelegramUpdate {
     message_id?: number | string;
     message_thread_id?: number | string;
     is_topic_message?: boolean;
-    reply_to_message?: { message_id?: number | string };
+    reply_to_message?: {
+      message_id?: number | string;
+      text?: string;
+      from?: { id: number | string };
+    };
     from?: { id: number | string };
     chat?: {
       id: number | string;
@@ -1726,8 +1730,22 @@ export class TelegramCommandService {
     try {
       if (route.kind === "forum_image" && !text.startsWith("/")) {
         const key = { chatId: context.chatId, threadId: context.threadId ?? "0", userId: context.userId };
-        const replyTo = message.reply_to_message?.message_id === undefined ? null : String(message.reply_to_message.message_id);
-        if (!await this.t2i.acceptsGroupReply(key, replyTo)) return;
+        const repliedMessage = message.reply_to_message;
+        const replyTo = repliedMessage?.message_id === undefined ? null : String(repliedMessage.message_id);
+        const repliesToPromptCard =
+          String(repliedMessage?.from?.id ?? "") === this.bot.id &&
+          repliedMessage?.text?.includes("Send the generation prompt.") === true;
+        const accepted = await this.t2i.acceptsGroupReply(key, replyTo, repliesToPromptCard);
+        console.info("[telegram] T2I ForceReply", {
+          updateId: update.update_id,
+          chatId: context.chatId,
+          threadId: context.threadId,
+          userId: context.userId,
+          replyTo,
+          repliesToPromptCard,
+          accepted
+        });
+        if (!accepted) return;
         const response = await this.t2i.handlePlainText(text, key, context);
         if (response) {
           const sent = await this.sendHtml(response, undefined, context.messageId) as { message_id?: number | string };
