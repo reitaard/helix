@@ -305,12 +305,12 @@ There is one physical worker, `helix-rtx4060-01`, with one RTX 4060, Comfy
 endpoint, adapter, and queue; physical GPU concurrency remains one. It now has
 logical Production Profiles: `nolan` / Christopher Nolan for validated LTX
 video tools, and `leibovitz` / Annie Leibovitz for validated `image.t2i`.
-Leibovitz is not a second worker. FLUX.2 Klein 4B Distilled FP8 has completed
-successful RTX 4060 Telegram generation and original-file delivery. The
-runtime wires `/t2i` to the supplied
-Distilled API workflow only: semantic aspect/seed settings resolve to the
-provisional V1 dimensions, and the binder changes only prompt, width, height,
-and seed. `HELIX_T2I_WORKFLOW_PATH` defaults to
-`/app/workflows/image_flux2_klein_4b_distilled_fp8_t2i_v2.api.json`.
-The workflow is installed and migration `0010` is applied. Base/model
+Leibovitz is not a second worker. The prior FLUX.2 Klein 4B Distilled FP8
+workflow completed successful RTX 4060 Telegram generation and original-file
+delivery and remains installed for rollback. The runtime now wires `/t2i` to
+the FLUX.2 Klein 4B INT8 W8A8 API workflow candidate: semantic aspect/seed
+settings resolve to the provisional V1 dimensions, and the binder changes only
+prompt, width, height, and seed. `HELIX_T2I_WORKFLOW_PATH` defaults to
+`/app/workflows/image_flux2_klein_4b_int8_w8a8_t2i_v1.api.json`. The workflow
+is installed for live validation and migration `0010` is applied. Model
 switching and T2I modes remain deferred.

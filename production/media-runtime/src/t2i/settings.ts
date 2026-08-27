@@ -6,8 +6,8 @@ import {
 
 export const T2I_PROFILE_ID = "leibovitz";
 export const T2I_TOOL = "image.t2i";
-export const T2I_MODEL = "FLUX.2 Klein 4B Distilled FP8";
-export const T2I_WORKFLOW_VARIANT = "klein4b-distilled-fp8-v1";
+export const T2I_MODEL = "FLUX.2 Klein 4B INT8 W8A8";
+export const T2I_WORKFLOW_VARIANT = "klein4b-int8-w8a8-v1";
 
 export const T2I_ASPECT_OPTIONS = [
   { ratio: "1:1", label: "Square", width: 1024, height: 1024 },

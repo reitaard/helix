@@ -20,7 +20,7 @@ Experiment Engine
 
 Production/generation continues as a separate workstream and will connect through stable briefs/contracts rather than shaping the Intelligence or Director architecture.
 
-The current Production checkpoint includes a durable ComfyUI execution runtime, PostgreSQL job/delivery state, sequential numeric Job references, 20-item paginated Jobs and live Downloads views, original-file Telegram delivery, operator diagnostics, durable operational alerts, complete job-event debugging, guarded terminal-style job cancellation, and validated Telegram generation paths for native LTX 2.5 T2V and FLUX.2 Klein 4B Distilled T2I with pre-submit confirmation.
+The current Production checkpoint includes a durable ComfyUI execution runtime, PostgreSQL job/delivery state, sequential numeric Job references, 20-item paginated Jobs and live Downloads views, original-file Telegram delivery, operator diagnostics, durable operational alerts, complete job-event debugging, guarded terminal-style job cancellation, and a validated Telegram generation path for native LTX 2.5 T2V and an active FLUX.2 Klein 4B INT8 W8A8 T2I candidate with pre-submit confirmation.
 
 T2V is no longer prompt-only. `Christopher Nolan / video.t2v` has a persisted semantic settings layer with Core controls for aspect, quality, duration and prompt enhancement, plus explicit `-dev` access to FPS, Stage 1/2 seeds, negative prompt, megapixel override, sampler and guidance. Durable reset confirmation can restore Core defaults or the full exposed T2V baseline.
 

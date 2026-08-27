@@ -189,7 +189,7 @@ export function renderJobGeneration(
     `<b>Workflow</b> · <i>${escapeHtml(
       workflowVariant ??
       (kind === "t2i"
-        ? "FLUX.2 Klein 4B Distilled"
+        ? "FLUX.2 Klein 4B INT8 W8A8"
         : "LTX 2.5 T2V")
     )}</i>`
   );

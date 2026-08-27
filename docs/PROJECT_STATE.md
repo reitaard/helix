@@ -336,7 +336,7 @@ Mode overlays never rewrite stored manual settings.
 
 ## T2I Production checkpoint
 
-Annie Leibovitz owns the validated narrow `image.t2i` path using FLUX.2 Klein 4B Distilled FP8.
+Annie Leibovitz owns the narrow `image.t2i` path. FLUX.2 Klein 4B INT8 W8A8 is active for live validation; the prior Distilled FP8 workflow remains installed for rollback.
 
 V1 deliberately exposes only:
 

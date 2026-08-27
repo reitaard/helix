@@ -63,7 +63,7 @@ Raw ComfyUI is not exposed publicly.
 - validated capabilities: `video.i2v`, `video.t2v`, `image.t2i`
 - max concurrent GPU jobs: `1`
 
-LTX `2.3` and `2.5` model-family assets are available. LTX `2.5` is the validated standalone video execution path. FLUX.2 Klein 4B Distilled FP8 is the validated narrow T2I path.
+LTX `2.3` and `2.5` model-family assets are available. LTX `2.5` is the validated standalone video execution path. FLUX.2 Klein 4B INT8 W8A8 is the active narrow T2I candidate; the prior Distilled FP8 workflow remains available for rollback until live validation completes.
 
 ## Worker filesystem
 

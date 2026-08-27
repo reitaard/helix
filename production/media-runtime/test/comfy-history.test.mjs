@@ -223,6 +223,25 @@ test("parseComfyHistory rejects malformed top-level history", () => {
   );
 });
 
+test("inspectComfyWorkflow identifies the native FLUX.2 Klein INT8 W8A8 loader", () => {
+  const workflow = {
+    "76": node("PrimitiveStringMultiline", { value: "An editorial portrait." }),
+    "77:87": node("OTUNetLoaderW8A8", {
+      unet_name: "flux-2-klein-4b-int8.safetensors",
+      model_type: "flux2",
+      on_the_fly_quantization: false,
+      enable_convrot: false,
+      lora_mode: "None"
+    })
+  };
+
+  const result = inspectComfyWorkflow(workflow);
+
+  assert.equal(result.workflow, "FLUX.2 Klein 4B INT8 W8A8");
+  assert.equal(result.prompt, "An editorial portrait.");
+  assert.equal(result.promptConfidence, "known");
+});
+
 test("inspectComfyWorkflow does not mislabel unknown node ids", () => {
   const workflow = {
     "76": node("OtherNode", { value: "not a FLUX prompt" }),

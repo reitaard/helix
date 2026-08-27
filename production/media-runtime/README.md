@@ -279,7 +279,7 @@ Annie Leibovitz
 └── image.t2i
 ```
 
-The current T2V surface includes persisted semantic settings plus Manual/Fast/Quality modes. The current T2I surface intentionally remains narrow: prompt, aspect and seed around the validated FLUX.2 Klein 4B Distilled FP8 workflow.
+The current T2V surface includes persisted semantic settings plus Manual/Fast/Quality modes. The current T2I surface intentionally remains narrow: prompt, aspect and seed around the active FLUX.2 Klein 4B INT8 W8A8 workflow candidate.
 
 ## Durable Telegram output delivery
 

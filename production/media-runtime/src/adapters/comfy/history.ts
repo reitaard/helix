@@ -560,8 +560,18 @@ export function inspectComfyWorkflow(
       )
     );
 
+    const int8Model = stringValue(
+      nodeInputs(
+        workflow,
+        "77:87",
+        "OTUNetLoaderW8A8"
+      )?.unet_name
+    );
+
     return {
-      workflow: "FLUX.2 Klein 4B Distilled",
+      workflow: int8Model === "flux-2-klein-4b-int8.safetensors"
+        ? "FLUX.2 Klein 4B INT8 W8A8"
+        : "FLUX.2 Klein 4B Distilled",
       prompt: t2iPrompt,
       promptConfidence: "known",
       details

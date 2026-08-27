@@ -70,7 +70,7 @@ const envSchema = z.object({
     z.string()
       .min(1)
       .default(
-        "/app/workflows/image_flux2_klein_4b_distilled_fp8_t2i_v2.api.json"
+        "/app/workflows/image_flux2_klein_4b_int8_w8a8_t2i_v1.api.json"
       ),
 
   HELIX_JOB_TIMEOUT_SECONDS:
@@ -186,7 +186,7 @@ export const config = {
           displayName: env.HELIX_LEIBOVITZ_DISPLAY_NAME,
           capabilities: ["image.t2i"],
           modelFamilies: {
-            flux2: { available: ["Klein 4B Distilled"], validated: [] }
+            flux2: { available: ["Klein 4B INT8 W8A8"], validated: [] }
           }
         }
       ],
