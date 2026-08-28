@@ -1,8 +1,10 @@
-# Reference-conditioning alternatives — 2026-08-26
+# Reference-conditioning alternatives — updated 2026-08-28
 
-Status: **research complete enough to define a comparison plan; no reference backend is locked yet**.
+Status: **Licon MSR and Lightricks Ingredients are both locally demonstrated; no single reference backend is locked yet.**
 
-This note compares open/self-hosted reference-to-video approaches that are relevant to Helix after the first local Licon MSR one-subject test. The goal is not to collect every video model. The goal is to avoid freezing Helix around Licon MSR before checking the strongest nearby approaches for the same Production problem:
+This note compares the open/self-hosted reference-to-video approaches relevant to Helix.
+
+The Production problem remains:
 
 ```text
 reference image(s)
@@ -15,9 +17,11 @@ while preserving the referenced person / wardrobe / object / location
 
 The current Helix preference remains local ComfyUI / inspectable workflows first.
 
-## Current local baseline — Licon MSR for LTX 2.5
+The important change since the original comparison is that **Ingredients is no longer only a candidate**. A working Core IC-LoRA path now exists locally and has produced a coherent new scene from a person + product + location reference bundle.
 
-Licon MSR V1 remains the strongest **already-running** candidate on the current worker.
+## Current locally demonstrated systems
+
+### Licon MSR — LTX 2.5
 
 Current local result:
 
@@ -26,158 +30,207 @@ one portrait reference
 + new kitchen-commercial prompt
 + 8 s / 24 fps / 1280x704
         ↓
-MSR generated the requested new kitchen scene,
+MSR generated a substantially different kitchen scene,
 preserved the same general man / hair / beard / sweater identity,
-and allowed substantial action + camera freedom.
+and allowed useful action + camera freedom.
 ```
 
-The paired fallback-control run stayed heavily anchored to the original portrait composition/background. That control therefore was not a clean "same identity method without MSR" quality baseline; it instead revealed an important behavioral distinction:
+The paired standard-guide control remained heavily anchored to the original portrait composition/background.
+
+That established the important behavioral distinction:
 
 ```text
 standard frame-0 guide
--> strongly anchors video composition to the reference image
+-> reference strongly anchors the generated composition
 
 Licon MSR negative-time slot reference
--> uses the image more like an appearance/identity source
-   while leaving the generated scene freer to change
+-> reference acts more like WHO / WHAT context
+-> prompt retains much more WHERE / ACTION / CAMERA freedom
 ```
 
-This makes MSR especially relevant to Helix commercials and story shots, but exact facial identity under strong viewpoint change and multi-subject slot separation are still unvalidated.
-
-## Candidate A — official Lightricks IC-LoRA Ingredients
-
-**Priority: very high. Test before locking Licon MSR.**
-
-Official Lightricks resources now include an LTX-2.5 ComfyUI workflow:
+Current Licon verdict:
 
 ```text
-LTX-2.5_ICLoRA_Ingredients_Single_Stage_Distilled.json
+plugin / inference works                 PASS
+one-person reference affects identity   PASS
+new-scene freedom                       STRONG PASS
+hair / beard / sweater continuity       PASS
+exact facial likeness                   GOOD, not perfect
+strong profile / viewpoint retention    NOT TESTED
+multi-subject slot separation           NOT TESTED
+person + object + background A/B        NOT TESTED
 ```
 
-The official LTX-2.5 workflow family describes Ingredients as generation from a **reference sheet** containing characters, props, wardrobe and locations. The reference sheet is a single composite image; the prompt identifies elements by their position on that sheet.
+See `MSR_RESEARCH.md`.
 
-Important implementation detail: the current official LTX-2.5 Ingredients workflow keeps the LTX-2.5 distilled backbone but uses the published **LTX-2.3 Ingredients IC-LoRA**:
+### Lightricks Ingredients — LTX 2.3
 
-```text
-ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors
-```
+Ingredients has now crossed the same basic capability threshold.
 
-The model card describes the intended use as short clips that preserve recurring characters, face/costume, handled props and the location from a supplied sheet. The sheet is looped as a static reference video and supplied through the IC-LoRA path rather than being treated as the generated first frame.
+The initial official 2.5 compatibility workflow and the first native 2.3 distilled workflow both failed by effectively animating the composite reference sheet.
 
-### Why Ingredients is unusually relevant to Helix
-
-It maps almost directly to a commercial/story asset package:
+The useful breakthrough was changing only the IC-LoRA reference path to:
 
 ```text
-reference sheet
-├── actor / character views
-├── wardrobe
-├── product
-├── logo / prop
-└── location
+LoraLoaderModelOnly
+Ingredients strength 1.4
         ↓
-new commercial shot
+GetICLoRAParameters
+        ↓
+LTXVAddGuide
 ```
 
-That could be better than independent MSR image slots when a shot needs a **whole visual package** rather than only one person's identity.
-
-Example Helix use:
+with the native short-video bucket:
 
 ```text
-Brand campaign entity bundle:
-  JOHN
-  black headphones
-  Soundwave store
-  wardrobe A
-        ↓
-Ingredients reference sheet
-        ↓
-multiple generated commercial shots
+768 x 448
+121 frames
+24 fps
 ```
 
-### Strengths versus Licon MSR
+The working cheap 8-step path successfully reconstructed a new scene from:
 
-- official Lightricks workflow and model family;
-- designed around characters + props + wardrobe + locations together;
-- reference content guides the whole clip without necessarily becoming frame zero;
-- explicit commercial-style examples exist in the model card;
-- uses the LTX-2.5 distilled backbone in the current official 2.5 workflow;
-- same general Comfy/LTX Production ecosystem we already operate.
+```text
+person + steak + kitchen
+```
 
-### Risks / disadvantages
+rather than reproducing the sheet.
 
-- requires constructing a clean reference sheet first;
-- several entities share one composite sheet rather than independent learned slots;
-- important panels need enough pixel area or details can be lost;
-- underlying Ingredients IC-LoRA was trained on LTX 2.3 even though the official 2.5 workflow uses it with the 2.5 backbone;
-- original trained bucket is 768x448 / 121 frames / 24 fps, so our richer 8-second 1280x704 workflow is outside the training bucket;
-- current official 2.5 Ingredients example is single-stage, while our main native quality baseline is two-stage.
+Later prompt cleanup removed the recurring pseudo-typography artifact while preserving coherent multi-asset construction and comparatively stable movement.
 
-### Decision
+Current Ingredients verdict:
 
-**Must test.** This is the closest serious alternative to Licon MSR for Helix's broader `character + prop + location` continuity problem.
+```text
+reference-sheet leakage        SOLVED
+multi-asset composition        STRONG PASS
+environment fidelity           GOOD
+food/product fidelity          GOOD
+simple physical interaction    PASS
+motion stability               GOOD
+character identity fidelity    MODERATE
+exact action/blocking          MODERATE
+camera/directing precision     MODERATE
+human anatomy / hands          IMPERFECT
+production ready               NO
+```
 
-Sources:
+This means:
 
-- `https://github.com/Lightricks/ComfyUI-LTXVideo/tree/master/example_workflows/2.5`
-- `https://github.com/Lightricks/ComfyUI-LTXVideo/blob/master/example_workflows/2.5/LTX-2.5_ICLoRA_Ingredients_Single_Stage_Distilled.json`
-- `https://huggingface.co/Lightricks/LTX-2.3-22b-IC-LoRA-Ingredients`
+```text
+Does Ingredients work as reference conditioning?
+-> YES.
+
+Is the current 8-step distilled output production quality?
+-> NO.
+```
+
+See `INGREDIENTS_RESEARCH.md`.
+
+## Licon vs Ingredients — current interpretation
+
+They should no longer be treated as identical competitors.
+
+### Ingredients mental model
+
+```text
+"Here is the visual world/package of the shot."
+
+character
+wardrobe
+product / prop
+location
+        ↓
+one composite reference sheet
+        ↓
+construct a new scene
+```
+
+Observed/expected strengths:
+
+- character + product + location together;
+- whole campaign/story visual packages;
+- environment and product carryover;
+- one sheet can represent several asset types;
+- useful fit for commercial/story asset bundles.
+
+Costs/risks:
+
+- reference-sheet construction overhead;
+- several entities share one composite rather than explicit independent slots;
+- panel size affects how much useful visual information survives;
+- current locally tested human identity is moderate;
+- current cheap distilled path has anatomy/control limitations.
+
+### Licon mental model
+
+```text
+"These are distinct entities."
+
+pic1       = Person A
+pic2       = Person B
+pic3       = Product / prop
+background = Location
+        ↓
+independent encoded references
++ learned slot identity
++ separate negative temporal positions
+        ↓
+compose a new scene
+```
+
+Expected structural strengths:
+
+- explicit independent reference slots;
+- natural fit for recurring named entities;
+- no need to construct one composite sheet;
+- dedicated background slot;
+- current first test showed stronger human-identity impression than the current Ingredients run.
+
+Costs/risks:
+
+- only a global reference strength plus reference-frame count; no rich per-slot public control surface;
+- exact identity through strong viewpoint change is still unknown;
+- multi-subject slot separation is still unvalidated locally;
+- object/background preservation has not yet been directly compared with Ingredients using the same assets.
 
 ## Candidate B — LTX-Best-Face-ID / BFS Nodes
 
-**Priority: high for human spokesperson identity; not a generic MSR replacement.**
+**Priority: targeted challenger for exact human identity.**
 
-`Alissonerdx/LTX-Best-Face-ID` is a dedicated identity-preserving reference-to-video LoRA for **LTX 2.3**. It uses:
+`Alissonerdx/LTX-Best-Face-ID` is a dedicated LTX 2.3 human-identity reference system using ArcFace-supervised identity training and specialized source/reference handling.
 
-```text
-reference latent overlap
-+ TASS-RoPE / source-phase tagging
-+ ArcFace identity supervision during training
-```
-
-The current project exposes two notable modes:
+Notable modes include:
 
 ```text
 Best_FaceID_v1.0
 -> close-up / bust face reference
 
 Best_FaceID_CharacterSheet_v1.0
--> character sheet with face + body views
+-> face + body / multi-view character sheet
 ```
 
-The companion `ComfyUI-BFSNodes` repository also contains multi-angle identity-transfer work where front face, back of head, full-body front and side profile are injected as distinct source IDs.
-
-### Why it matters
-
-This system is more **identity-specialized** than Licon MSR. ArcFace identity loss directly optimizes facial similarity, which makes it a serious challenger if Helix's most important use case becomes:
+Why it remains important:
 
 ```text
 same human spokesperson
-across many commercial shots
+across many shots
 ```
 
-Our clean male portrait is almost exactly the kind of source image its face model recommends: frontal/near-frontal, chest-up, clear and well lit.
+is a narrower problem than generic person + product + location conditioning. If Licon's next viewpoint test shows unacceptable face drift, Best-Face-ID should become the direct identity specialist challenger.
 
-### Strengths versus Licon MSR
+Strengths:
 
-- explicitly optimized for human face identity;
-- ArcFace-supervised training rather than generic reference retrieval alone;
-- source-phase reference design avoids simply treating the image as generated frame zero;
-- character-sheet continuation adds clothing/body appearance support;
-- ready-made Comfy workflows and active BFS node implementation exist.
+- explicitly optimized for human identity;
+- ArcFace supervision;
+- close-up and character-sheet paths;
+- avoids ordinary frame-zero reference semantics.
 
-### Risks / disadvantages
+Risks:
 
-- current released model is LTX 2.3, not LTX 2.5;
-- would create a separate LTX 2.3 branch rather than dropping cleanly into our proven 2.5 graph;
-- dedicated primarily to people, not arbitrary objects/backgrounds;
-- strongest close-up model is biased toward clear frontal face references;
+- LTX 2.3 branch rather than native 2.5 MSR;
+- mostly a people specialist, not a generic asset/reference backend;
 - extra BFS node/dependency surface;
-- Hugging Face model card currently uses a non-Apache `other` license, so licensing needs review before any production lock.
-
-### Decision
-
-Do **not** replace Licon with it now, but keep it as the most interesting **human-identity specialist**. If the next Licon viewpoint test shows noticeable face drift, this should become a direct isolated challenger using the same portrait and commercial concept.
+- license must be reviewed before any production lock.
 
 Sources:
 
@@ -186,41 +239,31 @@ Sources:
 
 ## Candidate C — Phantom-Wan 14B
 
-**Priority: medium; strong multi-subject challenger on a different model stack.**
+**Priority: fallback multi-subject challenger on a different stack.**
 
-ByteDance's Phantom is a purpose-built **Subject-to-Video** framework. Phantom-Wan supports single and multi-reference subject generation; the published implementation accepts up to four reference images. Its design explicitly targets subject consistency while reducing reference-image leakage and multi-subject confusion.
-
-ComfyUI support exists through Wan tooling, and ComfyUI also documents a built-in `WanPhantomSubjectToVideo` node.
-
-### Why it matters
-
-This is the clearest non-LTX alternative if our key requirement becomes:
+ByteDance Phantom-Wan is purpose-built Subject-to-Video and supports multiple references. It is particularly relevant if the central problem becomes:
 
 ```text
 multiple independent people / objects
-in a newly generated scene
+inside one newly generated scene
 ```
 
-rather than preserving an opening frame.
+Strengths:
 
-### Strengths versus Licon MSR
+- purpose-built single/multi-subject generation;
+- up to four public references in the published system;
+- research explicitly targets subject consistency and reduced reference leakage/mixing;
+- available ComfyUI integrations.
 
-- purpose-built subject-to-video model rather than an add-on to ordinary I2V;
-- up to four references;
-- research specifically targets both single- and multi-subject consistency;
-- mature public history and ComfyUI integrations;
-- not dependent on constructing one reference sheet.
+Risks:
 
-### Risks / disadvantages
+- different Wan stack;
+- additional model/download/calibration burden;
+- higher integration cost because our current prompt/audio research baseline is LTX.
 
-- different Wan 2.1 model stack, so this is a backend comparison rather than a drop-in LTX control;
-- would require additional models/workflow calibration on the worker;
-- older Phantom-Wan generation conventions differ from our native LTX 2.5 24-fps joint-AV baseline;
-- our current validated Production prompt/audio behavior belongs to LTX, so moving to Phantom has a higher integration cost.
+Decision:
 
-### Decision
-
-Do not install immediately. Keep Phantom-Wan 14B as the **fallback multi-subject challenger** if Licon and Ingredients both fail the two-person test.
+Do not install by default. Activate only if **both Licon and Ingredients fail the meaningful two-subject requirement**.
 
 Sources:
 
@@ -230,21 +273,17 @@ Sources:
 
 ## Candidate D — HunyuanCustom
 
-**Priority: research reference only on the current worker.**
+**Priority: architecture reference only on the current worker.**
 
-Tencent's HunyuanCustom is a dedicated customized-video architecture supporting image, text, audio and video conditions and both single- and multi-subject customization. Its published examples explicitly include virtual-human advertisements and virtual try-on.
+Tencent HunyuanCustom supports customized video with single/multi-subject conditioning and includes virtual-human advertisement/try-on style use cases.
 
-The architecture is interesting because it uses image-text fusion plus a separate identity-enhancement path, and its multi-subject design also uses separated negative temporal positions for different subjects.
-
-However, the official requirements make it a poor current fit for `helix-rtx4060-01`:
+Published memory requirements make it a poor current fit for the RTX 4060 worker:
 
 ```text
-512x896 / 129f -> ~60 GB peak memory
-720x1280 / 129f -> ~80 GB peak memory
+512x896 / 129f -> ~60 GB peak
+720x1280 / 129f -> ~80 GB peak
 minimum documented GPU memory -> 24 GB, very slow
 ```
-
-### Decision
 
 Keep as an architectural benchmark, not an immediate local Production candidate.
 
@@ -255,107 +294,193 @@ Sources:
 
 ## Candidate E — HuMo
 
-**Priority: future human + audio reference path, not current identity baseline.**
+**Priority: future human + audio reference path.**
 
-ByteDance/Tsinghua HuMo is human-centric and combines text, reference images and audio. It emphasizes subject preservation plus synchronized audio-driven motion. This is conceptually attractive for future spokesperson/dialogue videos because Helix could eventually provide:
+HuMo combines text, reference images and audio for human-centric video. It remains attractive for a future path such as:
 
 ```text
 person reference
 + scene prompt
-+ voice/dialogue audio
++ dialogue / voice audio
         ↓
 identity-consistent talking/acting video
 ```
 
-But current compute is not a natural RTX 4060 fit. The project's 1.7B release is described around 480p generation on a 32 GB GPU, while the 17B model is heavier.
-
-### Decision
-
-Track, but do not divert the current MSR experiment into HuMo.
+Current compute requirements do not make it a natural RTX 4060 Production candidate.
 
 Sources:
 
 - `https://github.com/Phantom-video/HuMo`
 - `https://huggingface.co/bytedance-research/HuMo`
 
-## Not in active scope — provider-only reference systems
+## Not in active scope — provider-only systems
 
-Current commercial/partner-node systems may offer stronger reference-to-video quality, but they do not answer the current open/self-hosted Production question. For example, Wan 2.7 Partner Nodes expose reference-to-video with multiple real-person inputs, but that path is provider/API-backed rather than the local open workflow we are evaluating.
+Provider/API reference-to-video systems may be stronger, but they do not answer the current open/self-hosted Helix Production question.
 
-Do not use provider systems to decide the local Helix reference backend.
+Do not use provider systems to decide the local reference backend.
 
-## Current ranking for Helix
+## Current role hypothesis — not a final lock
+
+The most useful current hypothesis is **complementary roles**, not one winner:
 
 ```text
-1. Licon MSR LTX 2.5
-   -> best already-running general independent-reference candidate
+Ingredients
+-> scene / campaign asset bundle
+-> character + product + wardrobe + location
 
-2. Lightricks Ingredients IC-LoRA
-   -> MUST benchmark; strongest same-ecosystem challenger for
-      character + wardrobe + prop + location commercial continuity
-
-3. LTX-Best-Face-ID
-   -> strongest specialist challenger for exact human spokesperson identity
-
-4. Phantom-Wan 14B
-   -> alternate-stack challenger for multi-subject reference generation
-
-5. HunyuanCustom / HuMo
-   -> interesting architecture, currently poor worker fit
+Licon MSR
+-> explicit entity continuity
+-> recurring people / independent subjects / named objects
 ```
 
-This is **not** a final winner ranking. It is a test-priority ranking.
+This remains a hypothesis until the next controlled Licon tests.
 
-## Recommended experiment order
+## Revised experiment order
 
-### R1 — finish Licon single-person identity stress
+### R1 — Licon viewpoint identity stress
 
-Use the current portrait and force a strong viewpoint transition:
+Use the same male portrait and force:
 
 ```text
 front
--> clear 60-90 degree profile / side-on action
--> return to camera
+-> clear 60-90 degree rotation
+-> short side-facing action
+-> return toward camera
 ```
-
-If identity survives, mark Licon one-subject locally validated.
-
-### R2 — official Ingredients one-character commercial test
-
-Build a clean reference sheet from the same man, then include one product and one location element. Use a compact commercial shot so Ingredients gets tested for the thing it was trained to do rather than as a pure face-ID tool.
 
 Score:
 
-- facial identity;
-- wardrobe;
-- product fidelity;
-- location fidelity;
-- scene freedom;
-- action quality;
-- preparation burden;
-- runtime / memory.
+- facial geometry;
+- hair;
+- beard;
+- age;
+- sweater;
+- whether the same person survives the viewpoint transition.
+
+If this fails badly, activate Best-Face-ID as the direct human-identity challenger.
+
+### R2 — direct Licon vs Ingredients asset-bundle A/B
+
+Use the same assets from the successful Ingredients test:
+
+```text
+Licon:
+pic1       = man
+pic2       = steak
+background = kitchen
+
+Ingredients:
+one sheet containing the same man + steak + kitchen
+```
+
+Ask for essentially the same creative shot.
+
+Score separately:
+
+```text
+REFERENCE CAPABILITY
+- person likeness
+- product fidelity
+- location fidelity
+- entity/reference separation
+- reference leakage
+
+FINAL VIDEO QUALITY
+- anatomy / hands
+- motion stability
+- action adherence
+- camera quality
+- overall coherence
+```
+
+Also record:
+
+- workflow preparation burden;
+- runtime;
+- VRAM / RAM behavior.
+
+Do not claim one reference method is better merely because the Licon path currently uses LTX 2.5 two-stage 1280x704 while Ingredients was proven with a cheap LTX 2.3 768x448 distilled path.
 
 ### R3 — Licon two-person slot separation
 
-Only after R1. Two people with visually different wardrobe and clearly assigned actions/positions.
+```text
+Image 1 = Person A
+Image 2 = Person B
+```
 
-### R4 — Ingredients multi-element / two-character test
+Use deliberately different faces and wardrobe with clearly assigned positions/actions.
 
-Compare the same underlying creative requirement using a sheet rather than independent MSR slots.
+Evaluate:
 
-### R5 — specialized challenger only when justified
+- face mixing;
+- wardrobe swapping;
+- one slot dominating;
+- position/action swapping;
+- identity through motion;
+- interaction quality.
+
+### R4 — Ingredients quality ceiling
+
+Ingredients has already passed its basic capability gate.
+
+The remaining heavier experiment is:
 
 ```text
-if exact human face identity is still weak
--> test LTX-Best-Face-ID on LTX 2.3
+30 steps
+CFG 4
+Ingredients ~1.4
+STG mode stg_v
+block 29
+scale 1.0
+```
 
-if multi-subject separation is weak in both Licon + Ingredients
--> test Phantom-Wan 14B
+Purpose:
+
+- hand/anatomy quality;
+- facial fidelity;
+- temporal stability;
+- action quality;
+- practical quality ceiling on the current worker.
+
+This test is no longer required to prove that Ingredients works.
+
+### R5 — specialist challenger only when justified
+
+```text
+if exact human face identity remains weak
+-> Best-Face-ID
+
+if multi-subject separation remains weak
+-> Phantom-Wan 14B
+```
+
+## Current ranking by role
+
+Do not read this as a single quality leaderboard.
+
+```text
+GENERAL INDEPENDENT ENTITY REFERENCES
+1. Licon MSR LTX 2.5
+   -> locally proven one-person scene freedom
+   -> viewpoint / multi-slot tests pending
+
+SCENE / ASSET BUNDLE REFERENCES
+1. Lightricks Ingredients LTX 2.3
+   -> locally proven person + product + location construction
+   -> higher-quality recipe pending
+
+HUMAN IDENTITY SPECIALIST
+1. LTX-Best-Face-ID
+   -> activate only if needed
+
+ALTERNATE MULTI-SUBJECT STACK
+1. Phantom-Wan 14B
+   -> activate only if needed
 ```
 
 ## Production-contract implication
 
-Do **not** make `msr_parameters`, Licon slot IDs, Ingredients sheet layout or BFS source IDs part of the Helix Director contract.
+Do **not** make `msr_parameters`, Licon slot IDs, Ingredients sheet geometry, `GetICLoRAParameters` wiring or BFS source IDs part of the Helix Director contract.
 
 The semantic concept should stay generic:
 
@@ -384,6 +509,17 @@ without changing upstream Helix creative intent.
 
 ## Current decision
 
-**Do not lock Licon MSR yet.**
+**Do not lock one reference backend yet.**
 
-The first local MSR result is strong enough to keep testing, not strong enough to freeze the reference architecture. The immediate comparison that can realistically beat or complement it on our existing LTX stack is **Lightricks Ingredients IC-LoRA**. Human-only Face-ID and Phantom-Wan remain targeted challengers rather than mandatory installs.
+Both Licon and Ingredients now have enough local evidence to justify continued testing.
+
+The next useful work is no longer "Does Ingredients work?" It is:
+
+```text
+1. how well does Licon preserve identity through viewpoint change?
+2. how does Licon compare with Ingredients on the same man + product + location requirement?
+3. can Licon keep two independent people separated?
+4. how much does the heavier Ingredients recipe improve anatomy/identity quality?
+```
+
+Best-Face-ID and Phantom-Wan remain active contingency searches rather than abandoned alternatives.
