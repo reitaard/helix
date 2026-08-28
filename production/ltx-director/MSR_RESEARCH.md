@@ -1,8 +1,8 @@
 # Licon MSR research and local validation — LTX 2.5
 
-Status: **installed and locally validated for one-subject reference-driven scene generation; stronger viewpoint retention and multi-subject separation remain unvalidated**.
+Status: **installed and locally validated for one-subject reference-driven scene generation; stronger viewpoint retention and multi-reference separation remain unvalidated**.
 
-This note records both the mechanism of LiconStudio's LTX 2.5 Multiple Subject Reference (MSR) system and the first controlled Helix local test.
+This note records the mechanism of LiconStudio's LTX 2.5 Multiple Subject Reference (MSR) system, the first controlled Helix local test, and the revised comparison plan after Lightricks Ingredients also produced a successful local reference-driven scene.
 
 ## What MSR is
 
@@ -114,6 +114,8 @@ Subject references preserve the complete source image and may be white-padded du
 
 The prompt should identify references explicitly using stable labels such as `Image 1`, `Image 2`, etc.
 
+The current public control surface is intentionally small. MSR's main value comes from the learned independent slot representation rather than a large set of per-reference knobs.
+
 ## Native two-stage LTX 2.5 integration
 
 The plugin fits the native Helix two-stage T2V topology.
@@ -218,16 +220,16 @@ returns gaze to camera with a smile
 Controlled generation settings:
 
 ```text
-duration:        8 s
-frames:          193
-fps:             24
-output:          1280x704
-prompt enhance:  OFF
-stage-1 seed:    558811532553686 fixed
-stage-2 seed:    42 fixed
-reference:       pic1 only
+duration:         8 s
+frames:           193
+fps:              24
+output:           1280x704
+prompt enhance:   OFF
+stage-1 seed:     558811532553686 fixed
+stage-2 seed:     42 fixed
+reference:        pic1 only
 reference_frames: 33
-strength:        1.0
+strength:         1.0
 ```
 
 Outputs:
@@ -301,13 +303,43 @@ subject + object reference separation   NOT TESTED
 
 Working conclusion:
 
-> Licon MSR has now shown genuine local Production value: it can use a portrait as an appearance source while allowing LTX to construct a substantially different prompted scene, rather than forcing the reference image to behave like frame zero.
+> Licon MSR has shown genuine local Production value: it can use a portrait as an appearance source while allowing LTX to construct a substantially different prompted scene, rather than forcing the reference image to behave like frame zero.
 
-This is enough to continue testing MSR, but not enough to lock Helix to Licon as the final reference-conditioning backend.
+This is enough to keep MSR in the leading group, but not enough to lock Helix to Licon as the final reference-conditioning backend.
 
-## Next Licon experiment
+## New comparison context — Ingredients now works locally
 
-Before two-subject testing, run one stronger one-person viewpoint stress test:
+Lightricks Ingredients has now also produced a successful local new-scene generation from:
+
+```text
+person + steak + kitchen
+```
+
+using a composite sheet and the corrected Core IC-LoRA path.
+
+This changes the MSR test strategy.
+
+We no longer need another unrelated Licon demonstration. We can now compare the two systems on the **same underlying creative requirement**.
+
+The likely abstraction difference is:
+
+```text
+Ingredients
+-> visual world / campaign asset bundle
+-> one composite sheet
+
+Licon MSR
+-> explicit independent entities
+-> separate learned slots
+```
+
+See `INGREDIENTS_RESEARCH.md` and `REFERENCE_CONDITIONING_ALTERNATIVES.md`.
+
+## Revised next Licon experiments
+
+### R1 — viewpoint identity stress
+
+Run one stronger one-person viewpoint test first:
 
 ```text
 front-facing
@@ -316,39 +348,107 @@ front-facing
 -> turn back toward camera
 ```
 
-Use the same portrait, same fixed seeds/settings, no Prompt Relay.
+Use:
 
-Goal: determine whether identity survives a real viewpoint change rather than mostly frontal/downward motion.
+- the same portrait;
+- the same native LTX 2.5 two-stage baseline;
+- fixed seeds/settings;
+- `reference_frames = 33`;
+- reference strength `1.0`;
+- Prompt Enhance OFF;
+- no Prompt Relay.
 
-If successful, mark **one-subject Licon MSR** locally validated and proceed to two-person slot separation.
-
-## Two-subject test
+Goal:
 
 ```text
-Image 1 = person A
-Image 2 = person B
+does the same identity survive a real viewpoint change?
 ```
 
-Use visually different people/wardrobe and explicitly assign positions/actions in the prompt.
+Score:
+
+- face geometry;
+- hair;
+- beard;
+- age;
+- sweater;
+- identity at strongest profile;
+- identity after returning toward camera.
+
+If this is weak, LTX-Best-Face-ID becomes the most justified specialist challenger.
+
+### R2 — direct Ingredients problem A/B
+
+Use the exact assets already proven with Ingredients:
+
+```text
+pic1       = man
+pic2       = steak / plate
+background = kitchen
+```
+
+Ask Licon to create essentially the same kitchen/steak shot.
+
+This is the most useful direct comparison because it removes the conceptual mismatch between the earlier Licon portrait-only demo and the Ingredients person + product + location test.
+
+Score two dimensions separately.
+
+#### Reference capability
+
+```text
+person likeness
+steak fidelity
+kitchen fidelity
+entity/reference separation
+reference leakage
+```
+
+#### Final video quality
+
+```text
+human anatomy
+hands
+motion stability
+action adherence
+camera quality
+overall coherence
+```
+
+Also record:
+
+```text
+workflow preparation burden
+runtime
+VRAM / RAM
+```
+
+Important fairness rule:
+
+> Do not claim that one reference mechanism is better merely because Licon currently runs through a higher-quality LTX 2.5 two-stage 1280x704 path while Ingredients was proven through a cheap LTX 2.3 768x448 distilled path.
+
+Reference capability and final video quality must be scored separately.
+
+### R3 — two-person slot separation
+
+After R1/R2:
+
+```text
+Image 1 = Person A
+Image 2 = Person B
+```
+
+Use visually distinct people and wardrobe with clearly assigned positions/actions.
 
 Evaluate:
 
 - identity mixing;
 - wardrobe swapping;
 - one reference dominating;
+- position/action swapping;
 - slot separation through motion;
-- prompt/action degradation caused by stronger reference conditioning.
+- prompt/action degradation caused by multiple reference conditions;
+- interaction quality.
 
-## Subject + object test
-
-After two-human separation, test:
-
-```text
-Image 1 = person
-Image 2 = distinctive product / vehicle / prop
-```
-
-This is directly relevant to Helix commercial/story continuity.
+This is the test where Licon's independent slot architecture should prove a real advantage if it has one.
 
 ## What MSR should not be assumed to solve
 
@@ -381,20 +481,27 @@ They remain conceptually complementary, but do not combine them until MSR's inde
 
 Licon is **not locked** as Helix's final reference solution.
 
-The first local result is strong enough to keep it in the leading group, while a separate comparison now tracks:
+The leading local reference systems now are:
 
 ```text
-Lightricks Ingredients IC-LoRA
--> same LTX ecosystem; reference sheet for character + wardrobe + prop + location
+Licon MSR
+-> independent slot-style references on LTX 2.5
 
+Lightricks Ingredients
+-> composite person + product + location reference bundle on LTX 2.3
+```
+
+Targeted challengers remain:
+
+```text
 LTX-Best-Face-ID
--> LTX 2.3 human-identity specialist with ArcFace-supervised training
+-> human identity specialist
 
 Phantom-Wan
 -> alternate-stack single/multi-subject challenger
 ```
 
-See `REFERENCE_CONDITIONING_ALTERNATIVES.md` for the comparison and test order.
+See `REFERENCE_CONDITIONING_ALTERNATIVES.md` for the updated role comparison and test order.
 
 ## Current Helix semantic implication
 
@@ -417,16 +524,19 @@ Production should choose the concrete reference backend later.
 
 Licon earns a stable Production role only if the next tests show that its scene freedom survives stronger viewpoint changes and multiple references without unacceptable identity mixing, action loss, motion degradation or runtime instability.
 
-For now:
+Current checkpoint:
 
 ```text
 one-subject new-scene generation
--> promising / locally demonstrated
+-> locally demonstrated
 
 exact viewpoint identity
+-> pending / NEXT
+
+person + product + background direct A/B
 -> pending
 
-multi-subject
+multi-subject separation
 -> pending
 
 final Helix reference backend
