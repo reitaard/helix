@@ -1,6 +1,6 @@
 # LTX Director
 
-This folder is the Helix Production workspace for evaluating and integrating LTX 2.5 generation, native T2V behavior, CGlide Director-style controls, Prompt Relay, reference-conditioning systems such as Licon MSR, and long-video continuation backends.
+This folder is the Helix Production workspace for evaluating and integrating LTX 2.5 generation, native T2V behavior, CGlide Director-style controls, Prompt Relay, reference-conditioning systems such as Licon MSR and Lightricks Ingredients, and long-video continuation backends.
 
 It is **not** the Helix Director. Helix Director remains model/provider agnostic. This folder is about how Production compiles explicit generation intent into LTX/ComfyUI execution state.
 
@@ -18,9 +18,11 @@ The workstation has validated:
 - Prompt Relay scene-progression benefit in a clean 15-second native-vs-Relay comparison;
 - appended image/keyframe guidance;
 - CGlide chunk writing, handoff PNGs, audio joining and final assembly;
-- official Lightricks `LTXVLoopingSampler` running locally over both LTX 2.5 stages.
+- official Lightricks `LTXVLoopingSampler` running locally over both LTX 2.5 stages;
+- Licon LTX 2.5 MSR one-subject reference-driven new-scene generation;
+- Lightricks LTX 2.3 Ingredients Core IC-LoRA person + product + location reference-driven scene construction.
 
-Licon LTX 2.5 MSR has been researched and has a concrete local test plan, but is **not yet locally validated**.
+Reference conditioning is therefore no longer a purely researched future path. Both Licon MSR and Ingredients have produced real local new-scene generations, but their remaining strengths/limits are still under controlled comparison.
 
 ## Native T2V quality baseline
 
@@ -86,9 +88,9 @@ For Relay compilation, persistent world/subject/camera/ambience belongs in the g
 
 See `PROMPT_RELAY.md` for exact tests, timing observations, workflow integration and Production policy.
 
-## Licon MSR research checkpoint
+## Licon MSR checkpoint
 
-Licon MSR V1 is a separate LTX 2.5 multi-reference control candidate.
+Licon MSR V1 is a locally running LTX 2.5 multi-reference control candidate.
 
 Conceptually:
 
@@ -102,9 +104,64 @@ Licon MSR
 
 The published LTX 2.5 system uses a dedicated MSR LoRA plus learned reference-slot embeddings and negative temporal reference positions. The current standalone ComfyUI plugin accepts up to five reference inputs (`pic1`..`pic4` + optional background) and documents a native two-stage LTX 2.5 integration where references are applied again after spatial latent upscale.
 
-MSR is promising for recurring characters, wardrobe, objects/vehicles and background continuity, but it has not yet earned a Helix Production role. It must first pass one-subject and two-subject local tests on the current worker.
+The first local one-person commercial test is a real PASS for the most important initial behavior:
 
-See `MSR_RESEARCH.md` for mechanism, plugin topology, model placement and the test plan.
+```text
+portrait reference
++ substantially different prompted kitchen scene
+        ↓
+recognizable same man / hair / beard / sweater
+while the studio portrait composition is discarded
+```
+
+The main result is the separation of identity/appearance from generated composition. Strong viewpoint identity, two-person slot separation and direct person + product + background comparison remain pending.
+
+See `MSR_RESEARCH.md` for mechanism, plugin topology, exact first-test observations and the next controlled tests.
+
+## Ingredients IC-LoRA checkpoint
+
+Lightricks Ingredients is also now locally demonstrated, but on the LTX 2.3 stack.
+
+The initial official 2.5 compatibility workflow and the first 2.3 distilled workflow both failed by effectively animating the composite reference sheet. The useful breakthrough was switching the reference-conditioning section to the current Core IC-LoRA route:
+
+```text
+LoraLoaderModelOnly (Ingredients @ 1.4)
+        ↓
+GetICLoRAParameters
+        ↓
+LTXVAddGuide
+```
+
+while keeping the native short-video bucket:
+
+```text
+768 x 448
+121 frames
+24 fps
+```
+
+The working cheap 8-step run successfully reconstructed a new scene from:
+
+```text
+person + steak + kitchen
+```
+
+rather than reproducing the sheet. Later prompt cleanup also removed the recurring pseudo-typography artifact while preserving coherent asset reconstruction and usable motion.
+
+Current interpretation:
+
+```text
+reference mechanism / multi-asset scene construction
+-> PROVEN locally
+
+cheap 8-step production quality
+-> NOT sufficient
+
+quality ceiling
+-> still pending 30-step / CFG4 / STG validation
+```
+
+See `INGREDIENTS_RESEARCH.md` for the complete failure history, working Core IC-LoRA path, prompt findings, best local result and revised comparison against Licon.
 
 ## Current quality baseline — native full-resolution I2V
 
@@ -187,8 +244,12 @@ identity/detail-critical I2V short shot
 multiple distinct semantic/narrative beats within one generation
 -> Prompt Relay is a validated temporal-routing candidate
 
-reference-critical recurring character/object appearance
--> Licon MSR is the next independent experiment; not yet validated
+reference-driven scene / asset bundle
+-> Ingredients is locally proven for person + product + location composition
+
+reference-critical independent entity continuity
+-> Licon MSR is locally proven for one-person new-scene freedom;
+   viewpoint + multi-reference separation are next
 
 long continuous extension
 -> Lightricks LoopingSampler
@@ -197,7 +258,7 @@ explicit timed direction
 -> compile Director intent into backend-compatible timing
 ```
 
-Do not add Prompt Relay or future MSR references automatically to shot types that native LTX already executes well. The goal is the lightest reliable Production path, not the most complicated graph.
+Do not add Prompt Relay, Ingredients or MSR automatically to shot types that native LTX already executes well. The goal is the lightest reliable Production path, not the most complicated graph.
 
 This remains experimental Production policy, not a frozen Helix schema.
 
@@ -205,7 +266,9 @@ This remains experimental Production policy, not a frozen Helix schema.
 
 - `NATIVE_T2V.md` — native 5/8/10-second T2V benchmark and quality findings;
 - `PROMPT_RELAY.md` — validated Kijai Relay A/Bs and scene-progression role;
-- `MSR_RESEARCH.md` — researched Licon LTX 2.5 MSR mechanism and local test plan;
+- `MSR_RESEARCH.md` — Licon LTX 2.5 MSR mechanism, first local validation and next tests;
+- `INGREDIENTS_RESEARCH.md` — Lightricks Ingredients failure history, Core IC-LoRA breakthrough, local validation and Licon comparison;
+- `REFERENCE_CONDITIONING_ALTERNATIVES.md` — broader reference-backend comparison and targeted challenger policy;
 - `FULL_RES_NATIVE_I2V.md` — locally validated bare full-resolution motorcycle baseline;
 - `LONG_VIDEO_COMPARISON.md` — continuation tracks, failure analysis and test order;
 - `HYBRID_B_V1.md` — failed hybrid history and re-entry constraints;
@@ -220,7 +283,7 @@ The current ComfyUI graphs are execution prototypes, not the final agent-facing 
 
 Useful Production controls may eventually include global/timed prompts, duration/fps/dimensions, prompt enhancement, image/reference assets and strengths, motion controls, retake/extension policy, seed and backend execution settings.
 
-The native T2V and Prompt Relay tests suggest that the eventual semantic interface should preserve distinctions between:
+The native T2V, Prompt Relay and reference-conditioning tests suggest that the eventual semantic interface should preserve distinctions between:
 
 ```text
 world state
@@ -233,4 +296,4 @@ reference / continuity entities
 audio intent
 ```
 
-Backend-specific details should remain behind a Production adapter until experiments show which controls deserve to become stable Helix concepts.
+Backend-specific details such as Prompt Relay regions, Ingredients sheet layout and Licon slot wiring should remain behind a Production adapter until experiments show which controls deserve to become stable Helix concepts.
