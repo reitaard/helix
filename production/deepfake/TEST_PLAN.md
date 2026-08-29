@@ -1,6 +1,6 @@
 # Deepfake local test plan
 
-Status: **D0 execution completed on the local RTX 4060; visual/output-quality review is still pending**.
+Status: **D0 completed on the local RTX 4060. Technical execution passed, but the first HyperSwap 1A result is below the desired finished-media quality bar. D1 raw swapper comparison is next.**
 
 The purpose of this plan is to answer one question before backend work:
 
@@ -69,7 +69,18 @@ audio codec / audio present
 file size
 ```
 
-The first executed target was longer than intended. The operator reported approximately 19 seconds, while FaceFusion processed 2378 frames. Do not derive authoritative FPS from those two values; verify the source/output metadata separately before recording the final media-preservation result.
+The first executed target was substantially longer than intended. Inspection of the native output established:
+
+```text
+duration: 79.289909 s
+frame count: 2378
+FPS: 30
+resolution: 720x1280
+video codec: H.264
+audio codec: AAC stereo, 44.1 kHz
+```
+
+The earlier approximately 19-second estimate was incorrect. For D1, cut one fixed 6-10 second benchmark segment from this video and reuse that exact segment for all model comparisons.
 
 ## D0 — FaceFusion installation smoke test
 
@@ -172,30 +183,51 @@ system RAM: approximately 30.3 / 31.8 GB (95%)
 GPU temperature observed: approximately 48 C
 ```
 
-Interpretation:
+Derived performance using the inspected 79.289909-second output:
 
-- CUDA execution is proven in real processing, not only provider discovery.
-- The RTX 4060 completed all 2378 frames and video reconstruction without an execution failure.
-- `476.96 s` is the FaceFusion reported processing-to-video completion time for this run, approximately 7m 56.96s.
-- The run is memory-heavy on this 8 GB GPU and 32 GB host: dedicated VRAM was near capacity and substantial shared GPU/system memory was used.
-- The current physical worker should be treated as exclusive for heavy deepfake work; do not overlap a FaceFusion job with Comfy/LTX/FLUX GPU generation unless a later scheduler explicitly proves safe coexistence.
-- For controlled D1 comparisons, use a shorter 6-10 second clip where practical so model A/B iteration is faster and memory/runtime measurements are easier to compare.
-- Technical execution passed. Final D0 media-quality/pass verdict remains pending until the native output is opened and identity, temporal quality, resolution/FPS and audio preservation are inspected.
+```text
+throughput: approximately 4.99 processed frames/s
+runtime ratio: approximately 6.0x slower than real time
+```
+
+Finished-media observations:
+
+- CUDA execution and full 2378-frame processing passed.
+- The output opens correctly at 720x1280 / 30 fps and contains AAC stereo audio.
+- Eye motion is preserved well.
+- Mouth/speech motion is preserved well.
+- Sampled ordinary frontal motion is reasonably temporally coherent.
+- Overall face/identity quality is not yet good enough; the face has a smoothed/generic swapped appearance.
+- Do not use restoration/enhancement yet to hide a weak raw swapper. First compare the raw swapper models.
+- Source-identity likeness should be evaluated beside the actual S1 source image during D1; output-only inspection cannot rigorously score likeness.
+
+D0 verdict:
+
+```text
+execution feasibility: PASS
+full-video completion: PASS
+video reconstruction: PASS
+expression / eye / mouth preservation: PROMISING
+finished identity/compositing quality: BELOW PRODUCTION BAR
+memory efficiency: HEAVY
+```
+
+See [`D0_RESULT.md`](D0_RESULT.md) for the focused result record.
 
 ## D1 — face-swap model comparison
 
-Use exactly the same S1 and V1, or first create one shorter fixed benchmark clip from V1 and then keep that shorter clip unchanged across all D1 runs.
+Use exactly the same S1 and one fixed 6-10 second segment cut from V1.
 
-Minimum comparison:
+Because D0's principal weakness is raw identity/face quality while target eye and mouth motion are already preserved, compare in this order:
 
 ```text
-hyperswap_1a_256
-hyperswap_1b_256
-hyperswap_1c_256
-inswapper_128_fp16
+D1-A  hyperswap_1a_256   existing baseline
+D1-B  hyperswap_1c_256   identity-quality challenger
+D1-C  hyperswap_1b_256   angle/profile challenger
+D1-D  inswapper_128_fp16 if still useful
 ```
 
-Add one Ghost model if setup makes it straightforward.
+Add one Ghost model later if setup makes it useful.
 
 Keep detector, selector, masks, enhancement and output settings fixed unless a model strictly requires a different compatible pixel-boost setting.
 
@@ -368,7 +400,7 @@ Do not assume more references are automatically better.
 
 Run only after FaceFusion has a documented best configuration.
 
-Use the same S1 + V1.
+Use the same S1 + V1 benchmark segment.
 
 The goal is not to reproduce every FaceFusion feature. Compare the core output on:
 
@@ -393,7 +425,7 @@ Maintain one compact result table as tests happen:
 
 | ID | Engine | Source | Key settings | Identity | Profile | Temporal | Expression | Composite | Runtime | VRAM | Verdict |
 |---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|
-| D0 | FaceFusion 3.8.2 | S1 736x1104 | HyperSwap 1A, 256 boost, weight 0.5, CUDA, strict | pending visual review | pending | pending | pending | pending | 476.96 s | ~7.6/8.0 GB dedicated + ~10 GB shared | execution passed; media review pending |
+| D0 | FaceFusion 3.8.2 | S1 736x1104 | HyperSwap 1A, 256 boost, weight 0.5, CUDA, strict | below desired bar; exact likeness needs S1 side-by-side | not isolated yet | ordinary frontal motion reasonably coherent | eyes/mouth preserved well | smoothed/generic swap appearance | 476.96 s for 79.29 s / 2378 frames (~4.99 fps) | ~7.6/8.0 GB dedicated + ~10 GB shared | execution pass; finished quality fail |
 
 Scores should be supplemented by written observations; a single number can hide different failure modes.
 
