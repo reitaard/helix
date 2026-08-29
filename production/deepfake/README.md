@@ -1,6 +1,6 @@
 # Deepfake Production
 
-Status: **FaceFusion 3.8.2 is installed and the first local RTX 4060 execution completed successfully; visual/media-quality review and model comparison are next**.
+Status: **FaceFusion 3.8.2 is installed and the first local RTX 4060 baseline completed successfully; execution is proven but finished identity/compositing quality is below the desired Production bar. D1 raw swapper comparison is next.**
 
 This folder is the dedicated Helix workstream for identity-preserving face replacement on existing video.
 
@@ -111,6 +111,20 @@ processing: 2378 / 2378
 processing-to-video succeeded: 476.96 seconds
 ```
 
+Native output inspection corrected the target/output duration and established the real throughput:
+
+```text
+resolution: 720x1280
+FPS: 30
+frames: 2378
+duration: 79.289909 s
+video: H.264
+audio: AAC stereo, 44.1 kHz
+runtime: 476.96 s
+throughput: ~4.99 processed frames/s
+speed: ~6.0x slower than real time
+```
+
 Observed resource pressure during the run:
 
 ```text
@@ -122,11 +136,9 @@ system RAM: approximately 30.3 / 31.8 GB (95%)
 
 This proves the current Windows worker can execute a substantial FaceFusion workload on CUDA without immediate failure. It also confirms that an 8 GB RTX 4060 run can become heavily memory-bound and use substantial shared/system memory. Deepfake and Comfy generation should therefore be treated as mutually exclusive heavy GPU workloads on this machine unless later scheduler testing proves otherwise.
 
-The target was reported as approximately 19 seconds long, but FaceFusion processed 2378 frames. Source/output FPS and final duration must be verified from media metadata rather than inferred from those two values.
+Finished-video review found a more mixed result. Eye motion and mouth/speech performance are preserved well, and sampled ordinary frontal motion is reasonably temporally coherent. However, the face has a visibly smoothed/generic swapped appearance and the overall identity/compositing result is below the Production quality target. D0 therefore passes execution feasibility but does not pass finished-media quality.
 
-The execution checkpoint is technically successful. Visual identity quality, temporal consistency, output resolution/FPS, and audio preservation still need inspection before D0 receives a final media-quality pass.
-
-Detailed measurements and the evolving result table live in [`TEST_PLAN.md`](TEST_PLAN.md).
+See [`D0_RESULT.md`](D0_RESULT.md) for the measured output metadata, performance calculation and quality notes.
 
 ## Reference preparation is part of the route
 
@@ -154,7 +166,7 @@ Generated references must be compared against the untouched source image. A gene
 ## Research order
 
 ```text
-D0  FaceFusion raw baseline                EXECUTED; visual review pending
+D0  FaceFusion raw baseline                EXECUTED; execution pass / quality below bar
 D1  FaceFusion swapper-model comparison    NEXT
 after D1  mask / expression / restoration only when failure requires them
 D3  best raw source-image result established
@@ -165,10 +177,13 @@ D6  CanonSwap challenger if FaceFusion temporal/identity quality remains insuffi
 only then design the VPS backend + Windows worker contract
 ```
 
+For D1, use one fixed 6-10 second segment rather than rerunning the 79-second source. Because D0 already preserves eye and mouth motion reasonably well while raw identity quality is weak, compare `hyperswap_1c_256` next for identity quality, then `hyperswap_1b_256` for angle/profile robustness. Keep all other settings fixed.
+
 See:
 
 - [`RESEARCH.md`](RESEARCH.md) — current findings and candidate ranking.
 - [`TEST_PLAN.md`](TEST_PLAN.md) — controlled local test sequence and measured results.
+- [`D0_RESULT.md`](D0_RESULT.md) — first native FaceFusion result.
 - [`INSTRUCTIONS.md`](INSTRUCTIONS.md) — rules for future implementation/Codex sessions.
 
 ## Explicit non-goals for the current checkpoint
