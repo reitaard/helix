@@ -2,7 +2,7 @@
 
 Date: 2026-08-29
 
-Status: **HyperSwap 1C completed successfully and is a modest visual improvement over 1A on the shared segment; source-identity likeness still needs the actual S1 image for rigorous scoring.**
+Status: **HyperSwap 1A, 1C and 1B have now been inspected. 1C remains the provisional finished-video naturalness winner, while 1B renders slightly stronger/sharper facial features. Final identity-fidelity selection requires the actual source portrait S1.**
 
 ## Benchmark ranges
 
@@ -16,7 +16,7 @@ model: hyperswap_1a_256
 processing-to-video: 106.09 s
 ```
 
-D1-B used:
+D1-B / HyperSwap 1C used:
 
 ```text
 trim: 250 -> 750
@@ -26,16 +26,29 @@ model: hyperswap_1c_256
 processing-to-video: 102.36 s
 ```
 
-Because D1-B extended the trim end from 600 to 750, total runtime is **not** a controlled A/B comparison. Visual comparison remains valid over the shared 250 -> 600 target interval, corresponding to the first 350 output frames of both files.
-
-Observed throughput for reference only:
+D1-C / HyperSwap 1B inspected artifact:
 
 ```text
-D1-A: 350 / 106.09  = ~3.30 frames/s
-D1-B: 500 / 102.36  = ~4.88 frames/s
+trim: 250 -> 750 (operator-confirmed benchmark range)
+frames: 500
+output duration: 16.666667 s
+resolution: 720 x 1280
+FPS: 30
+model: hyperswap_1b_256
 ```
 
-Do not treat this as proof that 1C is intrinsically faster; clip length, warm caches and run state differ.
+The uploaded 1B artifact filename was `D1_B_hyperswap_1b.mp4`, but within the experiment sequence it is the planned D1-C / HyperSwap 1B challenger.
+
+Because D1-A used only 350 frames, total runtime is **not** a controlled comparison against 1B/1C. Visual comparison remains valid over the shared first 350 output frames. HyperSwap 1B and 1C both use the same 500-frame benchmark range, so their visual comparison is directly aligned.
+
+Observed earlier throughput for reference only:
+
+```text
+D1-A / 1A: 350 / 106.09 = ~3.30 frames/s
+D1-B / 1C: 500 / 102.36 = ~4.88 frames/s
+```
+
+No terminal runtime was supplied yet for the 1B artifact, so do not infer a 1B performance result from file metadata alone.
 
 ## HyperSwap 1C model download behavior
 
@@ -48,19 +61,42 @@ The first 1C download attempt reached completion but failed source validation re
 
 FaceFusion then re-downloaded the approximately 402.7 MB source and the subsequent run completed normally. This is not a blocker, but a future worker should expose model-download/checksum failures as explicit setup/health events rather than presenting them as generic generation failures.
 
-## Shared-segment visual comparison
+## Shared visual comparison
 
-Representative matching frames from the shared 250 -> 600 target interval were inspected side by side.
+Representative matching frames were inspected side by side across the common target interval.
 
-Current observations:
+### HyperSwap 1A -> 1C
 
 - 1C keeps the same useful eye, blink and mouth/speech preservation seen in 1A;
 - 1C appears slightly less exaggerated around the eyes and slightly less beauty-filtered/synthetic in several frontal frames;
 - facial rendering looks somewhat more natural through smile and neutral-expression changes;
 - the difference is real but not dramatic; both still retain a smoothed face-swap character;
-- no clear new temporal instability was observed in the sampled shared frames;
-- the additional 600 -> 750 portion of the 1C run also remains coherent through speech and moderate viewpoint changes;
-- exact source-identity likeness cannot be decided without the actual source portrait S1 beside the outputs.
+- no clear new temporal instability was observed.
+
+### HyperSwap 1C -> 1B
+
+The 1B and 1C artifacts contain the same 500 frames, which allows a cleaner visual comparison.
+
+Observed differences:
+
+- both preserve the target performance, eye motion, blink states and mouth/speech shapes similarly;
+- 1B renders facial features slightly more sharply/strongly, especially around eyes, brows, nose and lips;
+- 1B can therefore look like a stronger identity imprint, but it also reads slightly more synthetic/processed in several frames;
+- 1C is a little softer but generally looks more natural and less obviously overlaid;
+- neither model shows a clear temporal-consistency advantage in this clip;
+- both remain coherent across ordinary speaking/head-motion frames;
+- neither can be declared the identity-fidelity winner without comparing against S1 itself.
+
+A simple diagnostic frame-to-frame grayscale-difference check over the same fixed face region also found essentially identical motion behavior:
+
+```text
+1B mean face-region adjacent-frame difference: ~6.65
+1C mean face-region adjacent-frame difference: ~6.68
+1B p95: ~11.78
+1C p95: ~11.79
+```
+
+The largest-change frame positions were also effectively the same. This is **not an identity/quality metric**, but it supports the visual observation that 1B versus 1C is mainly a facial-rendering choice rather than a temporal-stability difference on this benchmark.
 
 ## Current verdict
 
@@ -71,28 +107,55 @@ HyperSwap 1A:
   face quality below Production bar
 
 HyperSwap 1C:
-  modestly more natural rendering than 1A
-  target eye/mouth/expression preservation remains strong
-  still not proven Production-grade
-  provisional winner over 1A for finished visual naturalness
+  best current finished-video naturalness
+  eye/mouth/expression preservation strong
+  still visibly face-swapped / not yet Production-grade
+  provisional naturalness winner
+
+HyperSwap 1B:
+  slightly stronger/sharper facial definition than 1C
+  target performance preservation comparable to 1C
+  no clear temporal advantage
+  can look slightly more processed/synthetic
+  identity-fidelity result unresolved until S1 is available
 ```
 
-The next useful test is HyperSwap 1B as the angle/profile challenger.
+## Next decision gate
+
+Do **not** spend another GPU run on InSwapper, enhancement, masks or generated references yet.
+
+First obtain the actual source portrait S1 and compare it beside representative matching 1A/1B/1C frames.
+
+The next decision should answer:
+
+```text
+Which HyperSwap variant is actually closest to S1?
+```
+
+Only after that should we decide whether the problem is:
+
+```text
+raw identity strength
+-> try another swapper / CanonSwap
+
+softness/detail only
+-> test pixel boost or face enhancement
+
+angle-specific identity loss
+-> test generated/multi-angle references
+
+occlusion/composite failure
+-> test masks
+```
 
 ## Benchmark policy from here
 
-The operator changed the trim to 250 -> 750 for D1-B. Freeze this as the preferred D1 range for new runs because it contains 500 frames / approximately 16.69 seconds and provides more facial motion than the earlier 250 -> 600 range.
-
-For D1-C:
+Keep the preferred D1 benchmark fixed at:
 
 ```text
-source: same S1
-target: same V1
 trim: 250 -> 750
-model: hyperswap_1b_256
-all other settings unchanged
+frames: 500
+approximately 16.67 seconds at 30 fps
 ```
 
-Do not rerun 1A at 250 -> 750 unless the 1B/1C results are close enough that a perfectly controlled timing or quality comparison is worth the extra GPU time. For visual comparison against 1A, use the shared 250 -> 600 interval.
-
-Before freezing a FaceFusion winner, compare the actual source portrait S1 against representative 1A/1B/1C frames. The primary unresolved question is source identity fidelity, not target-expression preservation.
+Do not rerun 1A at 250 -> 750 unless the final source-identity review shows 1A is unexpectedly competitive and a fully aligned comparison becomes worthwhile.
