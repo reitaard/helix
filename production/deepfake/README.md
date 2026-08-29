@@ -1,6 +1,6 @@
 # Deepfake Production
 
-Status: **research track created; no local installation or Production integration has been performed yet**.
+Status: **FaceFusion 3.8.2 is installed and the first local RTX 4060 execution completed successfully; visual/media-quality review and model comparison are next**.
 
 This folder is the dedicated Helix workstream for identity-preserving face replacement on existing video.
 
@@ -72,6 +72,62 @@ Why it is the first baseline:
 
 **CanonSwap** is the first dedicated research challenger after a FaceFusion baseline. Its published interface also directly accepts one source image and one target video and its research focuses on high-fidelity, temporally consistent video face swapping. Do not install it until the baseline test tells us what FaceFusion actually fails at on this GPU.
 
+## First local execution checkpoint — 2026-08-29
+
+The initial manual FaceFusion run completed all frames and reconstructed the output video successfully on the local RTX 4060.
+
+Environment checkpoint:
+
+```text
+FaceFusion: 3.8.2
+Python: 3.12.13
+ONNX Runtime GPU: 1.24.4
+CUDAExecutionProvider: available and used
+GPU: NVIDIA GeForce RTX 4060, 8 GB class
+FFmpeg: 9.0.1
+```
+
+First baseline configuration:
+
+```text
+processor: face_swapper only
+model: hyperswap_1a_256
+pixel boost: 256x256
+weight: 0.5
+video memory strategy: strict
+execution threads: 8
+provider: CUDA
+detector: yolo_face 640x640, score 0.5
+landmarker: 2dfan4, score 0.5
+mask: box only, blur 0.3
+enhancement/restoration: off
+```
+
+Execution result:
+
+```text
+analysing: 2378 / 2378
+processing: 2378 / 2378
+processing-to-video succeeded: 476.96 seconds
+```
+
+Observed resource pressure during the run:
+
+```text
+GPU utilization: reached 100%
+dedicated VRAM: approximately 7.6 / 8.0 GB
+shared GPU memory: approximately 10 GB
+system RAM: approximately 30.3 / 31.8 GB (95%)
+```
+
+This proves the current Windows worker can execute a substantial FaceFusion workload on CUDA without immediate failure. It also confirms that an 8 GB RTX 4060 run can become heavily memory-bound and use substantial shared/system memory. Deepfake and Comfy generation should therefore be treated as mutually exclusive heavy GPU workloads on this machine unless later scheduler testing proves otherwise.
+
+The target was reported as approximately 19 seconds long, but FaceFusion processed 2378 frames. Source/output FPS and final duration must be verified from media metadata rather than inferred from those two values.
+
+The execution checkpoint is technically successful. Visual identity quality, temporal consistency, output resolution/FPS, and audio preservation still need inspection before D0 receives a final media-quality pass.
+
+Detailed measurements and the evolving result table live in [`TEST_PLAN.md`](TEST_PLAN.md).
+
 ## Reference preparation is part of the route
 
 Image generation/editing is a required research direction, but the backend must remain model-agnostic.
@@ -98,9 +154,9 @@ Generated references must be compared against the untouched source image. A gene
 ## Research order
 
 ```text
-D0  FaceFusion raw baseline
-D1  FaceFusion swapper-model comparison
-D2  mask / expression / restoration controls only when failure requires them
+D0  FaceFusion raw baseline                EXECUTED; visual review pending
+D1  FaceFusion swapper-model comparison    NEXT
+after D1  mask / expression / restoration only when failure requires them
 D3  best raw source-image result established
 D4  generated/matched reference A/B
 D5  multi-reference / multi-angle preparation if D4 helps
@@ -112,7 +168,7 @@ only then design the VPS backend + Windows worker contract
 See:
 
 - [`RESEARCH.md`](RESEARCH.md) — current findings and candidate ranking.
-- [`TEST_PLAN.md`](TEST_PLAN.md) — controlled local test sequence.
+- [`TEST_PLAN.md`](TEST_PLAN.md) — controlled local test sequence and measured results.
 - [`INSTRUCTIONS.md`](INSTRUCTIONS.md) — rules for future implementation/Codex sessions.
 
 ## Explicit non-goals for the current checkpoint
