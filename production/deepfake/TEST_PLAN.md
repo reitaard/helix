@@ -1,6 +1,6 @@
 # Deepfake local test plan
 
-Status: **planned; no test has been executed yet**.
+Status: **D0 execution completed on the local RTX 4060; visual/output-quality review is still pending**.
 
 The purpose of this plan is to answer one question before backend work:
 
@@ -30,6 +30,13 @@ Use one high-quality portrait with:
 - no extreme stylization.
 
 The first source should remain unchanged across the raw-engine benchmark.
+
+First executed source image dimensions:
+
+```text
+736 x 1104
+portrait orientation
+```
 
 ### Target video V1
 
@@ -61,6 +68,8 @@ codec
 audio codec / audio present
 file size
 ```
+
+The first executed target was longer than intended. The operator reported approximately 19 seconds, while FaceFusion processed 2378 frames. Do not derive authoritative FPS from those two values; verify the source/output metadata separately before recording the final media-preservation result.
 
 ## D0 — FaceFusion installation smoke test
 
@@ -99,9 +108,83 @@ Pass criteria:
 
 Do not optimize quality during the smoke run beyond choosing a reasonable baseline.
 
+### D0 execution checkpoint — 2026-08-29
+
+Environment:
+
+```text
+OS: Windows
+GPU: NVIDIA GeForce RTX 4060
+Dedicated VRAM: 8188 MiB class / 8 GB
+FaceFusion: 3.8.2
+FaceFusion git tag: 3.8.2
+Python: 3.12.13
+ONNX Runtime GPU: 1.24.4
+Available ORT providers:
+  TensorrtExecutionProvider
+  CUDAExecutionProvider
+  CPUExecutionProvider
+FFmpeg: 9.0.1 full build
+FaceFusion installer backend: cuda@12
+```
+
+Baseline settings used/observed:
+
+```text
+processor: face_swapper only
+face swapper: hyperswap_1a_256
+pixel boost: 256x256
+face swapper weight: 0.5
+video memory strategy: strict
+execution thread count: 8
+execution provider: CUDA
+face detector: yolo_face
+face detector size: 640x640
+face detector angle: 0
+face detector score: 0.5
+face landmarker: 2dfan4
+face landmarker score: 0.5
+face mask type: box only
+face mask blur: 0.3
+face mask padding: 0
+face enhancer: off
+expression restorer: off
+frame enhancer: off
+deep swapper: off
+```
+
+Terminal completion:
+
+```text
+[FACEFUSION.CORE] processing step 1 of 1
+analysing: 100% (2378/2378)
+processing: 100% (2378/2378)
+[FACEFUSION.TO_VIDEO] processing to video succeeded in 476.96 seconds
+```
+
+Measured/observed machine pressure during processing:
+
+```text
+GPU utilization: reached 100%
+dedicated GPU memory: approximately 7.6 / 8.0 GB
+shared GPU memory: approximately 10.0 / 15.9 GB
+system RAM: approximately 30.3 / 31.8 GB (95%)
+GPU temperature observed: approximately 48 C
+```
+
+Interpretation:
+
+- CUDA execution is proven in real processing, not only provider discovery.
+- The RTX 4060 completed all 2378 frames and video reconstruction without an execution failure.
+- `476.96 s` is the FaceFusion reported processing-to-video completion time for this run, approximately 7m 56.96s.
+- The run is memory-heavy on this 8 GB GPU and 32 GB host: dedicated VRAM was near capacity and substantial shared GPU/system memory was used.
+- The current physical worker should be treated as exclusive for heavy deepfake work; do not overlap a FaceFusion job with Comfy/LTX/FLUX GPU generation unless a later scheduler explicitly proves safe coexistence.
+- For controlled D1 comparisons, use a shorter 6-10 second clip where practical so model A/B iteration is faster and memory/runtime measurements are easier to compare.
+- Technical execution passed. Final D0 media-quality/pass verdict remains pending until the native output is opened and identity, temporal quality, resolution/FPS and audio preservation are inspected.
+
 ## D1 — face-swap model comparison
 
-Use exactly the same S1 and V1.
+Use exactly the same S1 and V1, or first create one shorter fixed benchmark clip from V1 and then keep that shorter clip unchanged across all D1 runs.
 
 Minimum comparison:
 
@@ -310,7 +393,7 @@ Maintain one compact result table as tests happen:
 
 | ID | Engine | Source | Key settings | Identity | Profile | Temporal | Expression | Composite | Runtime | VRAM | Verdict |
 |---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|
-| D0 | FaceFusion | S1 | smoke | - | - | - | - | - | - | - | pending |
+| D0 | FaceFusion 3.8.2 | S1 736x1104 | HyperSwap 1A, 256 boost, weight 0.5, CUDA, strict | pending visual review | pending | pending | pending | pending | 476.96 s | ~7.6/8.0 GB dedicated + ~10 GB shared | execution passed; media review pending |
 
 Scores should be supplemented by written observations; a single number can hide different failure modes.
 
