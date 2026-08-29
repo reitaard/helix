@@ -4,6 +4,14 @@ Date: 2026-08-29
 
 Status: **technical execution passed; finished-video quality is below the desired Production bar**.
 
+## Production-duration clarification
+
+The intended practical Helix deepfake target is **up to approximately 30 seconds per video** for the current use case.
+
+The 79.29-second artifact used in D0 was therefore an accidental stress test, not the required Production duration. That makes the completed D0 workload materially heavier than the current target and provides useful headroom evidence for execution stability.
+
+At the observed throughput of approximately 4.99 processed frames/s, a 30-second / 30-fps video would contain roughly 900 frames and should be substantially cheaper than D0. Do not treat this as a guaranteed runtime estimate until a real fixed 30-second benchmark is measured.
+
 ## Inputs
 
 Source identity image:
@@ -146,3 +154,5 @@ D1-C  hyperswap_1b_256   angle/profile challenger
 ```
 
 Only after selecting the strongest raw HyperSwap result should we test pixel boost, masks, expression restoration, enhancement, generated references, or CanonSwap.
+
+After the winning raw model/settings are established on the short benchmark clip, run one **fixed 30-second validation clip** before the local quality/performance gate is considered representative of the intended Production use case.
