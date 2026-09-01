@@ -2,14 +2,15 @@
 
 Infrastructure should support proven execution needs rather than speculative architecture.
 
-As of 2026-08-26 the active Production infrastructure is a dedicated standalone ComfyUI GPU worker plus the VPS-side `helix-runtime`, its dedicated PostgreSQL database, durable Telegram artifact delivery, and one durable operator-facing media-reference namespace shared by Helix jobs and Comfy-only artifacts.
+As of the 2026-09-01 documentation reconciliation, the active Production infrastructure consists of one standalone ComfyUI RTX 4060 worker plus the VPS-side `helix-runtime`, dedicated PostgreSQL state, durable Telegram artifact delivery, and one shared operator-facing numeric media-reference namespace.
 
-For the focused worker/runtime roadmap, see:
+For detailed runtime/worker state, see:
 
-- [`production/comfyui-worker/README.md`](../production/comfyui-worker/README.md)
-- [`production/media-runtime/README.md`](../production/media-runtime/README.md)
+- [`../production/comfyui-worker/README.md`](../production/comfyui-worker/README.md)
+- [`../production/media-runtime/README.md`](../production/media-runtime/README.md)
+- [`../docs/PROJECT_STATE.md`](../docs/PROJECT_STATE.md)
 
-## Current Production execution path
+## Current Production path
 
 ```text
 caller / n8n / Telegram
@@ -18,12 +19,13 @@ helix-runtime :8787
     ↓
 WorkerService + JobService
     ├── helix-db
-    │   ├── workers
-    │   ├── worker_observations
+    │   ├── workers + observations
     │   ├── media_jobs
     │   ├── media_references
     │   ├── media_job_events
-    │   └── media_deliveries
+    │   ├── media_deliveries
+    │   ├── operator / Telegram state
+    │   └── Production settings
     ↓
 WorkerRegistry
     ↓
@@ -34,19 +36,11 @@ ComfyAdapter / ComfyClient
 helix-rtx4060-01
     ↓
 ComfyUI :8188
-    ↓
-generated artifact
-    ↓
-VPS temporary spool
-    ↓
-ffprobe
-    ↓
-Telegram metadata + original document
 ```
 
-Raw ComfyUI is not exposed publicly.
+Raw ComfyUI is private over Tailscale and must not be publicly exposed.
 
-## Worker machine/runtime
+## Physical worker
 
 - OS: Windows
 - GPU: NVIDIA GeForce RTX 4060
@@ -55,15 +49,21 @@ Raw ComfyUI is not exposed publicly.
 - ComfyUI: `0.33.0`
 - Python: `3.12.11`
 - PyTorch: `2.10.0+cu130`
-- CUDA build used by PyTorch: `13.0`
-- production API port: `8188`
-- listen address: `0.0.0.0`
 - worker ID: `helix-rtx4060-01`
-- Production profiles: `nolan` / Christopher Nolan and `leibovitz` / Annie Leibovitz
-- validated capabilities: `video.i2v`, `video.t2v`, `image.t2i`
-- max concurrent GPU jobs: `1`
+- physical GPU concurrency: `1`
 
-LTX `2.3` and `2.5` model-family assets are available. LTX `2.5` is the validated standalone video execution path. FLUX.2 Klein 4B INT8 W8A8 is the active narrow T2I candidate; the prior Distilled FP8 workflow remains available for rollback until live validation completes.
+Logical Production Profiles share this one worker:
+
+```text
+nolan / Christopher Nolan
+-> video.i2v
+-> video.t2v
+
+leibovitz / Annie Leibovitz
+-> image.t2i
+```
+
+LTX 2.5 is the validated standalone video execution family. FLUX.2 Klein 4B INT8 W8A8 is the current narrow T2I workflow candidate; the earlier Distilled FP8 path remains available for rollback.
 
 ## Worker filesystem
 
@@ -84,254 +84,113 @@ C:\AI\HelixWorker\
 ├── inventory\
 ├── logs\
 └── state\
-
-C:\ComfyMigrationBackup\
 ```
 
-Keep `C:\ComfyMigrationBackup` until the standalone worker has been stable for a sustained period and rollback is no longer needed.
-
-Heavy model assets are consolidated under:
-
-```text
-C:\AI\Models\LTX
-C:\AI\Models\WAN
-C:\AI\Models\FLUX
-```
-
-and exposed to the standalone runtime through `extra_model_paths.yaml`.
+Heavy model assets are consolidated under `C:\AI\Models\...` and exposed through `extra_model_paths.yaml`.
 
 ## Frozen known-good environment
 
-ComfyUI core:
+ComfyUI core is pinned at:
 
 ```text
 7dde56176efa71fd74ef7b3930ab5882d1926288
 ```
 
-Important known-good package pins include:
-
-```text
-torch==2.10.0+cu130
-torchvision==0.25.0+cu130
-torchaudio==2.10.0+cu130
-kornia==0.8.2
-kornia_rs==0.1.10
-transformers==5.0.0
-diffusers==0.40.0
-einops==0.8.2
-ninja==1.11.1.4
-```
-
-Kornia `0.8.3` previously broke the LTXVideo import; `0.8.2` is the known-good pin.
-
-Triton is intentionally not installed. `PatchTritonVAE` is therefore unavailable, but the validated LTX path does not require it.
-
-Frozen inventory under `C:\AI\HelixWorker\inventory` includes:
-
-```text
-comfy-commit.txt
-custom-nodes.txt
-gpu.txt
-pip-freeze.txt
-scheduled-task.xml
-node-classes.txt
-```
-
-The captured worker exposes 1219 ComfyUI node classes.
+The worker stack is intentionally pinned. Upstream drift may be inspected, but worker mutation requires explicit update/restart/validation.
 
 ## Worker startup
 
-Windows Task Scheduler contains:
+Windows Task Scheduler contains the `Helix ComfyUI Worker` AtStartup task launching `C:\AI\start-comfy.ps1`.
 
-```text
-Task name: Helix ComfyUI Worker
-Trigger: AtStartup
-Account: SYSTEM
-Run level: Highest
-Restart on failure: 1 minute
-```
-
-It launches `C:\AI\start-comfy.ps1`, which starts the standalone ComfyUI CLI installation on port `8188`.
-
-Manual scheduled-task startup has been validated. A real Windows reboot/AtStartup validation is still pending and must not be claimed as complete until tested.
+Manual scheduled-task startup has been validated. A real Windows reboot/AtStartup validation is still pending.
 
 ## Private connectivity
 
-Validated paths:
+Validated paths include:
 
-- worker-local HTTP;
-- worker-local WebSocket;
+- worker-local HTTP/WebSocket;
 - main Windows PC -> worker over Tailscale;
 - VPS host -> worker over Tailscale;
 - n8n container -> VPS runtime;
-- `helix-runtime` -> worker HTTP + WebSocket.
+- `helix-runtime` -> worker HTTP/WebSocket.
 
-Validated Comfy surfaces include:
+Validated Comfy surfaces include `/system_stats`, `/queue`, `/history`, `/history/{prompt_id}`, `/object_info`, `/view`, `/prompt`, prompt-specific cancellation, and `/ws`.
 
-```text
-GET  /system_stats
-GET  /queue
-GET  /history
-GET  /history/{prompt_id}
-GET  /object_info
-GET  /view
-POST /prompt
-POST /api/jobs/{prompt_id}/cancel
-WS   /ws
-```
-
-`POST /upload/image` is deliberately not wired into Helix yet because semantic image staging is deferred until the workflow input contract stabilizes.
+Image upload/staging remains deliberately deferred until broader I2V/reference input contracts stabilize.
 
 ## VPS runtime
 
-The Production runtime runs as:
+Production runtime:
 
 ```text
 container: helix-runtime
-image: helix-runtime:dev
 host binding: 127.0.0.1:8787
-networks: helix-network + n8n_default
-runtime: Node 24 container
+runtime target: Node 24 container
 ```
 
-The current runtime API exposes:
-
-```text
-GET  /v1/health
-GET  /v1/workers
-GET  /v1/workers/:workerId
-GET  /v1/workers/:workerId/live
-GET  /v1/workers/:workerId/readiness
-GET  /v1/workers/:workerId/health
-POST /v1/media/jobs
-GET  /v1/media/jobs/:jobId
-POST /v1/media/jobs/:jobId/cancel
-```
-
-`POST /v1/media/jobs` accepts a raw Comfy API-format workflow and returns after durable acceptance/submission. Generation continues asynchronously.
-
-`GET /v1/media/jobs/:jobId` returns compact generation state plus durable delivery rows and intentionally omits the stored workflow request.
-
-## Dedicated runtime database
-
-The VPS runs a dedicated private PostgreSQL database:
+Dedicated database:
 
 ```text
 container: helix-db
-image: postgres:16-alpine
-database: helix
-private Docker network only
-volume: helix-db-data
+database family: PostgreSQL 16
+private Docker network
+persistent volume: helix-db-data
 ```
 
-Applied runtime migrations through `0012_media_references.sql` currently provide:
+The runtime exposes worker/readiness routes and asynchronous media-job create/read/cancel routes. n8n does not own low-level Comfy polling or node-event interpretation.
+
+## Database / migration state
+
+The repository currently contains Production migrations through at least:
 
 ```text
-workers + worker_observations
-media_jobs + media_job_events + media_deliveries
-operator alerts/cursors/worker transition state
-operator cancellation, T2V, T2I, and reset pending state
-persisted T2V/T2I settings and T2V generation modes
-logical Production Profile identity on jobs
-unique sequential media_jobs.job_number
-media_references sharing media_jobs_job_number_seq
+0011_job_numbers.sql
+0012_media_references.sql
+0013_telegram_forum_topics.sql
+0014_telegram_job_lifecycle.sql
 ```
 
-Migration `0011_job_numbers.sql` introduced the public `BIGINT` sequence and backfilled the first 51 Helix jobs chronologically. Migration `0012_media_references.sql` reserves those existing Job numbers in `media_references`, registers future Helix jobs automatically, and lets completed Comfy-only history entries allocate from the same sequence when Helix first discovers them.
+`0011` and `0012` established one durable numeric media-reference namespace shared by Helix jobs and direct ComfyUI artifacts.
 
-The operator-facing invariant is:
+The operator invariant is:
 
 ```text
 one number -> one media execution
 ```
 
-A number cannot identify a Helix job in one command and a different Comfy artifact in another. Helix-managed jobs remain truthful `media_jobs` rows. Direct ComfyUI generations do not create fake jobs; they persist only a `kind = 'comfy_artifact'` reference mapping to the Comfy Prompt ID.
+Direct ComfyUI generations do not create fake `media_jobs` rows; they receive durable reference mappings to their Comfy Prompt IDs.
 
-This allows the same numeric reference to work across Downloads and Job/media detail:
+The last older documentation checkpoint proved `0013_telegram_forum_topics.sql` applied in Production. **Do not assume `0014` is live merely because the migration exists in Git.** Re-check the live production schema and running image before updating deployment claims.
 
-```text
-/dl i 52
-/dl g 52
-/jb 52
-```
+This README intentionally avoids the stale statement that migrations are applied only through `0012`.
 
-Legacy Comfy Prompt prefixes remain accepted for compatibility, but they are no longer the operator-facing identity once an artifact has been registered.
+## Execution/recovery model
 
-PostgreSQL is the durable Helix state. Comfy queue/history remain the execution source of truth used for reconciliation and live artifact discovery.
-
-Before migration `0012` was applied, a custom-format PostgreSQL backup was created at the VPS and the migration backfilled 51 existing `job` references successfully.
-
-## Current adapter boundary
+Durable correctness comes from:
 
 ```text
-WorkerService / JobService
-        ↓
-WorkerRegistry
-        ↓
-MediaAdapter
-        ↓
-ComfyAdapter
-        ↓
-ComfyClient
-        ↓
-ComfyUI
+PostgreSQL job
+    ↓
+backend_job_id / prompt_id
+    ↓
+Comfy /history + /queue
+    ↓
+reconcile durable state
 ```
 
-`ComfyClient` owns raw HTTP/WebSocket mechanics. `ComfyAdapter` normalizes Comfy execution into runtime semantics. n8n does not own Comfy polling or parse low-level node events.
+The repository now also contains persistent Comfy WebSocket execution telemetry using a stable Helix client identity. This improves progress presentation but does not replace queue/history reconciliation.
 
-## Proven job execution
-
-The runtime supports:
-
-```text
-durable job acceptance
-        ↓
-POST /prompt
-        ↓
-prompt_id persisted
-        ↓
-queue/history reconciliation
-        ↓
-running/completion state
-        ↓
-artifact discovery
-        ↓
-GET /view retrieval
-        ↓
-durable delivery state
-```
-
-Restart recovery has been proven by reconciling unfinished/completed jobs after `helix-runtime` restarted.
+The old infrastructure note that persistent WebSocket execution tracking is simply deferred is obsolete.
 
 ## Cancellation and timeout
 
-The pinned worker provides prompt-specific cancellation:
+The pinned worker exposes prompt-specific cancellation. Helix delegates cancellation through `JobService`, and running-job timeout reuses the same backend cancellation path.
 
-```text
-POST /api/jobs/{prompt_id}/cancel
-```
-
-Helix exposes it through:
-
-```text
-POST /v1/media/jobs/:jobId/cancel
-```
-
-Terminal transitions are guarded so a late reconciler tick cannot overwrite a recorded `cancelled`, `succeeded`, `failed`, or `timed_out` state.
-
-Running-job timeout reuses the cancellation path and is configured with:
-
-```text
-HELIX_JOB_TIMEOUT_SECONDS=3600
-```
-
-Only jobs already in `running` state consume this timeout. Queued jobs waiting for the single GPU are not timed out by this policy.
+Terminal state transitions are guarded against late reconciler overwrites.
 
 ## Artifact delivery
 
-Generation success and delivery success are separate durable states.
-
-Validated delivery path:
+Generation and delivery remain separate durable states.
 
 ```text
 Comfy artifact
@@ -340,44 +199,41 @@ Comfy artifact
     ↓
 VPS temporary spool
     ↓
-ffprobe
+ffprobe / metadata
     ↓
-Telegram original file/document
+Telegram delivery
     ↓
-persist message ID
+persist result
     ↓
-remove VPS temporary copy
+remove temporary copy
 ```
 
-Delivery uses PostgreSQL claiming/retry state, stale-delivery recovery, and exponential backoff. Retries are capped at five attempts. Malformed artifact metadata is treated as a permanent failure immediately. Terminal delivery failures remain visible with no future retry time.
+Delivery uses PostgreSQL claim/retry state with bounded retries and stale-claim recovery.
 
-Secrets remain outside Git in deployment environment files.
+The newer Telegram lifecycle implementation can target an existing lifecycle message for primary artifact replacement; whether that code/migration is currently live on the VPS must be verified separately.
 
-## Deferred infrastructure
+## Deferred infrastructure work
 
-The following remain deliberately deferred:
+- worker output-retention cleanup;
+- broader image/reference upload staging;
+- service authentication before broader remote-client exposure;
+- migration ledger/checksum automation;
+- CI/integration-test enforcement;
+- stronger submission-window recovery and idempotency hardening;
+- real Windows reboot/AtStartup proof.
 
-- worker output retention cleanup;
-- `/upload/image` staging;
-- persistent WebSocket execution tracking;
-- production service authentication before broader remote-client exposure;
-- migration ledger/checksum automation and CI enforcement.
-
-Worker-output retention is deferred because the traditional Comfy output path does not currently provide a clean runtime-controlled per-artifact delete primitive. Do not sweep the whole Comfy output tree, because manual/experimental outputs may coexist with Helix outputs.
-
-Persistent WebSocket execution tracking remains optional because queue/history reconciliation already provides correctness after a backend Prompt ID has been persisted.
+Persistent WebSocket execution telemetry is no longer listed as deferred because the repository implementation now exists.
 
 ## Operational rules
 
-1. Keep ComfyUI Desktop installed but normally closed. Desktop and CLI should not run heavy generations simultaneously.
-2. Avoid competing GPU inference workloads during LTX generation.
-3. Do not auto-update ComfyUI or custom nodes.
-4. Before any worker upgrade, record commits/packages and run a known smoke generation afterward.
-5. Keep raw ComfyUI private over Tailscale; do not expose `8188` publicly.
-6. Keep `maxConcurrentGpuJobs: 1` on this RTX 4060 worker until deliberate concurrency testing says otherwise.
-7. Keep Comfy API workflow JSON as the execution asset. Do not rewrite workflow graphs as Python.
-8. Do not move model storage or delete migration backups while this execution path is being stabilized.
-9. Do not let n8n own low-level Comfy job tracking.
-10. Do not commit runtime/database/Telegram secrets.
-11. Preserve one global numeric media-reference namespace; never introduce a second independent operator ID sequence.
-12. Do not represent direct ComfyUI history as fake Helix lifecycle jobs.
+1. Keep raw ComfyUI private over Tailscale.
+2. Keep physical GPU concurrency at one until deliberate concurrency testing says otherwise.
+3. Preserve durable worker identity independently from presentation names.
+4. Do not auto-update ComfyUI/custom nodes.
+5. Record/validate the worker stack before and after any upgrade.
+6. Do not let n8n own low-level Comfy tracking.
+7. Keep workflow JSON as execution assets; do not expose raw graph structure as the stable Helix contract.
+8. Do not commit runtime/database/Telegram secrets.
+9. Preserve one global numeric media-reference namespace.
+10. Do not represent direct ComfyUI history as fake Helix lifecycle jobs.
+11. Treat WebSocket execution events as advisory presentation telemetry rather than durable job truth.
