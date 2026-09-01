@@ -101,14 +101,16 @@ Telegram remains a bounded operator/generation surface, not a shell or general c
 
 Private operator capabilities include diagnostics, queue/job/download inspection, failures/events/outbox, guarded cancellation, T2V/T2I generation, settings, and explicit developer controls.
 
-The repository also contains forum-topic routing for the `Absolute Cinema` generation forum:
+The repository contains forum-topic routing for the `Absolute Cinema` generation forum:
 
 ```text
 Image topic -> image.t2i
 Video topic -> video.t2v
 ```
 
-Forum interaction is isolated by `(chatId, threadId, userId)`, uses selective ForceReply only for bare prompt capture, and uses inline Generate/Cancel or Reset/Cancel confirmation buttons. Consumed ForceReply cards are removed after prompt capture so they cannot become active again when the user changes topics. Operator-only commands and T2V developer controls remain private-chat-only.
+Forum interaction is isolated by `(chatId, threadId, userId)` and uses **no ForceReply behavior**. A bare `/t2i` or `/t2v` creates scoped `awaiting_prompt` state and sends an ordinary prompt card; the next plain-text message from that exact chat/topic/user is accepted while the state remains active. The user does not need to reply to the card. Prompt cards are removed after successful capture and are also cleaned up when a new slash command abandons the pending prompt where possible. Confirmation uses inline Generate/Cancel or Reset/Cancel buttons. Operator-only commands and T2V developer controls remain private-chat-only.
+
+Repository commits `d81e78f` and `02c2aa1` contain the current scoped prompt-capture and callback-keyboard fixes. After rebasing onto the documentation cleanup, the media-runtime validation suite passed **57/57** tests.
 
 ### Lifecycle/progress deployment status
 
@@ -122,7 +124,7 @@ operator_pending_t2i.confirmation_message_id
 operator_pending_t2v.confirmation_message_id
 ```
 
-The running `helix-runtime:dev` container also contains the compiled lifecycle/progress implementation, including:
+The inspected running `helix-runtime:dev` container also contains the compiled lifecycle/progress implementation, including:
 
 ```text
 /app/dist/telegram/progress-service.js
@@ -131,9 +133,11 @@ The running `helix-runtime:dev` container also contains the compiled lifecycle/p
 /app/dist/adapters/comfy/events.js
 ```
 
-This verifies that both the lifecycle migration and the newer runtime code are deployed. The implementation includes persistent Comfy execution WebSocket telemetry with a stable Helix client identity, normalized execution/progress events, compact Workflow + Sampling presentation, durable lifecycle-message ownership, primary artifact replacement through `editMessageMedia`, and retry/failure presentation on the same lifecycle target.
+This verifies that both the lifecycle migration and lifecycle/progress runtime code are deployed. The implementation includes persistent Comfy execution WebSocket telemetry with a stable Helix client identity, normalized execution/progress events, compact Workflow + Sampling presentation, durable lifecycle-message ownership, primary artifact replacement through `editMessageMedia`, and retry/failure presentation on the same lifecycle target.
 
-A successful recent end-to-end lifecycle smoke was **not** established by this verification output. The last 24-hour runtime log sample contained a Telegram command-poll `TypeError: fetch failed`, so Telegram transport health should be checked separately before treating the operator path as currently healthy.
+The scoped-prompt-capture and callback-keyboard fixes were pushed to repository `main` after that container inspection. Because the inspected container had already been running for several days, deployment of those **latest interaction fixes** is not yet proven by the existing container checkpoint.
+
+A successful recent end-to-end lifecycle smoke was also **not** established by the verification output. The sampled runtime logs contained a Telegram command-poll `TypeError: fetch failed`, so Telegram transport health and a fresh forum/lifecycle smoke remain separate verification tasks.
 
 See:
 
@@ -312,7 +316,7 @@ Prompt Relay, LTX Director, MSR, Ingredients, samplers, node IDs, and model-spec
 - real Windows reboot / AtStartup validation;
 - worker output-retention cleanup;
 - image upload/staging for broader I2V flows;
-- investigate the observed Telegram command-poll `fetch failed` transport error and complete a live lifecycle smoke test.
+- rebuild/restart the runtime with the latest scoped prompt-capture interaction fixes, investigate the observed Telegram command-poll `fetch failed` transport error, and complete a live lifecycle/forum smoke test.
 
 These are hardening tasks, not reasons to rewrite the current Production boundary.
 
@@ -339,11 +343,13 @@ These are hardening tasks, not reasons to rewrite the current Production boundar
 - [x] Validate first one-subject Licon MSR generation.
 - [x] Validate Ingredients Core IC-LoRA multi-asset reconstruction mechanism.
 - [x] Verify live `0014` Telegram lifecycle migration and lifecycle/progress runtime code.
+- [x] Replace forum ForceReply behavior with scoped next-message prompt capture in repository code.
+- [x] Pass post-rebase media-runtime regression suite (`57/57`).
+- [ ] Deploy/restart latest scoped prompt-capture fixes and complete a live Telegram lifecycle/forum smoke.
 - [ ] Validate stronger MSR viewpoint/identity retention.
 - [ ] Validate multi-subject MSR separation.
 - [ ] Validate higher-quality Ingredients settings.
 - [ ] Validate/calibrate Fast and Quality modes with controlled benchmarks.
-- [ ] Complete a live Telegram lifecycle smoke test and investigate current command-poll fetch failures.
 - [ ] Validate real Windows reboot/AtStartup behavior.
 - [ ] Close Production reliability items from the repository audit.
 

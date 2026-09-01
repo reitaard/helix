@@ -213,11 +213,13 @@ The binder mutates only vetted prompt, width, height, and seed inputs. T2I modes
 
 Private operator chat provides diagnostics, job/download inspection, failures/events/outbox, guarded cancellation, T2V/T2I generation, settings, and developer controls.
 
-The repository also contains Image/Video forum-topic generation routing with per-topic policy, isolated pending state, selective ForceReply prompt capture, and inline confirmation buttons.
+The repository contains Image/Video forum-topic generation routing with per-topic policy, isolated pending state, **state-scoped next-message prompt capture with no ForceReply**, and inline confirmation buttons. A bare generation command creates `awaiting_prompt` state for the exact chat/topic/user; the next plain-text message from that same conversation is accepted without requiring the user to reply to the prompt card.
 
-The lifecycle/progress implementation is **verified deployed on the VPS as of 2026-09-01**. The live PostgreSQL schema contains `telegram_job_lifecycles` and both pending-generation `confirmation_message_id` columns from migration `0014_telegram_job_lifecycle.sql`; the running `helix-runtime:dev` image contains the compiled lifecycle/progress, delivery, repository, and Comfy event code.
+The lifecycle/progress implementation is **verified deployed on the VPS as of 2026-09-01**. The live PostgreSQL schema contains `telegram_job_lifecycles` and both pending-generation `confirmation_message_id` columns from migration `0014_telegram_job_lifecycle.sql`; the inspected `helix-runtime:dev` image contains the compiled lifecycle/progress, delivery, repository, and Comfy event code.
 
-This proves deployment of the schema and runtime implementation. It does not replace a fresh end-to-end operator smoke. The sampled recent logs showed a Telegram command-poll `TypeError: fetch failed`, which should be investigated separately as a transport/health issue.
+The newer scoped-capture and callback-keyboard commits (`d81e78f`, `02c2aa1`) were pushed after that container checkpoint and passed the post-rebase media-runtime suite (`57/57`). Their exact live-container deployment remains to be proven by rebuild/restart and forum smoke.
+
+The sampled runtime logs also showed a Telegram command-poll `TypeError: fetch failed`, which should be investigated separately as a transport/health issue.
 
 ## Production workflow policy
 
@@ -248,6 +250,6 @@ Prompt Relay, LTX Director, MSR, Ingredients, continuation samplers, model files
 - submission-window recovery and concurrent API idempotency hardening;
 - service authentication before broader network exposure;
 - CI/integration-test and migration-governance hardening;
-- investigate the Telegram command-poll `fetch failed` transport error and complete a live lifecycle smoke.
+- rebuild/restart the runtime with the latest scoped prompt-capture fixes, investigate the Telegram command-poll `fetch failed` transport error, and complete a live lifecycle/forum smoke.
 
 Production should continue feature-by-feature behind the stable runtime/adapter boundary without reopening already-solved identity or worker-boundary decisions.

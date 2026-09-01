@@ -1,6 +1,6 @@
 # Telegram Forum Topics — Historical Implementation Record
 
-Status: **forum routing is implemented in the repository and was previously verified deployed; this file is no longer the active execution plan. Lifecycle/progress deployment status is tracked separately and must be verified against the VPS.**
+Status: **forum routing is implemented. This file is historical; current behavior is defined by `TELEGRAM_DESIGN.md` and `PROJECT_STATE.md`.**
 
 Original implementation date: 2026-08-26
 
@@ -10,24 +10,9 @@ Lifecycle implementation record: [`TELEGRAM_LIFECYCLE_PROGRESS_IMPLEMENTATION.md
 
 Canonical project checkpoint: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 
-## Mission that was implemented
+## Implemented topology
 
-Extend the existing single Telegram bot so it serves both the Creator's private operator chat and one private forum supergroup with strictly separated Image and Video generation topics while preserving:
-
-```text
-one bot
-one helix-runtime
-one Comfy worker
-one physical GPU queue
-```
-
-No second bot, worker identity, or runtime process was introduced.
-
-## Verified forum routing
-
-The implemented forum uses one Image generation topic and one Video generation topic.
-
-Policy:
+The existing single Telegram bot serves the private operator chat and one private forum supergroup with separate Image and Video generation topics while preserving one runtime, one Comfy worker, and one physical GPU queue.
 
 ```text
 Image topic
@@ -41,47 +26,52 @@ Private operator chat
    cancellation, T2I/T2V, and T2V developer controls
 ```
 
-Operator-only commands and T2V `-dev` controls remain private-chat-only.
+## Conversation isolation
 
-## Authorization and conversation isolation
-
-Forum membership authorizes only the topic-appropriate generation surface.
-
-Every interaction retains user identity and pending state is isolated by:
+Pending forum interaction state is isolated by:
 
 ```text
 (chatId, threadId, userId)
 ```
 
-A user's Image interaction cannot consume another user's state or that same user's Video interaction.
+A user's Image interaction cannot consume another user's state or that same user's Video interaction. Wrong-topic or unsupported interactions must not mutate unrelated pending state.
 
-Unknown chats/threads, unsupported update forms, and wrong-surface commands fail closed or return compact routing guidance without mutating unrelated pending state.
+## Current prompt-capture model
 
-## Prompt capture and confirmation
+The current repository no longer uses Telegram ForceReply behavior.
 
-The final forum interaction differs from the earliest implementation draft and should be understood from current code/design rather than the original plan text.
+For bare `/t2i` and `/t2v` in their allowed forum topics:
 
-Current forum rules:
+1. Helix creates durable `awaiting_prompt` state for the exact chat/topic/user.
+2. Helix sends an ordinary prompt card.
+3. The next plain-text message from that same scoped conversation is accepted while `awaiting_prompt` remains active.
+4. No Telegram reply relation is required.
+5. The prompt card is removed after successful capture.
+6. A new slash command abandons the pending prompt and removes the old prompt card where possible.
 
-- bare `/t2i` and `/t2v` use selective ForceReply only for free-text prompt capture;
-- Image also supports inline `/t2i <prompt>` capture;
-- group free text is accepted only for the correct pending conversation/user and expected prompt-capture reply;
-- the consumed ForceReply card is deleted after prompt capture;
-- generation confirmation uses inline `[ Generate ] [ Cancel ]` buttons;
-- reset confirmation uses `[ Reset ] [ Cancel ]`;
-- callbacks are bound to exact chat/thread/user/message/action state;
-- repeated, expired, wrong-user, wrong-topic, and mismatched callbacks fail closed;
-- private operator chat retains direct text confirmation.
+Image also supports inline `/t2i <prompt>`.
 
-This supersedes the earlier draft assumption that inline callbacks were unnecessary.
+After prompt capture, generation confirmation uses:
+
+```text
+[ Generate ] [ Cancel ]
+```
+
+Reset confirmation uses:
+
+```text
+[ Reset ] [ Cancel ]
+```
+
+Callbacks remain bound to the exact chat/thread/user/message/action state. The current callback cleanup removes the keyboard without sending an empty inline-keyboard object.
+
+Private operator chat retains its direct text-confirmation behavior.
 
 ## Durable origin and delivery routing
 
-Telegram-created jobs persist their delivery origin so completed artifacts can return to the exact originating destination after runtime restart.
+Telegram-created jobs persist their destination so completed artifacts return to the exact originating conversation after runtime restart.
 
-The forum migration introduced durable routing state and conversation-key changes rather than relying on in-memory maps.
-
-Delivery-time validation must continue to fail closed on unknown destinations or tool/topic mismatch:
+Delivery routing continues to enforce the tool/topic boundary:
 
 ```text
 image.t2i -> Image topic only
@@ -92,9 +82,7 @@ Operational alerts remain private.
 
 ## Polling durability and idempotency
 
-Forum work also introduced durable Telegram polling progress and update-aware/idempotent generation submission behavior so a restart/replayed update cannot freely create duplicate GPU work.
-
-There must remain only one `getUpdates` consumer for the configured bot token.
+Forum work introduced durable Telegram polling progress and update-aware generation submission behavior. There must remain only one `getUpdates` consumer for the configured bot token.
 
 ## Migration checkpoint
 
@@ -104,21 +92,38 @@ Forum routing migration:
 0013_telegram_forum_topics.sql
 ```
 
-was previously recorded as applied in Production.
+was previously verified applied in Production.
 
-The later lifecycle/progress migration is separate:
+Lifecycle migration:
 
 ```text
 0014_telegram_job_lifecycle.sql
 ```
 
-Do not infer `0014` deployment from forum deployment. Verify the live production schema/runtime before updating lifecycle deployment claims.
+was verified applied on the VPS on 2026-09-01, together with the lifecycle/progress runtime layer.
 
-## Regression expectations
+The newest interaction commits are:
 
-The repository contains focused tests for forum routing, conversation isolation, delivery routing, polling behavior, lifecycle integration, confirmation buttons, and ForceReply behavior.
+```text
+d81e78f  scoped next-message prompt capture
+02c2aa1  callback keyboard cleanup
+```
 
-For current regression validation run:
+They were pushed to `main` after the inspected runtime-container checkpoint. Their repository behavior is validated; their exact live-container deployment still needs rebuild/restart and a forum smoke test.
+
+## Regression checkpoint
+
+Post-rebase media-runtime validation on 2026-09-01:
+
+```text
+57 tests
+57 pass
+0 fail
+```
+
+Coverage includes forum routing, conversation isolation, lifecycle integration, confirmation buttons, scoped next-message prompt capture, callback cleanup, and a transport assertion that ordinary prompt-card delivery does not emit `force_reply` or `selective` markup.
+
+For current validation:
 
 ```bash
 cd production/media-runtime
@@ -126,33 +131,18 @@ npm run typecheck
 npm test
 ```
 
-Do not rely on the historical test-count numbers from the original implementation session as if they are permanently current.
-
 ## Acceptance properties that remain current
 
 - Existing private operator behavior continues to work.
 - Forum members can invoke only the allowed Image/Video generation surfaces.
 - Pending interactions are isolated by chat/topic/user.
-- Wrong-topic and operator-only commands cannot invoke hidden operations.
+- Prompt capture is state-scoped, not reply-bound.
+- Wrong-topic commands cannot invoke hidden operations.
 - T2V developer settings remain private.
 - Artifacts persist their intended destination rather than depending on process memory.
-- Operational alerts remain private.
 - One bot poller and one runtime serve the configured bot.
 - Both forum topics share the same physical RTX 4060/Comfy queue.
 
-## Non-goals that remain current
+## Why this file is historical
 
-- second Telegram bot;
-- second physical worker identity;
-- second media-runtime process;
-- group diagnostics/global cancellation;
-- arbitrary LLM command parsing inside Telegram routing;
-- broad shell/control-plane access;
-- per-user Production settings;
-- an unvalidated GPU scheduler hidden inside the routing feature.
-
-## Why this file was condensed
-
-The original document was an autonomous implementation plan containing step-by-step instructions that became stale after the feature shipped and received follow-up fixes. Keeping those steps as if they were today's plan created contradictions with current code and `TELEGRAM_DESIGN.md`.
-
-Git history remains the source for the original implementation sequence. This file now preserves the architectural intent, safety boundaries, migration identity, and acceptance properties while pointing current work to canonical docs.
+The original document was an implementation plan. Forum behavior subsequently changed through several fixes, so step-by-step historical instructions are no longer canonical. Git history preserves the implementation sequence; current work should follow `TELEGRAM_DESIGN.md` and `PROJECT_STATE.md`.

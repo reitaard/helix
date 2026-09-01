@@ -1,6 +1,6 @@
 # Telegram lifecycle progress implementation
 
-Status: **implemented, merged to `main`, and verified deployed on the VPS on 2026-09-01. A fresh end-to-end lifecycle smoke is still pending.**
+Status: **implemented, merged to `main`, and verified deployed on the VPS on 2026-09-01. A fresh end-to-end lifecycle smoke is still pending. The newest scoped forum prompt-capture fixes are on `main` and passed regression tests, but their live container deployment has not yet been re-verified.**
 
 This document records the implementation contract for the Telegram one-message generation lifecycle. It is not the canonical production-deployment ledger; use `docs/PROJECT_STATE.md` for the current verified project checkpoint.
 
@@ -109,19 +109,22 @@ The media/job identity remains valid even if automatic Telegram delivery fails.
 
 ## Forum interaction updates after the initial lifecycle merge
 
-Later forum work refined how lifecycle confirmation interacts with group privacy and Telegram UI:
+The current repository interaction model is state-scoped rather than reply-bound:
 
-- bare `/t2i` and `/t2v` use selective ForceReply only for free-text prompt capture;
+- **ForceReply is removed from the Telegram implementation.**
+- bare `/t2i` and `/t2v` create `awaiting_prompt` state scoped to the exact `(chatId, threadId, userId)` and send an ordinary prompt card;
+- the next plain-text message from that scoped conversation is accepted while `awaiting_prompt` remains active, without requiring a Telegram reply relation;
 - Image also supports inline `/t2i <prompt>` capture;
 - forum prompt confirmation uses inline `[ Generate ] [ Cancel ]` buttons;
 - forum reset uses `[ Reset ] [ Cancel ]`;
 - callbacks are bound to the exact conversation/user/message/action;
-- consumed ForceReply cards are deleted after successful prompt capture so Telegram cannot reactivate them when the user switches topics;
-- T2I ForceReply capture and inline prompt handling received follow-up fixes after the initial forum/lifecycle merge.
+- consumed prompt cards are deleted after successful capture;
+- a new slash command abandons pending prompt capture and removes the obsolete prompt card where possible;
+- callback markup is cleared after a valid action without sending an empty inline keyboard object.
 
 Private operator chat retains its direct text-confirmation model.
 
-These later fixes are part of the current repository behavior and must not be omitted when reasoning about the lifecycle UX.
+This supersedes the older reply-bound prompt-capture implementation.
 
 ## Runtime composition
 
@@ -150,13 +153,21 @@ DeliveryWorker
 
 ## Regression coverage
 
-Repository tests cover lifecycle/progress and forum integration areas including normalized Comfy progress events, stable submission client identity, workflow-node counting, lifecycle text/media edits, delivery retry behavior, forum routing/buttons, and related Telegram state transitions.
+Repository tests cover lifecycle/progress and forum integration areas including normalized Comfy progress events, stable submission client identity, workflow-node counting, lifecycle text/media edits, delivery retry behavior, forum routing/buttons, scoped next-message prompt capture, callback cleanup, and related Telegram state transitions.
 
-Do not freeze a historical total test count in this document as if it remains permanently current. Exact counts belong in deployment/test checkpoints.
+The transport regression suite explicitly verifies that prompt-card delivery does not emit `force_reply` or `selective` markup.
+
+Post-rebase validation on 2026-09-01:
+
+```text
+57 tests
+57 pass
+0 fail
+```
 
 ## Verified deployment checkpoint — 2026-09-01
 
-The VPS verification established both required production layers.
+The VPS verification established both required lifecycle production layers.
 
 ### Database
 
@@ -172,7 +183,7 @@ This confirms the effects of `0014_telegram_job_lifecycle.sql` are applied.
 
 ### Running runtime image
 
-The running `helix-runtime:dev` container contains compiled lifecycle/progress code including:
+The inspected running `helix-runtime:dev` container contains compiled lifecycle/progress code including:
 
 ```text
 /app/dist/telegram/progress-service.js
@@ -181,14 +192,18 @@ The running `helix-runtime:dev` container contains compiled lifecycle/progress c
 /app/dist/adapters/comfy/events.js
 ```
 
-This confirms the newer lifecycle/progress runtime is deployed, including the delivery path and Comfy execution-event layer.
+This confirms the lifecycle/progress runtime was deployed, including the delivery path and Comfy execution-event layer.
+
+### Newer interaction code
+
+The scoped prompt-capture commit `d81e78f` and callback-keyboard fix `02c2aa1` were pushed to `main` after the container checkpoint above. The inspected container had already been running for several days, so the docs do **not** yet claim those exact newest interaction changes are live until a rebuild/restart and forum smoke are completed.
 
 ### What this verification does not prove
 
-The verification did not include a successful fresh `/t2i` or `/t2v` end-to-end lifecycle run. The sampled 24-hour runtime logs instead showed:
+The verification did not include a successful fresh `/t2i` or `/t2v` end-to-end lifecycle run. The sampled runtime logs showed:
 
 ```text
 [telegram] command poll failed [TypeError: fetch failed]
 ```
 
-Treat this as a separate Telegram transport/health issue to investigate. Deployment of the migration/runtime code is verified; current end-to-end operator-path health is not yet re-proven by this checkpoint.
+Treat this as a separate Telegram transport/health issue to investigate. Lifecycle schema/runtime deployment is verified; current end-to-end operator-path health and deployment of the newest interaction fixes still need a fresh smoke checkpoint.

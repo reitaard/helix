@@ -172,8 +172,16 @@ Comfy WebSocket progress remains presentation-only and must never become job tru
 
 **Reason:** Forum privacy mode requires reply-bound prompt capture, while inline confirmation avoids ambiguous group `yes`/`no` handling. Removing the consumed ForceReply message prevents Telegram from reactivating an old prompt target when users switch topics.
 
+> Superseded by the 2026-09-01 scoped-prompt-capture decision below. ForceReply is no longer part of the current implementation.
+
 ## 2026-08-28 — Reference conditioning is locally validated research, but remains opt-in Production control
 
 **Decision:** Treat reference conditioning as a locally demonstrated Production research capability rather than an unvalidated future idea. Licon MSR has passed an initial one-subject LTX 2.5 new-scene identity/appearance test. Lightricks Ingredients Core IC-LoRA has reconstructed a new person + product + location scene locally on the LTX 2.3 stack. Neither system becomes a default control or a Helix Director concept; stronger tests remain required before broader Production reliance.
 
 **Reason:** Real local generations now prove that both mechanisms can influence reference-driven scene construction, superseding the earlier "not yet validated" status. Their remaining failure modes are different and still need controlled attribution: Licon needs stronger viewpoint/multi-subject testing, while Ingredients needs higher-quality settings and matched comparison. Prompt Relay still owns temporal semantic routing; reference conditioning owns visual identity/asset consistency.
+
+## 2026-09-01 — Forum prompt capture is state-scoped, not reply-bound
+
+**Decision:** Remove ForceReply from the Telegram implementation. A bare forum `/t2i` or `/t2v` creates durable `awaiting_prompt` state scoped to the exact `(chatId, threadId, userId)` and sends an ordinary prompt card. While that state is active, the next plain-text message from that same scoped conversation is accepted as the prompt without requiring a Telegram reply relation. Prompt cards are cleaned up after capture or command abandonment where possible. Forum generation/reset confirmation remains button-based and callback-bound to the exact conversation, user, message, and action state.
+
+**Reason:** The durable conversation key already provides the correct authorization boundary. Requiring Telegram reply metadata added UI friction and produced sticky/reappearing prompt behavior without adding meaningful isolation. State-scoped next-message capture keeps topic/user separation while simplifying the interaction. Regression coverage explicitly verifies that prompt-card transport emits no `force_reply` or `selective` markup.
