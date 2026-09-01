@@ -1,8 +1,8 @@
 # Production
 
-Production is the execution layer. This area contains the active ComfyUI worker/runtime work as well as model/workflow experiments.
+Production is the Helix execution layer. It owns generation/editing backends, worker/runtime reliability, semantic workflow binding, artifact delivery, and model-specific research controls.
 
-The current generation direction is **open/self-hosted first**. Runway is not part of the active Production plan. Seedance 2.0 is used as a behavioral/quality reference rather than as an integrated provider.
+The current generation direction is **open/self-hosted first**. Runway is not part of the active Production plan. Seedance-class systems are behavioral/quality references rather than integrated dependencies.
 
 ## Current execution path
 
@@ -10,19 +10,11 @@ The current generation direction is **open/self-hosted first**. Runway is not pa
 n8n / caller / Telegram
     ↓
 helix-runtime
-    ├── helix-db + worker/job/delivery/operator state
-    ├── TelegramCommandService
-    ├── TelegramAlertService
-    ├── TelegramCancelService
-    ├── TelegramT2VService
-    ├── TelegramT2VSettingsService
-    ├── TelegramT2VModeService
-    ├── TelegramT2VResetService
-    ├── TelegramT2IService + settings/reset
-    ├── TelegramDownloadsService
-    └── OutboxRepository
-    ↓
-ComfyAdapter / ComfyClient
+    ├── helix-db
+    ├── JobService / WorkerService
+    ├── Telegram operator + generation services
+    ├── DeliveryWorker
+    └── ComfyAdapter / ComfyClient
     ↓ Tailscale
 helix-rtx4060-01
     ↓
@@ -35,54 +27,38 @@ VPS temporary spool
 Telegram original-file delivery
 ```
 
-The worker/runtime boundary is a stable checkpoint. It supports durable numbered job acceptance, raw Comfy workflow submission, `prompt_id` persistence, queue/history reconciliation, restart recovery, artifact capture/retrieval, paginated live Downloads, cancellation, running-job timeout, durable Telegram delivery, bounded retry, diagnostics, operator inspection, proactive alerts, confirmed T2V/T2I submission, persisted settings, durable reset confirmation, and T2V generation modes.
+The worker/runtime boundary supports durable numbered media identity, asynchronous workflow submission, Comfy Prompt-ID persistence, queue/history reconciliation, restart recovery, cancellation, running-job timeout, artifact capture/retrieval, durable Telegram delivery, bounded retry, diagnostics, confirmed T2V/T2I submission, persisted settings, reset state, and T2V generation modes.
 
-See [`production/comfyui-worker/`](comfyui-worker/) for the worker state and roadmap.
+One global numeric media-reference namespace is shared by Helix jobs and direct/manual ComfyUI artifacts. Direct ComfyUI runs do not become fake Helix jobs.
 
-See [`production/media-runtime/`](media-runtime/) for the deployed TypeScript runtime implementation.
+See [`comfyui-worker/`](comfyui-worker/) for the worker checkpoint and [`media-runtime/`](media-runtime/) for runtime details.
 
-## Current ComfyUI/LTX validation
+## Physical worker and logical Production Profiles
 
-The standalone RTX 4060 worker has validated native LTX 2.5 I2V and T2V generation and exposes the pinned ComfyUI/custom-node stack only through the private Tailscale path.
-
-```text
-durable worker ID: helix-rtx4060-01
-display name: Christopher Nolan
-validated tools: video.i2v, video.t2v
-```
-
-LTX/Director workflow experiments remain execution research, not a frozen Helix contract. See [`production/ltx-director/`](ltx-director/) for experiment notes.
-
-## Native T2V research checkpoint
-
-Controlled native runs cover:
+There is one physical worker:
 
 ```text
-5 s  -> 121 frames @ 24 fps
-8 s  -> 193 frames @ 24 fps
-10 s -> 241 frames @ 24 fps
-1280x704 output on the current 16:9 / 0.9 MP two-stage path
-Prompt Enhance OFF for the native baseline
+worker ID: helix-rtx4060-01
+GPU: RTX 4060
+physical GPU concurrency: 1
 ```
 
-Current findings:
+Logical profiles on that worker:
 
-- native LTX already provides meaningful temporal allocation, camera/action planning, native hard cuts and joint AV behavior;
-- focused continuous shots should try native LTX first;
-- 5 seconds is the exact tested default baseline and remains useful for compact/high-motion ideas;
-- 8 seconds is the strongest current general-purpose duration for richer single shots;
-- 10 seconds should be used only when the scene genuinely has enough evolving action;
-- exact collision geometry, dense physical causality, precise reflection geometry and strict multi-action tracking remain weak;
-- longer duration can stretch a story instead of completing more events;
-- natural overlapping action language generally works better than rigid state-machine phrasing;
-- benchmark adherence and finished-video quality must be evaluated separately;
-- dominant sound sources are more reliable than subtle ambient beds.
+```text
+nolan / Christopher Nolan
+-> video.i2v
+-> video.t2v
 
-See [`production/ltx-director/NATIVE_T2V.md`](ltx-director/NATIVE_T2V.md) for the full findings.
+leibovitz / Annie Leibovitz
+-> image.t2i
+```
+
+Profiles are tool authority/operator presentation. They do not imply separate GPUs, Comfy instances, queues, or adapters.
 
 ## T2V semantic settings
 
-`Christopher Nolan / video.t2v` has persisted base settings.
+`Christopher Nolan / video.t2v` has persisted semantic base settings.
 
 Core:
 
@@ -105,7 +81,7 @@ samp   Sampler
 cfg    Guidance
 ```
 
-Exact default/test baseline:
+Current baseline:
 
 ```text
 Aspect       16:9
@@ -121,13 +97,11 @@ Sampler      euler_ancestral
 Guidance     1.0
 ```
 
-The workflow binder maps these semantic controls into the vetted T2V graph. Model files, sigmas, decoder tiling, bit depth and other graph plumbing remain outside the operator settings contract.
+The binder maps these concepts into vetted workflow inputs. Raw Comfy node IDs remain implementation details.
 
 ## Generation modes
 
-The operator concept is **Mode**, not Profile.
-
-Christopher Nolan remains the Production profile/authority. `manual`, `fast`, and `quality` are generation modes applied above the stored T2V settings.
+Christopher Nolan remains the Production profile/authority. `manual`, `fast`, and `quality` are generation modes applied above stored T2V settings.
 
 ```text
 stored manual settings
@@ -141,9 +115,9 @@ workflow binder
 ComfyUI
 ```
 
-Modes do **not** rewrite the stored manual settings. Switching back to `manual` exposes the operator's original settings unchanged.
+Modes never rewrite stored manual settings. There is no `auto` mode.
 
-Current v1 mode policy:
+Current v1 policy:
 
 ```text
 manual
@@ -153,164 +127,125 @@ fast
   Quality   Standard / 0.9 MP
   Duration  5 s
   FPS       24
-  MP        quality-derived
 
 quality
   Quality   High / 1.2 MP
   Duration  8 s
   FPS       24
-  MP        quality-derived
 ```
 
-Aspect, seeds, negative prompt, sampler, guidance and prompt-enhance state remain inherited from the stored manual settings unless a future calibrated mode explicitly earns ownership of one of those controls.
+Fast/Quality still need controlled calibration before their values should be treated as optimized presets.
 
-There is no `auto` mode.
+## Native LTX checkpoint
 
-Telegram surface:
+Native LTX 2.5 is the first-choice Production path for focused shots inside its proven comfort zone.
+
+Controlled research has covered 5 s, 8 s, and 10 s native T2V runs and established useful behavior around temporal allocation, camera/action planning, native hard cuts, and joint audiovisual generation.
+
+Current policy:
 
 ```text
-/t2v mode
-/t2v m
-/t2v mode manual
-/t2v mode fast
-/t2v mode quality
-/t2v mode reset   -> manual
+focused shot inside native comfort zone
+-> native LTX first
+
+multiple distinct semantic/narrative beats
+-> consider Prompt Relay
+
+strict physical state / identity / continuation problem
+-> use the specific Production control that targets that failure class
 ```
 
-The generation confirmation shows the selected mode and the effective settings that will actually be submitted.
+Exact collision geometry, fragile possession chains, strict multi-object physical state, and guaranteed final-state completion remain weaker classes.
 
-Migration `0009_t2v_generation_modes.sql` persists the selected mode.
+## Prompt Enhance checkpoint
 
-## Reset semantics
+Prompt Enhance has already been tested. For already-directed Helix prompts it should generally remain **OFF**.
+
+The useful lesson is not to keep a second automatic director in the final path. Prompt-structuring principles discovered through enhancement testing should be incorporated into Helix-side prompt compilation instead.
+
+## Prompt Relay checkpoint
+
+Prompt Relay is locally validated with native LTX 2.5.
+
+Its useful abstraction is:
 
 ```text
-/t2v reset
-→ reset Core base settings only
-
-/t2v reset -dev
-→ reset all exposed base settings
-
-/t2v mode reset
-→ select Manual mode
+temporal semantic routing / scene progression
 ```
 
-Settings reset and mode selection are intentionally separate. Resetting settings does not silently change the selected mode, and selecting a mode does not mutate stored settings.
+It can reduce future-event leakage and give distinct narrative beats more temporal ownership. It is **not** a hard timestamp switch, physics controller, or persistent object-state machine.
 
-## Workflow integration policy
+## Reference-conditioning checkpoint
 
-The runtime must not become a raw mirror of the Comfy graph.
+Reference conditioning has moved beyond pure research proposals.
+
+### Licon MSR
+
+A one-subject LTX 2.5 MSR test has locally passed the key initial behavior: recognizable identity/appearance survived while the generated scene/composition changed substantially.
+
+Pending work includes stronger viewpoint retention, multi-subject slot separation, person/product/background interactions, and combined timing/reference tests.
+
+### Lightricks Ingredients
+
+Ingredients Core IC-LoRA has locally reconstructed a new scene from person + product + location references on the LTX 2.3 stack. The cheap 8-step path proves the mechanism but not the quality ceiling.
+
+Higher-quality 30-step / CFG / STG validation remains pending.
+
+See [`ltx-director/README.md`](ltx-director/README.md) for detailed findings.
+
+## T2I checkpoint
+
+Annie Leibovitz owns the narrow `image.t2i` path.
+
+The active runtime workflow candidate is FLUX.2 Klein 4B **INT8 W8A8**. The prior Distilled FP8 path remains installed for rollback and was successfully validated earlier.
+
+V1 exposes only:
 
 ```text
-vetted Comfy API workflow
-        ↓
-stored semantic settings
-        ↓
-optional generation mode overlay
-        ↓
-effective settings snapshot
-        ↓
-workflow binder
-        ↓
-helix-runtime execution
+prompt
+aspect
+seed
 ```
 
-Native LTX should be the first Production path for shots inside its proven comfort zone. Director/Prompt Relay should be introduced only when required beats, state changes, shot responsibilities, or timing relationships repeatedly fail under focused native prompting.
+The binder mutates only vetted prompt, width, height, and seed inputs. T2I modes and model switching remain deferred.
 
-## Telegram operational checkpoint
+## Telegram Production surface
 
-The operator surface includes:
+Private operator chat provides diagnostics, job/download inspection, failures/events/outbox, guarded cancellation, T2V/T2I generation, settings, and developer controls.
+
+The repository also contains Image/Video forum-topic generation routing with per-topic policy, isolated pending state, selective ForceReply prompt capture, and inline confirmation buttons.
+
+The newer lifecycle/progress implementation is present in the repository, including persistent Comfy execution WebSocket telemetry and in-place lifecycle delivery. The exact live VPS migration/container checkpoint must be re-verified before describing that feature as deployed.
+
+## Production workflow policy
+
+Do not expose raw Comfy graph structure as the long-term Helix contract.
 
 ```text
-/status       Diagnostics
-/queue        Queue check
-/j            Jobs, 20 per page
-/j p <page>   Jobs page
-/jb <number>  Job details
-/dl           Downloads, 20 per page
-/dl p <page>  Downloads page
-/dl i <number> Inspect artifact
-/dl g <number> Get artifact
-/outbox       Send queue
-/errors       Recent failures
-/ev <number>  Job events
-/t2v          Generate video
-/t2i          Generate image
-/cc <number>  Cancel job
+creative / generation intent
+        ↓
+semantic Production settings
+        ↓
+optional tool-specific controls
+        ↓
+workflow binder / adapter
+        ↓
+backend workflow
 ```
 
-T2V subcommands now include settings, reset, and mode inspection/mutation.
+Prompt Relay, LTX Director, MSR, Ingredients, continuation samplers, model files, raw node IDs, and backend timing details stay inside Production unless repeated evidence proves a higher-level concept belongs in the stable Helix contract.
 
-`/t2v` separates prompt entry from GPU execution:
+## Remaining Production work
 
-```text
-/t2v
-  ↓
-awaiting prompt
-  ↓
-prompt preview + effective settings snapshot
-  ↓
-yes / no
-  ↓ yes
-video.t2v JobService submission
-```
+- controlled Fast vs Quality vs Manual calibration;
+- stronger MSR viewpoint and multi-subject validation;
+- higher-quality Ingredients validation;
+- broader image upload/staging for I2V/reference flows;
+- worker output-retention policy;
+- real Windows reboot / AtStartup validation;
+- submission-window recovery and concurrent API idempotency hardening;
+- service authentication before broader network exposure;
+- CI/integration-test and migration-governance hardening;
+- verify current live Telegram lifecycle migration/runtime state.
 
-No media job is created until confirmation. The settings snapshot freezes the effective generation configuration so later mode or settings changes cannot alter an already-previewed generation.
-
-## Current checkpoint
-
-Completed:
-
-- durable asynchronous submission and restart recovery;
-- sequential numeric Job references with legacy UUID compatibility;
-- 20-item paginated Jobs and live Downloads views;
-- artifact capture/retrieval and original-file Telegram delivery;
-- cancellation and running timeout;
-- diagnostics, alerts and complete event inspection;
-- durable cancellation confirmation;
-- durable T2V prompt/confirmation state;
-- validated native `video.t2v` generation;
-- controlled 5/8/10-second native T2V research baseline;
-- persisted Core/Advanced T2V settings;
-- durable Core/full T2V reset;
-- persisted generation modes: Manual, Fast, Quality;
-- mode overlays that preserve stored manual settings;
-- effective settings snapshot at generation confirmation;
-- validated Annie Leibovitz `image.t2i` generation and Telegram delivery.
-
-Still deferred:
-
-- worker output-retention cleanup;
-- actual image upload/staging;
-- Prompt Enhance ON/OFF calibration;
-- targeted Director/Prompt Relay retesting;
-- broader prompt/relay semantic bindings;
-- persistent WebSocket execution tracking;
-- broader Telegram mutation commands.
-
-A real Windows reboot -> automatic ComfyUI worker startup remains to be proven.
-
-## Next Production phases
-
-1. **Mode validation** — benchmark Fast vs Quality vs Manual with fixed prompts/seeds and native artifacts; compare runtime, motion/coherence, adherence, action completion and AV quality.
-2. **Mode calibration** — change only values that repeated tests justify; keep mode definitions versionable and small.
-3. **Prompt Enhance A/B** — controlled preprocessing comparison with raw prompt/settings retained.
-4. **Targeted Director / Prompt Relay** — apply stronger control only to native failure classes that still matter.
-5. **Production contract freeze** — freeze/version the stable workflow family and expose one semantic contract to Telegram, n8n and later Helix Director callers.
-
-There is intentionally no Auto phase. Mode selection stays explicit until a future system requirement proves otherwise.
-
-## Production profiles and experimental T2I
-
-There is one physical worker, `helix-rtx4060-01`, with one RTX 4060, Comfy
-endpoint, adapter, and queue; physical GPU concurrency remains one. It now has
-logical Production Profiles: `nolan` / Christopher Nolan for validated LTX
-video tools, and `leibovitz` / Annie Leibovitz for validated `image.t2i`.
-Leibovitz is not a second worker. The prior FLUX.2 Klein 4B Distilled FP8
-workflow completed successful RTX 4060 Telegram generation and original-file
-delivery and remains installed for rollback. The runtime now wires `/t2i` to
-the FLUX.2 Klein 4B INT8 W8A8 API workflow candidate: semantic aspect/seed
-settings resolve to the provisional V1 dimensions, and the binder changes only
-prompt, width, height, and seed. `HELIX_T2I_WORKFLOW_PATH` defaults to
-`/app/workflows/image_flux2_klein_4b_int8_w8a8_t2i_v1.api.json`. The workflow
-is installed for live validation and migration `0010` is applied. Model
-switching and T2I modes remain deferred.
+Production should continue feature-by-feature behind the stable runtime/adapter boundary without reopening already-solved identity or worker-boundary decisions.
