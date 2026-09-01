@@ -1,12 +1,12 @@
 # Helix Media Runtime
 
-Execution service used to control the dedicated ComfyUI GPU worker.
+Execution service used to control the dedicated ComfyUI GPU worker and expose the bounded Helix Production operator/generation surface.
 
-The active scope is intentionally narrow: accept durable media jobs, submit vetted Comfy API workflows, reconcile execution, support cancellation/timeouts, capture artifacts, deliver generated media, expose a narrow Telegram operator surface, and keep the worker/runtime boundary reliable while Production experiments continue evolving.
+Its active scope is intentionally narrow: durably accept media jobs, submit vetted Comfy API workflows, reconcile execution, support cancellation/timeouts, capture artifacts, deliver generated media, expose Telegram controls, and keep backend-specific behavior behind semantic Production boundaries.
 
-See [`../comfyui-worker/README.md`](../comfyui-worker/README.md) for the worker checkpoint.
+See [`../comfyui-worker/README.md`](../comfyui-worker/README.md) for the physical worker checkpoint.
 
-## Current deployed path
+## Runtime architecture
 
 ```text
 caller / n8n / Telegram
@@ -15,14 +15,14 @@ helix-runtime :8787
     ├── WorkerService + JobService
     │     ↓
     │   helix-db
-    │     ├── workers
-    │     ├── worker_observations
+    │     ├── workers + observations
     │     ├── media_jobs
     │     ├── media_references
     │     ├── media_job_events
     │     ├── media_deliveries
-    │     ├── operator alerts / pending actions
-    │     └── production profile settings
+    │     ├── operator / pending state
+    │     ├── production profile/settings state
+    │     └── Telegram routing/lifecycle state
     │
     ├── WorkerRegistry
     │     ↓
@@ -33,11 +33,8 @@ helix-runtime :8787
     │   ComfyUI :8188
     │
     ├── DeliveryWorker
-    ├── TelegramAlertService
-    ├── TelegramCancelService
-    ├── TelegramT2VService / TelegramT2IService
-    ├── TelegramDownloadsService
-    └── TelegramCommandService
+    ├── Telegram operator/generation services
+    └── persistent execution-event telemetry
 ```
 
 ## Current worker
@@ -45,18 +42,18 @@ helix-runtime :8787
 - Durable ID: `helix-rtx4060-01`
 - Physical-worker name: `Helix RTX 4060`
 - Adapter: `comfy`
-- Production profile `nolan`: Christopher Nolan; validated `video.i2v`, `video.t2v`
-- Production profile `leibovitz`: Annie Leibovitz; validated `image.t2i`
+- Profile `nolan`: Christopher Nolan; validated `video.i2v`, `video.t2v`
+- Profile `leibovitz`: Annie Leibovitz; `image.t2i`
 - GPU: RTX 4060, 8188 MiB VRAM
 - ComfyUI: 0.33.0
 - Pinned Comfy revision: `7dde56176efa71fd74ef7b3930ab5882d1926288`
 - Python: 3.12.11
 - PyTorch: 2.10.0+cu130
-- Max concurrent GPU jobs: 1
+- Physical GPU concurrency: 1
 
-Profiles are logical Production identities on one physical worker, not separate hardware workers.
+Profiles are logical Production identities on one physical worker, not separate workers or queues.
 
-## Current API
+## API
 
 Worker/runtime:
 
@@ -73,11 +70,11 @@ Media jobs:
 - `GET /v1/media/jobs/:jobId`
 - `POST /v1/media/jobs/:jobId/cancel`
 
-Generation is asynchronous. `POST /v1/media/jobs` durably accepts the Helix job and submits the workflow to the selected Production profile/worker.
+Generation is asynchronous. Job correctness remains grounded in durable PostgreSQL state plus Comfy queue/history reconciliation.
 
 ## Execution identity
 
-Helix deliberately keeps three identities separate:
+Helix deliberately separates:
 
 ```text
 internal Helix ID
@@ -90,21 +87,7 @@ Comfy backend execution ID
 prompt_id / backend_job_id
 ```
 
-The internal `job_...` ID remains the database primary key. Comfy Prompt IDs remain backend execution identities. The short numeric reference is the operator-facing identity.
-
-### One global numeric media-reference namespace
-
-Migration `0011_job_numbers.sql` introduced `media_jobs.job_number BIGINT` and the sequence `media_jobs_job_number_seq`.
-
-Migration `0012_media_references.sql` extends that same sequence into a global operator namespace:
-
-```text
-media_references.reference_number
-        ↓
-same media_jobs_job_number_seq
-```
-
-Existing Helix jobs are reserved as `kind = 'job'`. Future Helix jobs are registered automatically by a database trigger. Completed Comfy-only artifacts discovered in live history allocate `kind = 'comfy_artifact'` references from the same sequence.
+Migrations `0011_job_numbers.sql` and `0012_media_references.sql` established one global numeric media-reference namespace.
 
 The invariant is:
 
@@ -112,37 +95,15 @@ The invariant is:
 one number -> one media execution
 ```
 
-There is no separate Download-ID sequence and no separate Job-ID sequence exposed to Telegram.
+Helix-managed jobs retain real `media_jobs` rows. Direct/manual ComfyUI generations receive durable `media_references.kind = comfy_artifact` mappings and do **not** become fake jobs.
 
-Example:
-
-```text
-51 -> Helix image.t2i job
-52 -> direct ComfyUI T2V artifact
-53 -> Telegram /t2v Helix job
-54 -> direct ComfyUI artifact
-55 -> Telegram /t2i Helix job
-```
-
-PostgreSQL sequences are monotonic allocators, not gapless counters. Gaps are acceptable and must not be repaired by renumbering.
-
-### Direct ComfyUI generations are not fake Helix jobs
-
-A direct/manual ComfyUI generation has no Helix lifecycle row. Helix therefore does **not** insert a synthetic `media_jobs` record for it.
-
-Instead:
+The same numeric reference therefore works across Jobs/Downloads/media detail:
 
 ```text
-media_references
-kind = comfy_artifact
-reference_number = 52
-backend_job_id = <Comfy Prompt ID>
-job_id = NULL
+/jb 52
+/dl i 52
+/dl g 52
 ```
-
-This preserves truthful lifecycle semantics while still giving the operator one durable number.
-
-The number is allocated when Helix first discovers the completed Comfy artifact in history. Once allocated, the Prompt ID -> numeric reference mapping is durable.
 
 ## Execution lifecycle
 
@@ -158,201 +119,143 @@ running
 succeeded
 ```
 
-Additional terminal paths:
+Additional terminal paths include `cancelled`, `timed_out`, and `failed`.
+
+Comfy's Prompt ID is stored as `backend_job_id`. Queue/history reconciliation remains authoritative for durable execution truth once that ID is persisted.
+
+## Persistent Comfy execution telemetry
+
+The repository now contains persistent WebSocket execution tracking for presentation telemetry.
+
+The runtime uses one stable client identity per physical worker and supplies it with `/prompt` submissions so Comfy execution events can be correlated to the backend Prompt ID. Normalized events include execution start/node/progress/success/interrupted/error families.
+
+This WebSocket is **not** durable job truth. A disconnect must not invalidate a generation; PostgreSQL plus queue/history reconciliation remain authoritative.
+
+The old statement that persistent WebSocket tracking is merely a future option is no longer correct.
+
+## Telegram surfaces
+
+Private operator chat remains the full bounded operator surface, including:
 
 ```text
-running -> cancelled
-running -> timed_out
-backend error -> failed
-```
-
-Comfy's `prompt_id` is stored as `backend_job_id` for Helix-managed jobs. Queue/history reconciliation provides durable backend-state recovery once that backend ID is persisted.
-
-## Telegram operator commands
-
-`TelegramCommandService` is a narrow operator surface inside `helix-runtime`. It accepts messages only from the configured `HELIX_TELEGRAM_CHAT_ID`.
-
-Current primary commands:
-
-```text
-/status        - Diagnostics
-/queue         - Queue check
-/j             - Helix jobs, 20 per page
-/j p <page>    - Jobs page
-/jb <number>   - Job/media details
-/dl            - Completed GPU artifacts, 20 per page
-/dl p <page>   - Downloads page
-/dl i <number> - Inspect artifact
-/dl g <number> - Get artifact
-/outbox        - Send queue
-/errors        - Recent failures
-/ev <number>   - Job events
-/t2v           - Generate video
-/t2i           - Generate image
-/cc <number>   - Cancel Helix job
-```
-
-Short aliases include `/st`, `/qu`, `/jbs`, `/jb`, `/ob`, `/err`, `/ev`, `/cc`, and `/h`.
-
-### `/j` / `/jobs`
-
-Shows Helix-managed `media_jobs` only, 20 items per page. Each row uses the durable numeric reference.
-
-Direct ComfyUI runs are intentionally not inserted into this lifecycle list because they are not Helix jobs.
-
-### `/jb <number>` / `/job <number>`
-
-Numeric lookup first resolves the shared media-reference namespace.
-
-For a Helix-managed reference, the detail view includes lifecycle state, Production Profile, tool, runtime, timestamps, Outbox/send state, and the semantic generation snapshot.
-
-For a Comfy-only reference, `/jb <number>` resolves the same underlying Comfy execution used by Downloads and exposes the same numeric inspect/get commands instead of returning `Job not found`.
-
-Therefore:
-
-```text
-/dl i 52
-/jb 52
-```
-
-refer to the same media execution.
-
-Legacy full Helix IDs and unique Helix UUID prefixes remain accepted where previously supported.
-
-### `/dl` / `/downloads`
-
-Reads live completed Comfy history and presents every discovered artifact with a numeric media reference.
-
-Helix-managed history reuses that job's existing `job_number`. Direct ComfyUI history receives a durable `media_references.reference_number` from the same allocator.
-
-The old operator-facing Prompt-prefix fallback is no longer used for discovered artifacts. Legacy Prompt prefixes remain accepted as input for compatibility, including historical workflows and copied references.
-
-This fixes the previous ambiguity where a six-character Comfy Prompt prefix such as `161023` could be mistaken for a numeric Helix Job ID.
-
-Commands converge on the same mapping:
-
-```text
+/status
+/queue
+/j
+/j p <page>
+/jb <number>
 /dl
-→ 52 · artifact.mp4
-
-/dl i 52
-→ inspect artifact 52
-
-/dl g 52
-→ retrieve artifact 52
-
-/jb 52
-→ resolve the same execution
+/dl p <page>
+/dl i <number>
+/dl g <number>
+/outbox
+/errors
+/ev <number>
+/t2v
+/t2i
+/cc <number>
+/help
 ```
 
-Valid-empty Comfy history remains distinct from unavailable/malformed history.
+T2V includes persisted semantic settings, reset behavior, and Manual/Fast/Quality modes. T2I intentionally remains narrow around prompt/aspect/seed.
 
-## Cancellation and timeout
+The repository also contains forum routing for one Image topic and one Video topic. Forum pending interactions are isolated by chat/thread/user; selective ForceReply is used only for bare prompt capture; confirmation/reset actions use inline buttons; operator-only commands and T2V developer settings remain private-chat-only.
 
-The pinned Comfy worker exposes prompt-specific cancellation through:
+## Telegram lifecycle/progress implementation
+
+Repository code contains the newer one-message lifecycle implementation:
 
 ```text
-POST /api/jobs/{prompt_id}/cancel
+confirmation
+    ↓
+queued
+    ↓
+generating
+    ↓
+uploading
+    ↓
+primary final artifact
 ```
 
-Helix exposes this through:
+Running presentation can show separate Workflow and Sampling progress. The primary successful Telegram artifact can replace the original lifecycle text message through `editMessageMedia`; delivery retry/failure presentation also remains attached to the lifecycle target.
+
+The corresponding repository migration is:
 
 ```text
-POST /v1/media/jobs/:jobId/cancel
+0014_telegram_job_lifecycle.sql
 ```
 
-Telegram `/cancel <number>` / `/cc <number>` uses durable yes/no confirmation and delegates to `JobService`; Telegram does not control Comfy directly.
+### Live deployment verification gate
 
-Running-job timeout is configured with `HELIX_JOB_TIMEOUT_SECONDS`.
+The repository proves the code/migration exists, but this README deliberately does **not** claim the current VPS has `0014` applied until production is re-checked.
 
-## T2V and T2I operator generation
+The last older documentation checkpoint proved forum migration `0013` deployed. To call lifecycle/progress live, verify both:
 
-`/t2v` and `/t2i` separate prompt entry from GPU execution. Prompt/setting snapshots are captured before confirmation and no media job is submitted until the operator confirms `yes`.
+1. production DB contains `telegram_job_lifecycles` and the pending-table confirmation-message columns;
+2. the running `helix-runtime` image contains the lifecycle/progress implementation.
 
-Current logical profiles:
+`docs/PROJECT_STATE.md` is the canonical place to record the result after verification.
 
-```text
-Christopher Nolan
-└── video.i2v / video.t2v
+## T2V and T2I workflow binding
 
-Annie Leibovitz
-└── image.t2i
-```
+T2V uses semantic Helix settings rather than exposing Comfy node IDs. Current concepts include aspect, quality, duration, prompt enhancement, FPS, seeds, negative prompt, megapixel override, sampler, guidance, and explicit Manual/Fast/Quality modes.
 
-The current T2V surface includes persisted semantic settings plus Manual/Fast/Quality modes. The current T2I surface intentionally remains narrow: prompt, aspect and seed around the active FLUX.2 Klein 4B INT8 W8A8 workflow candidate.
+T2I uses FLUX.2 Klein 4B INT8 W8A8 as the active workflow candidate. Its V1 semantic surface is deliberately narrow: prompt, aspect, and seed. The earlier Distilled FP8 path remains available for rollback.
 
-## Durable Telegram output delivery
+## Artifact delivery
 
 Generation and delivery remain separate durable states.
 
 ```text
 job succeeded
     ↓
-media_deliveries row
+media_deliveries
     ↓
 Comfy /view
     ↓
 VPS temporary spool
     ↓
-Telegram sendDocument
+Telegram original document/media target
     ↓
-persist Telegram message ID
+persist Telegram result
     ↓
 remove temporary copy
 ```
 
-Delivery claims use PostgreSQL state, `FOR UPDATE SKIP LOCKED`, stale-claim recovery, bounded retries, and exponential backoff.
+Delivery claims use PostgreSQL state, stale-claim recovery, bounded retries, and backoff. Original media is handled as document/file media so Telegram does not intentionally transcode the generated artifact.
 
-Original media is sent as a Telegram document/file so Telegram does not intentionally recompress the artifact.
+For lifecycle-owned primary Telegram deliveries, the repository implementation may replace the existing lifecycle message rather than append a new bottom-of-chat artifact message.
 
 ## Database migrations
 
-Current applied Production migration checkpoint is through:
+Repository migrations currently include at least:
 
 ```text
+0011_job_numbers.sql
 0012_media_references.sql
+0013_telegram_forum_topics.sql
+0014_telegram_job_lifecycle.sql
 ```
 
-`0012` was applied after a custom-format `pg_dump` backup. It reserved 51 existing Helix Job numbers successfully before the updated runtime was deployed.
+Do not equate "migration exists in Git" with "migration is applied in Production". The live schema must be checked before deployment claims are updated.
 
-The migration creates:
+## Validation policy
 
-- `media_references`;
-- unique Job and Comfy-artifact mappings;
-- backfill of existing `media_jobs.job_number` values;
-- `register_media_job_reference()`;
-- an `AFTER INSERT` trigger for future Helix jobs.
+Use the project-owned runtime suite for regression validation:
 
-Do not run runtime code that expects `media_references` against a database where `0012` has not been applied.
-
-## Validation checkpoint
-
-The media-reference change is covered by the runtime test suite. The VPS host test run after pulling the change completed:
-
-```text
-32 tests
-32 passed
-0 failed
+```bash
+cd production/media-runtime
+npm run typecheck
+npm test
 ```
 
-Coverage includes:
-
-- numeric allocation for Comfy-only artifacts;
-- `/dl` list/inspect/get resolution;
-- legacy Prompt-prefix input with numeric presentation;
-- exact numeric Job lookup;
-- Comfy-only numeric `/jb` representation;
-- the shared-sequence migration contract;
-- the all-digit Comfy Prompt-prefix collision class that caused the original bug.
-
-The VPS host currently uses Node 26 for local test commands and therefore emits an `EBADENGINE` warning because the package declares `>=24 <25`. The deployed runtime image remains the intended Node 24 production environment.
+Do not keep a historical test-count number in this README as if it were permanently current. Record exact counts in implementation/deployment checkpoints where they were observed.
 
 ## Runtime stack
 
 - TypeScript
 - Fastify
 - Zod
-- ws
+- `ws`
 - PostgreSQL via `pg`
 - Node 24 production container
 - ffprobe/FFmpeg in the production image
@@ -362,16 +265,19 @@ The VPS host currently uses Node 26 for local test commands and therefore emits 
 ## Operational rules
 
 - Keep raw ComfyUI private over Tailscale.
-- Keep `maxConcurrentGpuJobs: 1` for the current RTX 4060 worker.
+- Keep physical GPU concurrency at one for the current RTX 4060 worker.
 - Preserve the durable worker ID even when display names change.
-- Treat the Comfy revision as a production pin; update deliberately after validation.
-- Keep Telegram write scope narrow; no shell/restart/package-update actions.
+- Treat the Comfy revision as a production pin; update only after explicit validation.
+- Keep Telegram scope narrow; no shell/restart/package-update actions.
 - Do not let n8n own low-level Comfy polling/tracking.
 - Do not store Telegram/database credentials in Git.
 - Preserve one global numeric media-reference namespace.
 - Do not create fake `media_jobs` rows for direct ComfyUI generations.
-- Keep raw node IDs behind Production binders rather than exposing them as long-term Helix semantics.
+- Keep raw node IDs behind Production binders.
+- Treat WebSocket progress as advisory presentation telemetry, not durable job truth.
 
 ## Next direction
 
-Production runtime work should now proceed feature-by-feature without reopening the numeric identity model. The next main Helix brain direction remains Niche Intelligence, while Production-specific features can continue as a separate workstream behind the stable worker/runtime boundary.
+Continue Production feature-by-feature behind the stable worker/runtime boundary. Current hardening priorities include the submission-before-`backend_job_id` recovery window, concurrent API idempotency, service authentication before broader network trust, CI/integration enforcement, migration governance, and explicit delivery semantics.
+
+The main Helix brain direction remains Niche Intelligence.
