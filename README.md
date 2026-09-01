@@ -6,9 +6,9 @@ The project is intentionally divided so that the **brain of the system is indepe
 
 ## Current status
 
-**Preparation / foundation phase, with the first Production execution slice locked as a stable checkpoint, a controlled native LTX 2.5 T2V quality baseline established, and a persisted T2V settings/reset surface now implemented.**
+Helix remains in the **Preparation / foundation phase**, with a comparatively mature single-worker Production execution slice and several active research tracks.
 
-The active brain-development path is:
+The active brain-development path remains:
 
 ```text
 Niche Intelligence
@@ -18,19 +18,38 @@ Director
 Experiment Engine
 ```
 
-Production/generation continues as a separate workstream and will connect through stable briefs/contracts rather than shaping the Intelligence or Director architecture.
+Production/generation continues as a separate workstream and connects through stable semantic contracts rather than shaping Intelligence or Director around ComfyUI/LTX details.
 
-The current Production checkpoint includes a durable ComfyUI execution runtime, PostgreSQL job/delivery state, sequential numeric Job references, 20-item paginated Jobs and live Downloads views, original-file Telegram delivery, operator diagnostics, durable operational alerts, complete job-event debugging, guarded terminal-style job cancellation, and a validated Telegram generation path for native LTX 2.5 T2V and an active FLUX.2 Klein 4B INT8 W8A8 T2I candidate with pre-submit confirmation.
+Current Production facts:
 
-T2V is no longer prompt-only. `Christopher Nolan / video.t2v` has a persisted semantic settings layer with Core controls for aspect, quality, duration and prompt enhancement, plus explicit `-dev` access to FPS, Stage 1/2 seeds, negative prompt, megapixel override, sampler and guidance. Durable reset confirmation can restore Core defaults or the full exposed T2V baseline.
+- one physical RTX 4060 worker: `helix-rtx4060-01`;
+- one VPS `helix-runtime` and PostgreSQL state store;
+- durable asynchronous ComfyUI job submission, reconciliation, cancellation, timeout, artifact capture, and delivery;
+- one durable numeric media-reference namespace shared by Helix jobs and direct ComfyUI artifacts;
+- logical Production Profiles `nolan` / Christopher Nolan for video and `leibovitz` / Annie Leibovitz for image generation;
+- validated native LTX 2.5 T2V plus persisted semantic T2V settings and Manual/Fast/Quality modes;
+- active FLUX.2 Klein 4B INT8 W8A8 T2I workflow candidate, with the prior Distilled FP8 path retained for rollback;
+- Telegram private-operator controls plus forum-topic Image/Video generation routing in the codebase;
+- Telegram lifecycle/progress code, including persistent Comfy execution WebSocket telemetry and in-place lifecycle delivery, is merged; the exact live migration/container checkpoint must be verified against the VPS before describing it as deployed.
 
-Native LTX 2.5 T2V has been benchmarked across controlled 5-second, 8-second and 10-second runs before adding Director/Prompt Relay controls. The current research result is to use focused native LTX first for shots inside its proven comfort zone and escalate to stronger Production controls only when timing, shot responsibility, state changes, or structured progression repeatedly fail.
+The current generation direction is **open/self-hosted first**. Runway is not part of the active Production plan. Seedance-class systems remain behavioral/quality references where useful.
 
-The current Production mode layer is intentionally small: `manual`, `fast`, and `quality`. A mode overlays only proven execution settings and never rewrites the stored manual settings. There is no `auto` mode. Annie Leibovitz `image.t2i` intentionally has no modes; its narrow V1 settings are aspect and seed.
+## Production research checkpoint
 
-The current generation research direction is **open/self-hosted first**. Runway is not part of the active Production plan. Seedance 2.0 is being used as a behavioral/quality reference rather than an active dependency.
+Native LTX 2.5 remains the first-choice path for focused shots inside its proven comfort zone. Controlled work has validated meaningful temporal allocation, camera/action planning, hard cuts, joint audiovisual generation, and useful Prompt Relay scene progression.
 
-See [`production/README.md`](production/README.md), [`production/ltx-director/NATIVE_T2V.md`](production/ltx-director/NATIVE_T2V.md), and [`production/media-runtime/README.md`](production/media-runtime/README.md).
+Reference-conditioning research has moved beyond theory:
+
+- Licon MSR has produced a locally validated one-subject new-scene identity/appearance result on LTX 2.5;
+- Lightricks Ingredients Core IC-LoRA has reconstructed a new person + product + location scene locally on the LTX 2.3 stack;
+- stronger viewpoint retention, multi-subject separation, higher-quality Ingredients settings, and combined reference/timing controls remain research tasks.
+
+See [`production/ltx-director/README.md`](production/ltx-director/README.md) for the current detailed Production research state.
+
+## Other validated research
+
+- [`services/speech/`](services/speech/) contains the project-owned Moonshine validation harness. Moonshine Medium Streaming English is validated locally on the VPS CPU; Telegram voice integration is not implemented yet.
+- [`research/helix-ai-adapter/`](research/helix-ai-adapter/) is detached tiny-LLM research for bounded semantic tasks. It is not integrated into Telegram, media-runtime, or job execution.
 
 ## System divisions
 
@@ -44,7 +63,7 @@ See [`production/README.md`](production/README.md), [`production/ltx-director/NA
 - `workflows/` — sanitized n8n workflow exports and orchestration notes
 - `research/` — evidence and validation notes; research is input to decisions, not automatically truth
 - `docs/` — system boundaries, preparation, state, assumptions, and decisions
-- `infra/`, `services/` — implementation support once real boundaries require them
+- `infra/`, `services/` — implementation support for proven boundaries
 
 ## Core principle
 
@@ -58,6 +77,6 @@ Analytics measures what happened.
 Feedback improves the next cycle.
 ```
 
-No Director component should depend on a specific model or production provider. The current open/self-hosted Production direction is an execution choice, not a Helix brain dependency.
+No Helix Director component should depend on a specific model or production provider. Anything not recorded as a decision remains a working assumption until validated.
 
-Anything not recorded as a decision remains a working assumption until validated.
+For the canonical checkpoint, read [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md).
