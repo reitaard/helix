@@ -1,172 +1,156 @@
 # Telegram Operator Design
 
-> Creator-approved design guidance reconstructed from the Telegram/ComfyUI project discussion exported on 2026-08-25, then checked against the current runtime implementation. This document governs future Telegram presentation work; current code may still contain older formatting that should be migrated carefully rather than changed opportunistically.
+> Canonical presentation and interaction guidance for the Helix Telegram surface. Updated 2026-09-01 to reconcile private-operator behavior, forum-topic generation, and lifecycle/progress implementation.
 
 ## Purpose
 
-Telegram is a compact operator surface for Helix Production. It provides diagnostics, job inspection, confirmed generation/cancellation, alerts, and original-artifact delivery. It is not a general control plane and must not expose shell, package, restart, update, or arbitrary worker mutation.
+Telegram is a compact operator and bounded generation surface for Helix Production. It provides diagnostics, job/media inspection, confirmed generation/cancellation, alerts, settings, and original-artifact delivery.
+
+It is **not** a general control plane. Do not expose shell execution, package updates, worker restart, arbitrary file mutation, or unrestricted Comfy controls.
 
 ## Design process
 
-1. Inspect the current rendered message and the exact code producing it before proposing a change.
-2. For a broad format revision, show the current format and collect Creator corrections first.
-3. Do not implement while the Creator is still reviewing formats. Implement only after explicit approval such as “execute”, “make changes”, or equivalent.
-4. Treat every approved example literally: punctuation, brackets, bold/italic/underline, quote behavior, and blank lines are part of the contract.
-5. Change related messages together. Search every Telegram presenter so an old variant is not left behind.
-6. Preview exact Telegram HTML, not Markdown approximations.
-7. Check for accidental leading, trailing, or repeated blank lines. The Creator repeatedly prefers no unexplained gaps.
-8. After changes, run typecheck, build, `git diff --check`, and inspect the complete diff. Verify deployed output separately when deployment is requested.
+1. Inspect current rendered output and the exact presenter/service before changing formatting.
+2. Treat approved examples literally: punctuation, brackets, emphasis, quote behavior, and blank lines are part of the contract.
+3. Change related message families together rather than leaving old variants behind.
+4. Preview Telegram HTML, not Markdown approximations.
+5. Preserve durable state/audit behavior independently from presentation copy.
+6. Run typecheck and the project-owned Telegram/runtime tests after behavior or presentation changes.
 
 ## Visual language
 
-### General
+- Telegram HTML parse mode.
+- No decorative emoji-heavy presentation.
+- Compact, modern, easy to scan/copy.
+- Bold for labels and important states.
+- Italic/bold-italic only where the approved grammar uses it.
+- Monospace for commands, IDs, filenames, sampler values, technical event names, and progress bars where appropriate.
+- Underline selected values in fixed-choice panels when the approved settings grammar calls for it.
+- Keep exact aspect brackets such as `⦗16:9⦘`.
+- Avoid unexplained blank lines.
 
-- Use Telegram HTML parse mode.
-- No emojis.
-- Keep messages compact, modern, and easy to scan or copy.
-- Avoid decorative text that does not add operational meaning.
-- Do not register or force Telegram’s command menu; commands remain available without a forced menu.
-- Use bold for labels and important states.
-- Use bold italic for selected emphasis where the approved format calls for it.
-- Use italic alone for units, durations, secondary notes, and quiet helper text.
-- Use monospace for commands, technical event names, filenames, sampler values, and IDs only where the specific view calls for it. Do not monospace every value.
-- Use underline to identify a selected option in a fixed choice list.
-- Use exact aspect brackets `⦗16:9⦘`; do not replace them with ordinary parentheses or square brackets.
-
-### Titles
-
-Primary command pages use compact square-bracket titles:
+Primary titles use compact square-bracket grammar such as:
 
 ```text
 [ STATUS ]
 [ QUEUE ]
 [ JOBS ]
 [ OUTBOX ]
-[ T2V / SETTINGS ] (dev)
+[ T2V / SETTINGS ]
 [ T2V / MODE ]
 ```
-
-Internal section headings may use the dot form in lowercase:
-
-```text
-• system •
-• core •
-• advanced •
-• options •
-• generation •
-```
-
-Do not restore the old `• TITLE •` form for primary page titles.
-
-### Spacing and quote blocks
-
-- Do not insert a blank line immediately after a primary title unless the approved message explicitly includes one.
-- Keep the worker hierarchy contiguous, with no blank line between its two lines:
-
-```text
-Worker > Christopher Nolan
-└ video.t2v
-```
-
-- Use quote blocks to group related details, not as decoration.
-- Use expandable quotes for genuinely long content: prompts, sampler lists, long option lists, event timelines, and detailed generation snapshots.
-- Do not collapse the main settings panel.
-- Three-choice settings such as Quality and FPS remain visible rather than collapsed.
-- Views with no options may omit an `options` heading while retaining the quote around the detail block.
-- In `/jobs`, each job is one compact quote block without blank lines inside it.
-- `/j`, `/jbs`, and `/jobs` list 20 jobs per page. Use `/j p <page>` for compact previous/next navigation and `/jb <number>` for detail.
 
 ## Identity and naming
 
 - Root system: **Helix**.
-- Production service/runtime names should describe the Comfy service boundary, not pretend every subsystem is Helix.
-- Durable worker ID: `helix-rtx4060-01` in the current verified branch state.
-- Operator-facing worker name: **Christopher Nolan**.
-- Operator-facing messages use **Christopher Nolan**; durable IDs remain internal unless a technical view explicitly requires them.
-- Use actual Helix tool names such as `video.t2v` and `video.i2v`, not generic labels such as `COMFY • GEN`.
-- Generation behavior is called a **Mode**, not a profile. Current modes are Manual, Fast, and Quality. There is no Auto mode.
+- Physical worker ID: `helix-rtx4060-01`.
+- Video Production profile: **Christopher Nolan**.
+- Image Production profile: **Annie Leibovitz**.
+- Production profile identity is presentation/tool authority; it is not physical worker identity.
+- Generation behavior is called a **Mode**, not a profile. Current T2V modes are Manual, Fast, and Quality. There is no Auto mode.
+- Use actual Helix tool names such as `video.t2v`, `video.i2v`, and `image.t2i`.
+
+## Operator media references
+
+The operator surface uses one durable numeric media-reference namespace shared across Helix jobs and direct ComfyUI artifacts.
+
+```text
+52
+```
+
+may be used consistently with:
+
+```text
+/jb 52
+/dl i 52
+/dl g 52
+```
+
+Internal Helix `job_...` IDs and Comfy Prompt IDs remain separate technical identities. Legacy IDs/prefixes remain accepted only where compatibility requires them.
+
+Do not reintroduce a second independent Download ID or a Prompt-prefix presentation namespace.
 
 ## Generation lifecycle cards
 
-T2I and T2V lifecycle cards use the same compact grammar in the private operator chat and the forum topics. Do not insert blank lines between rows.
+T2I and T2V use one compact lifecycle grammar across private chat and forum topics.
+
+Representative running form:
 
 ```html
 <b>[ GENERATING ]</b>
 <b>Annie Leibovitz</b> <b>//</b> Job · <code>60</code>
 └ <code>image.t2i</code>
 <code>Workflow  █░░░░░░░░░  13%</code>
+<code>Sampling  ░░░░░░░░░░  --</code>
 CLIP Text Encode (Positive) · <b><i>Running (15s)</i></b>
 ```
 
-- The second row is always `<worker> // Job · <number>`.
-- The third row is always `└ <tool>`; use `image.t2i` for Annie Leibovitz and `video.t2v` for Christopher Nolan.
-- `Workflow` is always shown.
-- `Sampling` is always shown between Workflow and the stage row. Before Comfy reports numeric sampler progress, render an empty loader with `--`; once reported, render its percentage.
-- The stage row owns the elapsed timer. Do not append a separate `Running`/timer row.
-- Queued, uploading, retry, failure, and cancellation lifecycle states retain this same title, worker/job, and tool hierarchy.
+Rules:
 
-### Forum generation interaction
+- no blank lines inside the lifecycle hierarchy;
+- second row is `<worker> // Job · <number>`;
+- third row is `└ <tool>`;
+- Workflow is always shown while generating;
+- Sampling is shown separately and may display `--` before numeric sampler progress exists;
+- the stage row owns elapsed time;
+- do not fabricate a percentage for stages without meaningful numeric progress;
+- queued/uploading/retry/failure/cancelled variants retain the same identity hierarchy.
 
-In Image and Video forum topics, selective ForceReply is used only by bare `/t2i` and `/t2v` commands to capture the free-text generation prompt. Delete the consumed ForceReply card immediately after prompt capture so Telegram cannot reactivate it when the user switches topics; confirmation buttons then own the interaction. Image generation also accepts `/t2i <prompt>` directly and proceeds to confirmation without ForceReply. Settings panels, setting changes, modes, help, usage, and result/toast messages must not force a reply.
+WebSocket progress is presentation telemetry only. PostgreSQL plus Comfy queue/history reconciliation remain durable job truth.
 
-After forum prompt capture, use inline `[ Generate ] [ Cancel ]` buttons. Forum reset confirmation uses `[ Reset ] [ Cancel ]`. Bind callbacks to the originating `(chatId, threadId, userId)` and exact confirmation message, remove the keyboard after the first valid action, and reject expired, repeated, wrong-user, wrong-topic, and mismatched-action callbacks. Private operator chat retains direct `yes` / `no` text confirmation without buttons.
+## Private operator interaction
 
-## IDs and states
+Private chat keeps the full bounded operator surface and direct text confirmation behavior where already established.
 
-Each Helix job has a durable sequential numeric Job number. This is the operator-facing reference in every Telegram view and command:
+Important actions such as generation, cancellation, and reset may use case-insensitive `yes` / `no` confirmation with durable pending state, expiry, and invalid-response limits.
+
+The old blanket statement "no destructive Telegram buttons" applies to the private operator confirmation model; it is **not** a ban on the forum inline-button interaction described below.
+
+## Forum generation interaction
+
+Forum routing exposes only the allowed generation surface for each configured topic.
+
+### Prompt capture
+
+Selective ForceReply is used only by bare `/t2i` and `/t2v` commands when free-text prompt capture is required.
+
+- Settings, modes, help, usage, and result/toast messages must not force a reply.
+- Image generation may also accept `/t2i <prompt>` inline and proceed directly to confirmation.
+- Group free text is accepted only for the matching pending user/conversation and, for bare-command capture, only when replying to the expected ForceReply message.
+- Delete the consumed ForceReply card after successful prompt capture so Telegram cannot reactivate it when the user switches topics.
+
+### Forum confirmation buttons
+
+After forum prompt capture:
 
 ```text
-Job · 51
-/job 51
-/events 51
-/cancel 51
-/dl i 51
-/dl g 51
+[ Generate ] [ Cancel ]
 ```
 
-Job numbers are exact, unpadded, never recycled, and stored independently from internal Helix and Comfy identifiers. Legacy Helix UUID references and Comfy Prompt prefixes remain accepted for compatibility where they were previously supported. Full internal identifiers appear only in technical expandable details. Live Comfy artifacts without a corresponding Helix job use a clearly labelled compact Comfy reference.
-
-Use bracketed state where the approved format shows it:
+Forum reset confirmation uses:
 
 ```text
-[queued]
-[running]
-[succeeded]
-[failed]
+[ Reset ] [ Cancel ]
 ```
 
-Do not add stray punctuation after an ID or quote block.
+Callbacks must be bound to the originating `(chatId, threadId, userId)`, the exact confirmation message, expected action family, and unexpired pending state.
+
+Reject repeated, expired, wrong-user, wrong-topic, and mismatched callbacks. Remove the keyboard after the first valid action.
+
+Private operator chat retains its text-confirmation behavior; do not force the forum button UX into private chat unless a separate decision changes that policy.
+
+## Forum authorization boundary
+
+- Image topic exposes image generation/settings only.
+- Video topic exposes video generation, normal settings, and normal modes only.
+- T2V developer controls remain private-chat-only.
+- Diagnostics, global jobs/downloads, failures, outbox, global cancellation, and other operator controls remain private-chat-only.
+- Wrong-topic commands return compact pointers rather than mutating hidden state.
+- Pending interaction state is isolated by chat, thread, and user.
 
 ## T2V settings contract
 
-### Commands
-
-```text
-/t2v settings
-/t2v s
-/t2v s <setting> <value>
-/t2v set
-/t2v set <setting> <value>
-/t2v settings -dev
-/t2v set -dev <setting>
-/t2v set -dev <setting> <value>
-
-/t2v settings -d
-/t2v set -d <setting>
-/t2v set -d <setting> <value>
-```
-
-`s` opens the panel without a setting, or changes a setting when given `<setting> <value>`; `set` remains its full alias. Use exactly one dash; `-dev` and its short alias `-d` are both accepted.
-
-`-dev` is explicit per-command higher authority, not a persistent toggle. It can inspect/change Core and Advanced settings. An Advanced setting without `-dev` returns only:
-
-```text
-Dev access required.
-```
-
-Accept approved abbreviations and full names. Important aliases include `seed`/`seed1` for Stage 1 and `seed2` for Stage 2.
-
-### Core
+Core:
 
 ```text
 asp   Aspect
@@ -175,14 +159,7 @@ time  Duration
 enh   Enhance
 ```
 
-Canonical labels and choices:
-
-- Aspect uses `⦗ratio⦘` plus its human label.
-- Quality choices are Low / Standard / High; underline the selected value.
-- Duration renders as `(N)s` with `(Max=10s)`.
-- Enhance renders as `[ ON ]` or `[ OFF ]`; OFF is the default.
-
-### Advanced
+Advanced (`-dev` / `-d`):
 
 ```text
 fps    FPS
@@ -194,21 +171,11 @@ samp   Sampler
 cfg    Guidance
 ```
 
-The settings panel uses two non-collapsed quote blocks headed `• core •` and `• advanced •`. Long per-setting option lists such as Aspect and Sampler may be expandable.
-
-A successful setting change is a single compact result, not a separate `[ SAVED ]` line:
-
-```text
-[ FPS : 30 ]
-[ Duration : (8)s ]
-[ Aspect : ⦗1:1⦘ (Square) ]
-```
-
-### Verified baseline
+Current baseline:
 
 ```text
 Aspect       16:9
-Quality      Standard (0.9 MP effective)
+Quality      Standard / 0.9 MP
 Duration     5 s
 Enhance      OFF
 FPS          24
@@ -220,45 +187,49 @@ Sampler      euler_ancestral
 Guidance     1.0
 ```
 
-The workflow resolves that baseline to `1280x704`, 121 frames, and about 5.04 seconds because dimensions are snapped to a multiple of 32.
+The settings surface represents Helix semantics. Do not expose raw Comfy node IDs as long-term operator controls.
 
-## Confirmation behavior
+## Modes
 
-Generation, cancellation, and reset are important actions and use terminal-style confirmation:
+Current T2V modes:
 
-- accept case-insensitive `yes` or `no`;
-- no destructive Telegram buttons;
-- confirmation lifetime: 60 seconds;
-- maximum invalid replies: 3;
-- after the third invalid reply, abort and clear pending state;
-- quiet expiry: do not emit a timer-driven expiry message;
-- a new slash command silently abandons the pending confirmation and runs the new command;
-- no job is created until T2V generation is confirmed;
-- the confirmation preview freezes the effective settings so later changes cannot alter the shown generation.
+```text
+Manual
+Fast
+Quality
+```
 
-Keep confirmation copy compact and explicit about whether the job continues or no job was submitted.
+Modes overlay effective execution settings but never rewrite stored manual settings. There is no Auto mode.
 
-## Jobs, events, errors, and outbox
+## Jobs, events, errors, outbox, and downloads
 
-- `/events` is a debugging view: preserve actual durable event names and show timestamps.
-- Show the complete event timeline rather than arbitrarily hiding older events.
-- `/errors` covers recent job and terminal Outbox failures; cancelled jobs are not errors.
-- Worker outages belong in status/alerts rather than `/errors`.
-- `/outbox` is the operator term for delivery/send state; do not expose database table names.
-- Do not insert an extra blank line before `Outbox is clear.`
-- In `/job`, keep the Outbox section outside the expandable generation-details quote.
+- `/j`, `/jbs`, `/jobs` list Helix jobs with 20-item pagination.
+- `/jb <number>` resolves Job/media detail through the shared media-reference namespace.
+- `/dl` lists completed Comfy artifacts with the same numeric namespace.
+- `/ev <number>` is a durable debugging/event timeline.
+- `/errors` covers recent failures, not normal cancellations.
+- `/outbox` is the operator term for durable delivery/send state.
+- Keep worker outages in status/alerts rather than pretending they are media-job errors.
 
-## Artifact delivery
+## Final artifact delivery
 
-- Deliver the generated file with Telegram `sendDocument`, not `sendVideo`, to preserve the original Comfy artifact without Telegram video transcoding.
-- Disable content-type detection for the document upload.
-- Include compact metadata: actual tool, runtime, video dimensions/duration/size, audio present/absent, worker display name, completed state/time, and job reference.
-- Use the actual tool (`video.t2v`, `video.i2v`) as the generation heading.
-- Temporary spool files must be removed after delivery attempts according to the runtime’s bounded delivery policy.
+The baseline artifact policy is original-file delivery rather than Telegram video transcoding.
+
+For ordinary/non-lifecycle delivery, use document/file delivery with compact metadata.
+
+For Telegram-originated jobs with durable lifecycle ownership, the newer implementation may use `editMessageMedia` so the primary final document replaces the existing lifecycle message in its original conversation position.
+
+Additional artifacts, and jobs without lifecycle ownership, may still use the normal new-message document path.
+
+Do not state that every final artifact is always appended with `sendDocument`; that is no longer true for the lifecycle-owned primary artifact implementation.
+
+## Delivery failures
+
+When lifecycle-owned automatic primary delivery is retrying or terminally fails, keep that state on the same lifecycle target when possible. If retry budget is exhausted, provide the durable manual retrieval reference rather than losing the media identity.
 
 ## Command aliases
 
-Current approved short aliases include:
+Approved short aliases include:
 
 ```text
 /st, /stat  -> /status
@@ -275,23 +246,16 @@ Current approved short aliases include:
 
 Do not invent many aliases for destructive actions.
 
-## Implementation guidance
+## Presentation implementation guidance
 
-- Centralize escaping, titles, ID formatting, durations, timestamps, and reusable presentation fragments.
-- Keep command parsing, state transitions, repositories, and presentation separate.
-- Do not duplicate formatting helpers across `command-service.ts`, delivery, and feature presenters.
-- Prefer small named presenters over large inline HTML concatenations.
-- Preserve durable state and audit events independently from Telegram copy.
-- Never expose raw Comfy node IDs or graph-specific controls as the stable operator contract.
-- Treat Telegram output as a tested presentation contract. Add focused snapshot/unit tests before another broad style refactor.
+- Centralize escaping, title, ID, duration, timestamp, and reusable lifecycle formatting.
+- Keep command parsing, routing, state transitions, repositories, and presentation separate.
+- Prefer small named presenters over large inline HTML concatenation.
+- Treat lifecycle/Telegram output as a tested contract.
+- The repository now includes focused Telegram tests for routing, lifecycle/progress, forum buttons, delivery routing, and related behavior; the old note claiming there was no project-owned Telegram presentation test coverage is obsolete.
 
-## Verified implementation gaps (2026-08-25)
+## Deployment-state note
 
-The current branch builds and contains the approved durable T2V settings, reset, modes, job snapshots, and Telegram workflows. Inspection also found presentation debt to address deliberately in a later formatting pass:
+Forum routing and lifecycle/progress code are separate concerns from whether the corresponding production migration/container revision is live.
 
-- `command-service.ts` still duplicates helpers already present in `telegram/presentation.ts`.
-- `delivery/telegram.ts` and `job-generation-presentation.ts` also define local escaping/ID or formatting logic.
-- Some older alert/cancel/debug messages still use formatting variants from before the final settings design.
-- The package has typecheck/build scripts but no project-owned Telegram presentation test suite.
-
-Do not mix this cleanup into unrelated behavior changes. First capture current output with tests, then centralize presentation without changing semantics.
+The repository contains forum routing plus the newer lifecycle implementation. Before documentation says lifecycle/progress is live, verify the production database has migration `0014_telegram_job_lifecycle.sql` effects and verify the running runtime image contains the lifecycle/progress code.
