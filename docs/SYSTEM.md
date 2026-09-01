@@ -1,6 +1,6 @@
 # Helix System Outline
 
-> Working system division. Component internals remain provisional until designed and validated.
+> Canonical system division. Component internals remain provisional until designed and validated.
 
 ## Objective
 
@@ -35,9 +35,7 @@ Helix is not primarily a video generator. It is intended to become a system that
 
 The upstream brain must not know how media is generated.
 
-The Director should output a media-agnostic creative specification. Production can later fulfill that specification using hosted models, open-weight models, editing tools, stock media, deterministic renderers, human work, or combinations of them.
-
-Example boundary:
+The Director should output a media-agnostic creative specification. Production can fulfill that specification using hosted models, open-weight models, editing tools, stock media, deterministic renderers, human work, or combinations of them.
 
 ```text
 NicheModel + Objective
@@ -57,23 +55,24 @@ MediaAsset
 
 ## 0. Foundation / Preparation
 
-Prepare repository conventions, shared identifiers, data contracts, workflow preservation, secrets/configuration practices, and boundaries between n8n and durable application state.
+Prepare repository conventions, shared identifiers, data contracts, workflow preservation, secrets/configuration practices, provenance rules, and boundaries between n8n and durable application state.
 
-Preparation should not be dominated by generation-provider implementation.
+Production already has a real PostgreSQL/runtime persistence boundary. Persistence technology for future Intelligence/Director/Experiment data remains intentionally undecided.
 
 ## 1. Intelligence
 
 Expected responsibilities:
 
 - niche definition and sub-niche mapping;
-- source discovery;
-- content/example ingestion;
-- feature extraction from successful and unsuccessful content where data is available;
+- source discovery and ingestion;
+- feature extraction from content examples;
 - hook/format/topic/visual/narrative pattern clustering;
 - trend versus evergreen separation;
 - saturation/novelty observations;
 - evidence provenance and confidence;
 - creation of a queryable `NicheModel`.
+
+The current intended direction is platform-first evidence from YouTube/Facebook/Reels-style observations, supplemented by wider web research rather than replaced by generic web search.
 
 ## 2. Director
 
@@ -88,7 +87,7 @@ Expected skills are separate concerns rather than one giant agent:
 - format adaptation;
 - critic/review.
 
-The Director consumes Intelligence and produces a `ContentSpec` or equivalent creative brief.
+The Helix Director consumes Intelligence and produces a `ContentSpec` or equivalent creative brief. Tool-specific systems named "Director" inside Comfy/LTX remain Production implementation details.
 
 ## 3. Experiment Engine
 
@@ -109,9 +108,44 @@ This is expected to become a central algorithmic layer of Helix.
 
 ## 4. Production
 
-Production is deliberately separate. Candidate internal areas include image, video, audio, voice, captions, editing, compositing, QC, upscaling, and rendering.
+Production owns generation/editing execution and backend-specific controls.
 
-Provider/model routing belongs here. The existing asynchronous generation workflow pattern should be preserved as useful implementation knowledge, but it is not the main Helix brain contract. A physical worker may expose multiple logical Production Profiles while retaining one adapter, endpoint, queue, and GPU concurrency limit; model implementations remain replaceable infrastructure.
+The active Production boundary is now real rather than hypothetical:
+
+```text
+caller / n8n / Telegram
+        ↓
+helix-runtime + PostgreSQL
+        ↓
+semantic Production settings / binders
+        ↓
+Comfy adapter
+        ↓
+helix-rtx4060-01
+```
+
+One physical RTX 4060 worker currently exposes logical Production Profiles:
+
+```text
+nolan / Christopher Nolan
+-> video.i2v
+-> video.t2v
+
+leibovitz / Annie Leibovitz
+-> image.t2i
+```
+
+These are logical tool authorities on one Comfy endpoint, one queue, and one physical GPU concurrency limit.
+
+The operator-facing identity model uses one durable numeric media-reference namespace shared across Helix jobs and direct ComfyUI artifacts. Internal Helix IDs and Comfy Prompt IDs remain separate.
+
+Current image execution uses FLUX.2 Klein 4B INT8 W8A8 as the active T2I workflow candidate; the earlier Distilled FP8 path remains a validated rollback route.
+
+Current video execution uses native LTX 2.5 as the first-choice focused-shot path. Prompt Relay, LTX Director, reference conditioning, continuation systems, sampler/model state, and raw Comfy node IDs remain behind the Production boundary.
+
+Reference-conditioning research has locally demonstrated both Licon MSR one-subject new-scene identity retention and Lightricks Ingredients Core IC-LoRA person + product + location reconstruction. These are research controls, not frozen Helix schemas.
+
+Speech also belongs to Production. Moonshine STT is locally validated as a foundation, but Telegram voice integration is not implemented.
 
 ## 5. Distribution
 
@@ -127,22 +161,11 @@ Collect observed platform and operational metrics, normalize them into `Performa
 2. design Niche Intelligence from first principles;
 3. design Director skills and `ContentSpec` boundary;
 4. design Experiment Engine algorithms and lineage;
-5. develop Production separately and connect it to the brief/variant contract;
+5. continue Production separately behind stable semantic contracts;
 6. then Distribution and full feedback automation.
-
-## Production execution checkpoint
-
-Production currently uses one physical `helix-rtx4060-01` RTX 4060 worker,
-one Comfy endpoint/adapter/queue, and one physical concurrent GPU job. `nolan`
-and `leibovitz` are logical Production Profiles on that worker, not separate
-execution infrastructure. The first image path is the validated
-`image.t2i` Distilled-FP8 variant; Telegram exposes only semantic aspect and
-seed while the runtime binds the supplied workflow at prompt, dimensions, and
-concrete seed. Successful RTX 4060 Telegram generations and original-file
-deliveries validate this narrow path. Operator-facing media references are
-durable sequential Job numbers; internal Helix and Comfy identifiers remain
-stable behind that public reference.
 
 ## Principle
 
 Optimize the learning-and-decision system. Treat media-generation technology as replaceable execution infrastructure.
+
+For the detailed current checkpoint, see [`PROJECT_STATE.md`](PROJECT_STATE.md).

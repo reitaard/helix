@@ -1,24 +1,16 @@
 # Telegram lifecycle progress implementation
 
-Status: **implemented, merged to `main`, and locally VPS-validated (`npm test`: 51/51); migration `0014`, runtime deployment, and live lifecycle smoke tests remain pending.**
+Status: **implemented in the repository and merged to `main`; exact live VPS migration/container state must be re-verified before calling the feature deployed.**
 
-Integration commits:
+This document records the implementation contract for the Telegram one-message generation lifecycle. It is not the canonical production-deployment ledger; use `docs/PROJECT_STATE.md` for the current verified project checkpoint.
 
-```text
-b01141e  forum-topic routing
-ca7bb2f  lifecycle/progress integration
-cf07d25  preserve forum target for lifecycle edits
-```
+## Core operator behavior
 
-This document records the implementation checkpoint for the locked Telegram lifecycle decision in `docs/DECISIONS.md`. It is intentionally explicit about what is implemented in code versus what is actually deployed.
-
-## Operator behavior
-
-Telegram-originated `/t2v` and `/t2i` generations own one operator-facing message for their whole lifecycle:
+Telegram-originated `/t2v` and `/t2i` generations can own one operator-facing message for their lifecycle:
 
 ```text
 confirmation
-    ↓ yes
+    ↓
 queued
     ↓
 generating
@@ -28,76 +20,38 @@ complete / uploading
 primary final artifact
 ```
 
-The confirmation message is not deleted and replaced. Its Telegram `message_id` is captured durably and the same message is edited in place.
-
-If the operator answers `no`, workflow preparation fails, or submission fails before a real backend execution exists, the same confirmation message is edited to the corresponding cancelled/failed state when possible.
+The durable lifecycle target is the Telegram message identity. The primary final artifact can replace the lifecycle text message in place rather than appearing later at the bottom of the conversation.
 
 ## Dual progress model
 
-Running cards expose two separate measurements:
+Running cards expose separate measurements:
 
 ```text
 Workflow  █████░░░░░  50%
 Sampling  ██░░░░░░░░  25%
 ```
 
-`Workflow` is completed submitted API-workflow nodes divided by the number of submitted API-workflow nodes. Expanded/internal Comfy execution nodes do not inflate the denominator or completed count. Cached submitted nodes are reported as finished by the pinned Comfy progress registry and therefore contribute correctly.
+`Workflow` represents submitted-workflow node completion. Expanded/internal Comfy execution nodes must not inflate the denominator.
 
-`Sampling` is the current numeric node progress (`value / max`). It can restart when a different sampler/progress-bearing node begins. It is not averaged with Workflow progress.
+`Sampling` represents the current numeric progress-bearing node (`value / max`). It can restart for a later sampler/progress-bearing node and is not averaged with Workflow progress.
 
-Nodes without meaningful numeric progress show a stage label such as `Loading`, `VAE Decode`, or `Finalizing` with `Running` instead of a fabricated percentage.
+Stages without meaningful numeric progress show a stage label such as Loading, VAE Decode, or Finalizing rather than a fabricated percentage.
 
-Workflow percentage is execution-node progress, not a wall-clock completion estimate.
+Workflow percentage is execution progress, not a wall-clock completion estimate.
 
 ## Comfy event transport
 
-The pinned Comfy revision is:
+Pinned Comfy revision:
 
 ```text
 7dde56176efa71fd74ef7b3930ab5882d1926288
 ```
 
-Helix keeps one persistent execution WebSocket per physical worker. The current worker uses a restart-stable client identity derived from its durable worker ID:
+The repository implementation keeps one persistent execution WebSocket per physical worker with a stable Helix client identity. `/prompt` submissions use that same client identity so Comfy can route execution events for the submitted Prompt ID to the Helix listener.
 
-```text
-helix-runtime-helix-rtx4060-01
-```
+Normalized event families include execution start/node/progress/success/interrupted/error behavior.
 
-Every Helix `/prompt` submission includes that same `client_id`, allowing Comfy to route execution events for the submitted Prompt ID to the Helix listener.
-
-Helix also sends:
-
-```json
-{
-  "extra_data": {
-    "preview_method": "none"
-  }
-}
-```
-
-so the progress connection does not need latent preview image traffic.
-
-The existing readiness WebSocket probe remains separate and uses an ephemeral `helix-probe-*` client ID. A `/status` call therefore cannot displace the persistent execution socket.
-
-The exact pinned Comfy source was checked before implementation: `/prompt.client_id` is copied into execution `extra_data`, `execute_async()` reads `extra_data.preview_method`, and `progress_state` is sent to the initiating `client_id`.
-
-## Event normalization
-
-Comfy-specific WebSocket JSON is normalized inside the adapter boundary before Telegram sees it. The normalized event stream covers:
-
-```text
-execution_start
-executing
-progress
-progress_state
-execution_success
-execution_interrupted
-execution_error
-```
-
-Progress events are presentation telemetry only. They do not change durable Helix job truth.
-
-Authoritative state remains:
+Progress transport is presentation telemetry only. Durable job truth remains:
 
 ```text
 PostgreSQL media_jobs
@@ -105,43 +59,33 @@ PostgreSQL media_jobs
 Comfy /queue and /history reconciliation
 ```
 
-A WebSocket disconnect must not stop or invalidate generation.
+A WebSocket disconnect must not invalidate generation.
 
 ## Telegram update throttling
 
-Ordinary live edits are coalesced. A visible progress edit occurs when at least one of these is true:
+Visible progress edits are coalesced. Stage changes and terminal transitions should update promptly; routine percentage changes should be throttled so Helix does not issue one Telegram API call per sampler step.
 
-- stage/node label changed;
-- Workflow changed by at least 5 percentage points;
-- current-node progress changed by at least 5 percentage points;
-- roughly 10 seconds passed since the previous visible update.
-
-Execution start, success, and durable terminal transitions are not held behind the normal percentage throttle.
+The implementation uses meaningful progress/stage deltas plus elapsed time to decide when to edit.
 
 ## Durable lifecycle identity
 
-Migration `0014_telegram_job_lifecycle.sql` adds:
+Migration:
 
 ```text
-operator_pending_t2v.confirmation_message_id
-operator_pending_t2i.confirmation_message_id
-telegram_job_lifecycles
+0014_telegram_job_lifecycle.sql
 ```
 
-`telegram_job_lifecycles` maps one real Helix job to one Telegram chat/message identity and tracks presentation ownership (`active`, `terminal`, `delivered`). Progress percentages themselves are not persisted.
+adds lifecycle ownership state including the confirmation-message identity and `telegram_job_lifecycles` mapping.
 
-Pending T2V/T2I state clears any old confirmation message ID whenever a new prompt flow begins, preventing stale-message ownership.
-
-**Migration 0014 is not applied to Production at this checkpoint.** Production has forum migration `0013_telegram_forum_topics.sql` applied and runs the forum-topic runtime; it does not yet have the lifecycle schema or runtime code deployed.
+Progress percentages themselves are transient and are not the durable recovery record.
 
 ## Final artifact behavior
 
-For a Telegram-originated successful job, artifact index `0` is the primary lifecycle artifact.
+For Telegram-originated successful jobs, artifact index `0` is the primary lifecycle artifact.
 
-Instead of appending a new Telegram file message, the DeliveryWorker uses `editMessageMedia` and converts the existing lifecycle text message into the original document/file with the existing Helix artifact metadata caption.
+The lifecycle implementation uses `editMessageMedia` so the existing lifecycle text message can become the original document/file with the Helix artifact caption:
 
 ```text
-old conversation position
 [ GENERATING ]
      ↓
 [ COMPLETE / Uploading ]
@@ -149,33 +93,41 @@ old conversation position
 [ final original document ]
 ```
 
-This keeps a finished video/image from suddenly appearing at the bottom of an unrelated later operator conversation.
+Additional artifacts can use the ordinary extra-message path. Jobs without a lifecycle mapping retain normal new-message delivery behavior.
 
-Additional artifacts, if any, keep the existing normal extra-message path. Jobs without a Telegram lifecycle mapping (for example API-created jobs) also retain the existing `sendDocument` fallback.
-
-There is deliberately no automatic fallback from a failed lifecycle media edit to a surprise new primary file message. The existing durable delivery retry machinery remains responsible for retrying the same in-place delivery target.
-
-Telegram's `message is not modified` response is treated as an idempotent success for edit retries, which protects the crash-after-Telegram-success/before-local-recording window.
+There is deliberately no semantic fallback that silently changes the identity model. Delivery retry remains durable and targets the same intended lifecycle delivery path.
 
 ## Delivery failure presentation
 
-When primary automatic artifact delivery fails transiently, the same lifecycle card changes to a retry state with the attempt and retry delay. The general progress status sweep excludes delivery-owned retry/failure presentation states so it cannot overwrite that card back to `Uploading artifact…`.
-
-If the automatic delivery retry budget is exhausted, the same card becomes `DELIVERY FAILED` and gives the operator the durable manual retrieval command:
+Transient primary delivery failure can update the lifecycle card to a retry state. Terminal delivery failure should leave a durable retrieval reference, for example:
 
 ```text
-/dl g <job-number>
+/dl g <media-reference>
 ```
 
-The completed media remains represented by the existing durable Job/media reference.
+The media/job identity remains valid even if automatic Telegram delivery fails.
+
+## Forum interaction updates after the initial lifecycle merge
+
+Later forum work refined how lifecycle confirmation interacts with group privacy and Telegram UI:
+
+- bare `/t2i` and `/t2v` use selective ForceReply only for free-text prompt capture;
+- Image also supports inline `/t2i <prompt>` capture;
+- forum prompt confirmation uses inline `[ Generate ] [ Cancel ]` buttons;
+- forum reset uses `[ Reset ] [ Cancel ]`;
+- callbacks are bound to the exact conversation/user/message/action;
+- consumed ForceReply cards are deleted after successful prompt capture so Telegram cannot reactivate them when the user switches topics;
+- T2I ForceReply capture and inline prompt handling received follow-up fixes after the initial forum/lifecycle merge.
+
+Private operator chat retains its direct text-confirmation model.
+
+These later fixes are part of the current repository behavior and must not be omitted when reasoning about the lifecycle UX.
 
 ## Runtime composition
 
-New/changed runtime responsibilities are intentionally narrow:
-
 ```text
 ComfyClient
-    persistent WS + stable client_id
+    persistent WS + stable client identity
         ↓
 ComfyAdapter / WorkerRegistry
     normalized execution events
@@ -183,11 +135,11 @@ ComfyAdapter / WorkerRegistry
 TelegramProgressService
     transient progress + throttled edits
         ↓
-TelegramDelivery
+Telegram delivery/presentation
     editMessageText / editMessageMedia
 
 T2V/T2I pending state
-    confirmation message_id
+    confirmation message identity
         ↓
 telegram_job_lifecycles
     durable lifecycle target
@@ -196,49 +148,41 @@ DeliveryWorker
     primary artifact replaces lifecycle message
 ```
 
-`TelegramCommandService` was intentionally not rewritten for this feature. T2V/T2I are already Telegram-specific services and own their confirmation/lifecycle card directly, reducing the blast radius for `/status`, `/j`, `/jb`, `/dl`, diagnostics, cancellation, and other commands.
+## Regression coverage
 
-## Regression coverage merged to main
+Repository tests cover lifecycle/progress and forum integration areas including normalized Comfy progress events, stable submission client identity, workflow-node counting, lifecycle text/media edits, delivery retry behavior, forum routing/buttons, and related Telegram state transitions.
 
-Tests now cover:
+Do not freeze a historical total test count in this document as if it remains permanently current. Exact counts belong in deployment/test checkpoints.
 
-- normalized Comfy `progress` and `progress_state` parsing;
-- malformed/unrelated WebSocket event rejection;
-- stable `/prompt.client_id` on repeated submissions;
-- `preview_method: none` submission metadata;
-- submitted-workflow node counting;
-- expanded internal-node exclusion from Workflow progress;
-- human sampler-stage labeling;
-- dual Workflow/current-node rendering;
-- one confirmation message being sent and its `message_id` captured by T2I;
-- migration 0014 durability contract;
-- lifecycle status sweep exclusion for delivery-owned retry/failure cards;
-- Telegram text edit targeting the original message;
-- idempotent `message is not modified` handling;
-- text-message to document-message replacement through `editMessageMedia`;
-- delivery retry and terminal-delivery failure rendering.
+## Deployment verification gate
 
-## Validation/deployment checkpoint
-
-Completed:
+An earlier checkpoint established:
 
 ```text
-forum migration 0013 applied and forum runtime deployed
-lifecycle branch merged to main
-combined VPS npm test: 51/51 passing
-forum-target lifecycle edit integration reviewed and tested
+forum migration 0013 -> deployed
+lifecycle code -> merged
 ```
 
-Still required before this lifecycle feature is live:
+but later code continued changing after that checkpoint.
+
+Before saying lifecycle/progress is live now, verify both production layers:
+
+### Database
+
+Production must contain the effects of `0014_telegram_job_lifecycle.sql`, including:
 
 ```text
-PostgreSQL backup before 0014
-apply and verify migration 0014_telegram_job_lifecycle.sql
-rebuild/restart the single helix-runtime
-live /t2v smoke test in Video topic
-live /t2i smoke test in Image topic
-confirm the same lifecycle message becomes the final document
-observe/reconnect the persistent Comfy execution WebSocket
+telegram_job_lifecycles
+operator_pending_t2v.confirmation_message_id
+operator_pending_t2i.confirmation_message_id
 ```
 
-Do not describe this feature as live until those steps have passed.
+### Running runtime image
+
+The running `helix-runtime` container must contain the newer lifecycle/progress implementation, including persistent progress-event handling and in-place media editing support.
+
+Until both are verified, use the wording:
+
+> lifecycle/progress is implemented in the repository; current live VPS deployment state is being verified.
+
+After verification, update `docs/PROJECT_STATE.md` and this status line together.

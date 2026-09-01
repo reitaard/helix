@@ -1,30 +1,18 @@
 # Project State
 
+Last documentation reconciliation: **2026-09-01**.
+
 ## Current phase
 
-**Preparation / foundation with a mature single-worker Production execution slice, validated native LTX 2.5 T2V and FLUX.2 Klein T2I paths, persisted semantic settings/modes, Telegram operator controls, and one durable numeric media-reference namespace shared across Helix jobs and direct ComfyUI artifacts.**
-
-The high-level Helix system division remains:
-
-```text
-Foundation
-Intelligence
-Director
-Experiment Engine
-Production
-Distribution
-Analytics / Feedback
-```
-
-The intended brain development order after preparation is still:
+Helix remains in **Preparation / foundation**, with a mature single-worker Production execution slice and active Production research. The main brain-development order remains:
 
 ```text
 Niche Intelligence -> Director -> Experiment Engine
 ```
 
-Production/generation remains a separate workstream and must connect later through stable contracts rather than shaping the Intelligence or Helix Director model around ComfyUI/LTX details.
+Production/generation remains a separate workstream. It must expose stable semantic contracts upward rather than shaping Intelligence or Helix Director around ComfyUI, LTX, FLUX, or any other backend.
 
-The current generation direction remains **open/self-hosted first**. Runway is not part of the active Production plan. Seedance-class systems remain behavioral/quality references where useful.
+The current generation direction remains **open/self-hosted first**. Runway is not part of the active Production plan. Seedance-class systems are behavioral/quality references where useful.
 
 ## Active Production architecture
 
@@ -33,22 +21,18 @@ caller / n8n / Telegram
     ↓
 helix-runtime :8787
     ├── helix-db
+    │   ├── workers + observations
     │   ├── media_jobs
     │   ├── media_references
     │   ├── media_job_events
     │   ├── media_deliveries
-    │   ├── operator state
-    │   └── production settings
+    │   ├── operator / Telegram state
+    │   └── Production profile/settings state
     │
-    ├── TelegramCommandService
-    ├── TelegramAlertService
-    ├── TelegramCancelService
-    ├── TelegramT2VService
-    ├── TelegramT2IService
-    ├── TelegramDownloadsService
-    └── OutboxRepository
-    ↓
-ComfyAdapter / ComfyClient
+    ├── JobService / WorkerService
+    ├── Telegram operator + generation services
+    ├── DeliveryWorker
+    └── Comfy adapter boundary
     ↓ Tailscale
 helix-rtx4060-01
     ↓
@@ -59,237 +43,99 @@ Current worker facts:
 
 ```text
 durable worker ID: helix-rtx4060-01
-physical-worker name: Helix RTX 4060
+physical worker: Helix RTX 4060
 GPU: RTX 4060
 ComfyUI: 0.33.0
 Comfy revision: 7dde56176efa71fd74ef7b3930ab5882d1926288
 Python: 3.12.11
 PyTorch: 2.10.0+cu130
-max concurrent GPU jobs: 1
+physical GPU concurrency: 1
 ```
 
-Logical Production profiles on that one worker:
+Logical Production Profiles share that one worker:
 
 ```text
-nolan
-Christopher Nolan
+nolan / Christopher Nolan
 -> video.i2v
 -> video.t2v
 
-leibovitz
-Annie Leibovitz
+leibovitz / Annie Leibovitz
 -> image.t2i
 ```
 
-Profiles describe tool authority/operator presentation, not additional hardware or queues.
+Profiles describe tool authority and operator presentation, not additional hardware or queues.
 
-## Numeric media-reference checkpoint
+## Operator media identity
 
-The original `0011_job_numbers.sql` work gave every Helix `media_jobs` row a unique sequential `BIGINT job_number` while preserving internal `job_...` primary keys and Comfy Prompt IDs.
-
-The initial Telegram implementation still exposed six-character Comfy Prompt prefixes for direct/manual ComfyUI generations. That created two problems:
-
-1. Jobs and Downloads did not truly use one operator identity system.
-2. A Comfy Prompt prefix containing only digits, such as `161023`, was parsed as a numeric Job number and could not be retrieved even though `/dl` displayed it.
-
-This is now corrected by migration:
+Helix keeps internal, operator-facing, and backend identities separate:
 
 ```text
-0012_media_references.sql
+internal Helix job ID      job_...
+operator media reference  52
+Comfy execution ID         prompt_id
 ```
 
-The database model is:
+Migrations `0011_job_numbers.sql` and `0012_media_references.sql` established one durable numeric media-reference namespace shared by Helix jobs and direct/manual ComfyUI artifacts.
 
-```text
-media_jobs.job_number
-        │
-        └──── media_jobs_job_number_seq ────┐
-                                             │
-media_references.reference_number <─────────┘
-```
-
-`media_references` reserves every operator-visible number.
-
-Helix-managed jobs:
-
-```text
-kind = job
-reference_number = media_jobs.job_number
-job_id = job_...
-backend_job_id = NULL
-```
-
-Direct ComfyUI artifacts:
-
-```text
-kind = comfy_artifact
-reference_number = next value from the same sequence
-job_id = NULL
-backend_job_id = Comfy Prompt ID
-```
-
-Direct ComfyUI runs do **not** become fake `media_jobs` rows. This preserves truthful lifecycle semantics.
-
-The operator invariant is now:
+The invariant is:
 
 ```text
 one number -> one media execution
 ```
 
-Example allocation:
+Direct ComfyUI generations do not become fake `media_jobs` rows. They receive `media_references.kind = comfy_artifact` mappings to their Comfy Prompt IDs.
+
+Jobs and Downloads therefore converge on the same operator identity:
 
 ```text
-51 -> Helix job
-52 -> direct ComfyUI artifact
-53 -> Telegram /t2v job
-54 -> direct ComfyUI artifact
-55 -> Telegram /t2i job
-```
-
-PostgreSQL sequence gaps are acceptable. References are unique/durable identifiers, not a gapless count of successful generations.
-
-## Telegram reference behavior
-
-Jobs remain a Helix lifecycle browser:
-
-```text
-/j
-/j p <page>
-```
-
-Downloads remain a live completed-Comfy-artifact browser:
-
-```text
-/dl
-/dl p <page>
-```
-
-Both now expose the same numeric media namespace.
-
-For any registered artifact:
-
-```text
-/dl i 52
--> inspect media 52
-
-/dl g 52
--> retrieve media 52
-
 /jb 52
--> resolve the same media execution
+/dl i 52
+/dl g 52
 ```
 
-For a real Helix job, `/jb` shows lifecycle/runtime/Production Profile/Outbox information.
+Legacy Helix IDs and legacy Comfy Prompt-prefix input remain compatibility paths where supported.
 
-For a direct ComfyUI artifact, `/jb` resolves the external media reference instead of returning `Job not found`, and points to the same inspect/get behavior used by Downloads.
+## Telegram checkpoint
 
-Legacy Helix UUID/prefix input remains compatible. Legacy Comfy Prompt-prefix input remains accepted for compatibility, but discovered artifacts are presented with their durable numeric reference.
+Telegram remains a bounded operator/generation surface, not a shell or general control plane.
 
-## Migration / validation state
+Private operator capabilities include diagnostics, queue/job/download inspection, failures/events/outbox, guarded cancellation, T2V/T2I generation, settings, and explicit developer controls.
 
-Production database migration `0012_media_references.sql` has been applied successfully on the VPS.
-
-Before applying it, a custom-format PostgreSQL backup was created:
+The repository also contains forum-topic routing for the `Absolute Cinema` generation forum:
 
 ```text
-backups/helix-before-0012-20260826-094932.dump
+Image topic -> image.t2i
+Video topic -> video.t2v
 ```
 
-Migration result:
+Forum interaction is isolated by `(chatId, threadId, userId)`, uses selective ForceReply only for bare prompt capture, and uses inline Generate/Cancel or Reset/Cancel confirmation buttons. Consumed ForceReply cards are removed after prompt capture so they cannot become active again when the user changes topics. Operator-only commands and T2V developer controls remain private-chat-only.
 
-```text
-51 existing media_jobs
--> 51 media_references kind=job
-```
+### Lifecycle/progress deployment status
 
-No `comfy_artifact` rows existed immediately after migration, which is expected. Direct Comfy history entries allocate their reference when the updated runtime first discovers them.
+The repository contains the newer lifecycle/progress implementation:
 
-The pulled runtime code passed the complete local test suite on the VPS host:
+- persistent Comfy execution WebSocket telemetry with a stable Helix client identity;
+- normalized execution/progress events;
+- compact Workflow + Sampling presentation;
+- durable Telegram lifecycle-message ownership;
+- primary artifact replacement through `editMessageMedia`;
+- delivery retry/failure presentation on the same lifecycle message.
 
-```text
-32 tests
-32 passed
-0 failed
-```
+Migration `0014_telegram_job_lifecycle.sql` exists in the repository.
 
-Regression coverage includes:
+**The exact live VPS checkpoint is intentionally not asserted here until it is re-verified.** The last documentation checkpoint proved forum migration `0013` deployed, while later lifecycle/forum code continued changing. Verify the production database for `telegram_job_lifecycles` and the running container for lifecycle/progress code before saying `0014` is live.
 
-- Comfy-only numeric allocation;
-- shared sequence behavior;
-- `/dl` numeric list/inspect/get;
-- `/jb` resolution of Comfy-only references;
-- legacy Prompt-prefix input;
-- numeric Prompt-prefix collision behavior.
+See:
 
-The host currently runs Node 26 for manual npm commands and emits an engine warning because `@helix/media-runtime` declares Node `>=24 <25`. Tests still passed. The production container remains designed for Node 24.
-
-### Deployment status
-
-As of this checkpoint:
-
-```text
-GitHub main
--> updated
-
-VPS working tree
--> pulled
-
-npm test
--> 32/32 pass
-
-PostgreSQL migration 0012
--> applied
-
-running helix-runtime container
--> rebuild/restart still pending in this session
-```
-
-Therefore the database and code are ready, but the new Telegram numeric-reference behavior should not be described as live until the container is rebuilt/restarted and smoke-tested.
-
-## Telegram operator checkpoint
-
-Primary commands:
-
-```text
-/status             diagnostics
-/queue              current Comfy + Helix queue state
-/j                   Helix jobs, 20 per page
-/j p <page>          another Jobs page
-/jb <number>         job/media detail
-/dl                  completed Comfy artifacts, 20 per page
-/dl p <page>         another Downloads page
-/dl i <number>       inspect artifact
-/dl g <number>       retrieve artifact
-/outbox              send work needing attention
-/errors              recent failures
-/ev <number>         durable Helix job event timeline
-/t2v                 confirmed native LTX 2.5 generation
-/t2i                 confirmed FLUX.2 Klein generation
-/cc <number>         confirmed Helix job cancellation
-/help                command list
-```
-
-Telegram remains a bounded operator surface, not a shell/control plane. Restart, package-update, arbitrary worker mutation and raw command execution remain outside its scope.
-
-## Telegram forum and lifecycle checkpoint
-
-`Absolute Cinema` is live through the existing single bot, one `helix-runtime`, one Comfy worker, and one GPU queue:
-
-```text
-forum chat: -1004369617758
-Image topic: thread 5 -> /t2i
-Video topic: thread 7 -> /t2v
-```
-
-Forum routing migration `0013_telegram_forum_topics.sql` is applied in production. The runtime validates configured routes, isolates prompt/reset state by `(chatId, threadId, userId)`, binds forum replies to the expected selective ForceReply message, persists Telegram delivery destinations, and returns completed media to the originating allowed topic. Private operator commands and T2V developer controls remain private-chat-only.
-
-The lifecycle/progress implementation is merged into `main` at `cf07d25` and passed the combined VPS suite (`51/51`). It adds a durable confirmation-to-artifact lifecycle card, Comfy execution event correlation, throttled Workflow/Sampling progress, in-place retry/failure state, and same-message primary-document delivery. It is **not live** yet: migration `0014_telegram_job_lifecycle.sql` has not been applied and the production runtime has not been rebuilt/restarted with that code. See `TELEGRAM_LIFECYCLE_PROGRESS_IMPLEMENTATION.md` for the deployment gate and smoke-test criteria.
+- `docs/TELEGRAM_DESIGN.md`
+- `docs/TELEGRAM_FORUM_IMPLEMENTATION_PLAN.md`
+- `docs/TELEGRAM_LIFECYCLE_PROGRESS_IMPLEMENTATION.md`
 
 ## T2V Production checkpoint
 
-Christopher Nolan owns the validated `video.t2v` path.
+Christopher Nolan owns the validated native LTX 2.5 `video.t2v` path.
 
-Current semantic settings include:
+Persisted semantic settings include:
 
 ```text
 Core
@@ -308,7 +154,7 @@ samp   Sampler
 cfg    Guidance
 ```
 
-Current default/test baseline:
+Current baseline:
 
 ```text
 Aspect       16:9
@@ -324,7 +170,7 @@ Sampler      euler_ancestral
 Guidance     1.0
 ```
 
-Generation modes remain:
+Generation modes are:
 
 ```text
 Manual
@@ -334,9 +180,21 @@ Quality
 
 Mode overlays never rewrite stored manual settings.
 
+Prompt Enhance has already been evaluated. For already-directed Helix Production prompts it should generally remain **OFF**; useful enhancement principles belong in Helix-side prompt compilation rather than a competing automatic director.
+
+Prompt Relay has also been validated. Its useful abstraction is:
+
+```text
+temporal semantic routing / scene progression
+```
+
+not hard timestamps, physics control, or persistent object-state tracking.
+
 ## T2I Production checkpoint
 
-Annie Leibovitz owns the narrow `image.t2i` path. FLUX.2 Klein 4B INT8 W8A8 is active for live validation; the prior Distilled FP8 workflow remains installed for rollback.
+Annie Leibovitz owns the narrow `image.t2i` path.
+
+The current runtime wiring targets **FLUX.2 Klein 4B INT8 W8A8** as the active workflow candidate. The prior Distilled FP8 workflow remains installed as a rollback path and was itself validated earlier.
 
 V1 deliberately exposes only:
 
@@ -346,48 +204,73 @@ aspect
 seed
 ```
 
-The binder validates and changes only the vetted prompt/dimension/seed inputs. Images use the generic artifact path and Telegram `sendDocument` original-file delivery.
+The workflow binder mutates only vetted prompt, width, height, and seed inputs. Model switching and T2I generation modes remain deferred.
 
-## Native LTX research checkpoint
+## LTX Production research checkpoint
 
-Native LTX 2.5 remains the first-choice Production path for focused shots within its proven comfort zone.
+Native LTX 2.5 remains the first Production choice for focused shots inside its proven comfort zone.
 
-Controlled work established that native LTX already handles meaningful temporal allocation, camera/action planning, hard cuts, subject continuity and joint audiovisual generation. Exact multi-object physical state, strict collision geometry, fragile possession chains and guaranteed final-state completion remain weaker.
+Controlled work has established:
 
-Prompt Enhance has been evaluated and should generally remain **OFF** for already-directed Helix Production prompts. Its useful prompting principles should be internalized into Helix-side prompt compilation instead of allowing an enhancer to become a competing director.
+- native 5 s / 8 s / 10 s T2V behavior;
+- meaningful temporal allocation and camera/action planning;
+- native hard cuts and joint audiovisual generation;
+- Prompt Relay scene-progression value;
+- full-resolution native I2V as an identity/detail candidate;
+- CGlide and Lightricks long-video continuation baselines;
+- tool-specific controls must stay inside Production rather than becoming Helix Director concepts.
 
-Prompt Relay is validated as:
-
-```text
-temporal semantic routing / scene progression
-```
-
-not as a hard timestamp controller or persistent object-state machine.
+Exact multi-object physical state, strict collision geometry, fragile possession chains, and guaranteed final-state completion remain weaker classes.
 
 ## Reference-conditioning checkpoint
 
-Licon MSR V1 for LTX 2.5 has now been installed and locally validated for an initial one-subject reference-driven generation.
+Reference conditioning is no longer a purely future capability.
 
-The first local checkpoint supports treating it as a promising Production research control for reference identity/appearance, while stronger viewpoint retention, multi-subject slot separation, subject/object interaction and combined Relay+MSR behavior still require controlled validation.
+### Licon MSR
 
-The distinction remains:
+A first one-subject LTX 2.5 MSR generation passed locally: the reference person's recognizable identity/appearance survived while composition changed substantially into a new scene.
+
+Still pending:
+
+- stronger viewpoint identity testing;
+- multi-subject slot separation;
+- person + product + background interaction;
+- combined timing/reference behavior.
+
+### Lightricks Ingredients
+
+Lightricks Ingredients Core IC-LoRA has also produced a real local new-scene reconstruction on the LTX 2.3 stack using person + product + location references. The cheap 8-step path proved the mechanism, not the final quality ceiling.
+
+Still pending:
+
+- higher-quality 30-step / CFG / STG validation;
+- controlled comparison against Licon on matched reference tasks.
+
+The responsibility split remains:
 
 ```text
 Prompt Relay
 -> WHEN semantic beats should dominate
 
-reference conditioning / MSR
+reference conditioning
 -> WHO / WHAT should remain visually consistent
 ```
 
-Do not collapse those two responsibilities into one Helix Director concept.
+Do not collapse these into one control concept.
 
-Research is recorded under:
+See `production/ltx-director/README.md` and its linked research notes.
 
-```text
-production/ltx-director/MSR_RESEARCH.md
-production/ltx-director/REFERENCE_CONDITIONING_ALTERNATIVES.md
-```
+## Speech checkpoint
+
+`services/speech/` contains the project-owned local speech foundation.
+
+Moonshine Voice `0.1.5` with the Medium Streaming English model is validated on the VPS CPU through the project-owned transcription harness. The production installation lives outside the repository at `/opt/helix-speech`.
+
+There is **no production speech daemon, HTTP endpoint, or Telegram voice-note integration yet**. Future voice input should transcribe to text and then enter the existing media-runtime command/pending-state paths rather than creating a second command interpreter.
+
+## Tiny-LLM checkpoint
+
+`research/helix-ai-adapter/` remains detached research. Qwen3 0.6B Q8_0 and related benchmark cases are being evaluated for bounded semantic tasks, but no tiny model is integrated into Telegram, the database, workflow mutation, or job execution.
 
 ## Production workflow policy
 
@@ -405,11 +288,9 @@ workflow binder / adapter
 ComfyUI
 ```
 
-Tool-specific systems such as Prompt Relay, LTX Director and MSR stay inside Production. They are not the Helix Director contract.
+Prompt Relay, LTX Director, MSR, Ingredients, samplers, node IDs, and model-specific graph state remain Production implementation details unless repeated experiments prove that a higher-level concept belongs in a stable cross-system contract.
 
 ## Reliability work still outstanding
-
-The recent repository audit identified reliability work that should be handled deliberately rather than mixed into unrelated features:
 
 - durable recovery for the submission window before `backend_job_id` is persisted;
 - atomic API idempotency under concurrent duplicate requests;
@@ -417,11 +298,14 @@ The recent repository audit identified reliability work that should be handled d
 - service authentication before expanding runtime network trust;
 - CI/integration-test enforcement;
 - formal migration ledger/checksum governance;
-- explicit at-least-once Telegram delivery semantics.
+- explicit at-least-once Telegram delivery semantics;
+- real Windows reboot / AtStartup validation;
+- worker output-retention cleanup;
+- image upload/staging for broader I2V flows.
 
-The current architecture should be preserved; these are hardening tasks, not reasons to rewrite Production.
+These are hardening tasks, not reasons to rewrite the current Production boundary.
 
-## Preparation / architecture checklist
+## Preparation checklist
 
 - [ ] Keep sanitized n8n exports as workflows stabilize.
 - [ ] Define common IDs and object names across system divisions.
@@ -437,15 +321,17 @@ The current architecture should be preserved; these are hardening tasks, not rea
 - [x] Implement Core/Advanced T2V settings.
 - [x] Implement Manual/Fast/Quality generation modes.
 - [x] Add profile-aware Annie Leibovitz T2I generation.
-- [x] Add durable numeric Job numbers without changing internal Helix/Comfy IDs.
 - [x] Add one shared numeric media-reference namespace for Helix and direct Comfy artifacts.
 - [x] Add 20-item Jobs and Downloads pagination.
-- [x] Run controlled Prompt Enhance evaluation.
+- [x] Evaluate Prompt Enhance.
 - [x] Validate Prompt Relay for temporal semantic routing.
-- [x] Complete first one-subject Licon MSR local validation.
+- [x] Validate first one-subject Licon MSR generation.
+- [x] Validate Ingredients Core IC-LoRA multi-asset reconstruction mechanism.
 - [ ] Validate stronger MSR viewpoint/identity retention.
 - [ ] Validate multi-subject MSR separation.
-- [ ] Validate/calibrate Fast and Quality with controlled benchmarks.
+- [ ] Validate higher-quality Ingredients settings.
+- [ ] Validate/calibrate Fast and Quality modes with controlled benchmarks.
+- [ ] Verify the current live Telegram lifecycle migration/runtime checkpoint.
 - [ ] Validate real Windows reboot/AtStartup behavior.
 - [ ] Close Production reliability items from the repository audit.
 
@@ -453,9 +339,9 @@ The current architecture should be preserved; these are hardening tasks, not rea
 
 **Niche Intelligence design** remains the next main brain phase.
 
-The intended research direction is platform-first rather than generic-web-search-first. YouTube/Facebook/Reels-style observations should provide primary behavioral evidence; wider web research supplements those observations.
+The intended research direction is platform-first rather than generic-web-search-first. YouTube/Facebook/Reels-style observations should provide primary behavioral evidence; wider web research should supplement those observations.
 
-Niche Intelligence should eventually define:
+Niche Intelligence should eventually define concepts such as:
 
 ```text
 Niche
@@ -466,4 +352,4 @@ observed facts vs inferred patterns
 NicheModel
 ```
 
-The later Director should consume that model without knowing whether Production currently uses LTX, FLUX, another local model, a provider API, stock footage, motion graphics, or human editing.
+Later Helix Director logic should consume that model without knowing whether Production currently uses LTX, FLUX, another local model, a provider API, stock footage, motion graphics, or human editing.

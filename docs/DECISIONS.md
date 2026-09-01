@@ -1,6 +1,8 @@
 # Decisions
 
-Only choices we are willing to treat as current project commitments belong here. Uncertain ideas belong in `ASSUMPTIONS.md`.
+Only choices we are willing to treat as project commitments belong here. Uncertain ideas belong in `ASSUMPTIONS.md`.
+
+This log is **append-only in meaning**: an older dated decision remains useful historical context even when a later dated decision supersedes part of it. When policy changes because new evidence arrives, add a newer decision instead of silently rewriting the old one.
 
 ## 2026-08-19 — Project name
 
@@ -58,7 +60,7 @@ Only choices we are willing to treat as current project commitments belong here.
 
 **Decision:** `/cancel <number>` and alias `/cc` create one durable pending action for the configured operator chat, expire after 60 seconds, and require a case-insensitive `yes` or `no`. Three invalid responses abort the request. A new slash command silently abandons the pending confirmation. Legacy Helix UUID references remain accepted for compatibility.
 
-**Reason:** Job cancellation is already owned by `JobService`, so Telegram should only provide a guarded operator path into that existing service. Durable pending state preserves intent and survives runtime restarts without introducing destructive buttons or direct Comfy control.
+**Reason:** Job cancellation is already owned by `JobService`, so Telegram should only provide a guarded operator path into that existing service. Durable pending state preserves intent and survives runtime restarts without introducing direct Comfy control.
 
 ## 2026-08-23 — Operational alerts are durable and deduplicated
 
@@ -76,11 +78,11 @@ Only choices we are willing to treat as current project commitments belong here.
 
 **Decision:** The first validated native LTX 2.5 T2V binding mutates only `405:376.inputs.value` in the vetted runtime workflow. Prompt enhancement remains disabled and the current resolution/aspect, duration, FPS, negative prompt, model and sampler controls remain workflow-defined.
 
-**Reason:** The full T2V settings contract has not been designed yet. A narrow binding proves the end-to-end Production path without prematurely freezing unstable Comfy node controls as public Helix semantics.
+**Reason:** The full T2V settings contract had not been designed yet. A narrow binding proved the end-to-end Production path without prematurely freezing unstable Comfy node controls as public Helix semantics.
 
 ## 2026-08-24 — T2V settings must be Helix semantics, not raw Comfy node controls
 
-**Decision:** Future T2V settings should expose stable concepts such as aspect ratio, duration, quality/resolution preset and prompt enhancement first. Seed, negative prompt, sampler/model tuning and workflow-specific values remain advanced/internal until their value and stability are proven.
+**Decision:** T2V settings should expose stable concepts such as aspect ratio, duration, quality/resolution preset and prompt enhancement first. Seed, negative prompt, sampler/model tuning and workflow-specific values remain advanced/internal until their value and stability are proven.
 
 **Reason:** The operator surface should remain understandable and portable across future workflow revisions. Raw node IDs and model-specific sampler details are implementation details, not the long-term Production contract.
 
@@ -126,11 +128,15 @@ Only choices we are willing to treat as current project commitments belong here.
 
 **Reason:** MSR and Prompt Relay target different failure dimensions. Prompt Relay routes semantic beats over time; MSR is intended to preserve referenced characters, clothing, objects and backgrounds through latent reference slots. Combining unvalidated controls would make failures impossible to attribute. The first MSR experiments should therefore establish one-subject identity retention, then multi-subject slot separation, before any combined scene-progression test.
 
+> Superseded in part by the 2026-08-28 reference-conditioning decision below after successful local validation.
+
 ## 2026-08-26 — Production Profiles share physical execution infrastructure
 
 **Decision:** `nolan` / Christopher Nolan and `leibovitz` / Annie Leibovitz are logical Production Profiles on the same `helix-rtx4060-01` worker, Comfy endpoint, adapter, queue, RTX 4060, and one-job physical concurrency limit. Nolan owns validated LTX video tools; Leibovitz owns the validated narrow FLUX.2 Klein Distilled `image.t2i` path.
 
 **Reason:** Profile identity describes tool authority and operator presentation, not additional hardware. Sharing the physical boundary avoids false worker/queue semantics while preserving distinct settings and generation behavior.
+
+> The physical/logical profile decision remains current. The specific active T2I workflow is superseded by the 2026-08-27 T2I workflow decision below.
 
 ## 2026-08-26 — Telegram uses one durable numeric media reference namespace
 
@@ -146,10 +152,28 @@ Only choices we are willing to treat as current project commitments belong here.
 
 ## 2026-08-26 — Telegram generation owns one lifecycle message
 
-**Decision:** A Telegram-originated T2V/T2I generation uses one operator-facing lifecycle message from confirmation through final artifact. After the operator answers `yes`, Helix first creates the durable job and receives the Comfy Prompt ID; only then does the existing confirmation message transition to `Queued` or `Generating`. While running, that same message is edited in place with a dual progress view: `Workflow` reflects workflow-node completion and `Sampling` reflects the currently progressing Comfy node's `value / max`. Non-numeric stages show their stage name and `Running` rather than a fabricated percentage. Terminal state changes (`failed`, `cancelled`, `completed`) update the same message immediately.
+**Decision:** A Telegram-originated T2V/T2I generation uses one operator-facing lifecycle message from confirmation through final artifact. After the operator confirms generation, Helix first creates the durable job and receives the Comfy Prompt ID; only then does the existing confirmation message transition to Queued or Generating. While running, that same message is edited in place with a dual progress view: Workflow reflects workflow-node completion and Sampling reflects the currently progressing Comfy node's `value / max`. Non-numeric stages show their stage name and Running rather than a fabricated percentage. Terminal state changes update the same message immediately.
 
-For successful Telegram-originated jobs, the lifecycle message ID is durable delivery state. After the artifact is downloaded from Comfy, Telegram delivery replaces that same lifecycle message with the primary final image/video/document instead of sending a new artifact message at the bottom of the chat. Additional artifacts, if any, may use normal extra delivery messages. Jobs without a Telegram lifecycle message (for example API-created jobs) retain the existing new-message delivery path as a fallback.
+For successful Telegram-originated jobs, the lifecycle message ID is durable delivery state. After the artifact is downloaded from Comfy, Telegram delivery replaces that same lifecycle message with the primary final image/video/document instead of sending a new artifact message at the bottom of the chat. Additional artifacts, if any, may use normal extra delivery messages. Jobs without a Telegram lifecycle message retain the existing new-message delivery path as a fallback.
 
-Comfy WebSocket progress remains presentation-only and must never become job truth. `/queue`, `/history`, PostgreSQL job state, reconciliation, cancellation, and durable delivery remain authoritative. Progress percentages themselves are transient and are not persisted. The Comfy connection must use a stable Helix client ID supplied with `/prompt` so `progress`, `progress_state`, `executing`, and terminal execution events can be correlated to the correct backend Prompt ID. Telegram edits are throttled; stage changes and terminal transitions are immediate, while ordinary progress edits are coalesced to avoid one Telegram API call per sampler step.
+Comfy WebSocket progress remains presentation-only and must never become job truth. `/queue`, `/history`, PostgreSQL job state, reconciliation, cancellation, and durable delivery remain authoritative. Progress percentages themselves are transient and are not persisted. The Comfy connection uses a stable Helix client identity supplied with `/prompt` so execution/progress events can be correlated to the correct backend Prompt ID. Telegram edits are throttled; stage changes and terminal transitions are immediate while ordinary progress edits are coalesced.
 
-**Reason:** One evolving message keeps long-running generation visible without flooding the operator chat or dropping a finished video into the middle of an unrelated later conversation. Separating advisory execution telemetry from durable lifecycle truth preserves recovery correctness, while persisting only the Telegram lifecycle message identity lets the existing delivery/retry machinery target the original conversation position after a runtime restart.
+**Reason:** One evolving message keeps long-running generation visible without flooding the operator chat or dropping a finished video into the middle of an unrelated later conversation. Separating advisory execution telemetry from durable lifecycle truth preserves recovery correctness.
+
+## 2026-08-27 — Active T2I candidate is Klein INT8 W8A8; Distilled remains rollback
+
+**Decision:** Annie Leibovitz `image.t2i` should use the FLUX.2 Klein 4B INT8 W8A8 API workflow as the active runtime candidate while retaining the previously validated Distilled FP8 workflow as a rollback path. The public V1 contract remains narrow: prompt, aspect, and seed; the binder mutates only vetted prompt/dimension/seed inputs.
+
+**Reason:** The INT8 W8A8 workflow became the active path without changing the semantic operator contract. Keeping the earlier Distilled workflow installed preserves rollback while avoiding model-selection complexity in the public interface.
+
+## 2026-08-27 — Forum generation uses reply-bound prompt capture and inline confirmation buttons
+
+**Decision:** In Telegram generation topics, bare `/t2i` and `/t2v` use selective ForceReply only for free-text prompt capture. After capture, forum generation confirmation uses inline Generate/Cancel buttons and reset uses Reset/Cancel buttons. Callbacks are bound to the exact chat/thread/user/message/action. Consumed ForceReply cards are deleted after prompt capture. Private operator chat retains direct text confirmation.
+
+**Reason:** Forum privacy mode requires reply-bound prompt capture, while inline confirmation avoids ambiguous group `yes`/`no` handling. Removing the consumed ForceReply message prevents Telegram from reactivating an old prompt target when users switch topics.
+
+## 2026-08-28 — Reference conditioning is locally validated research, but remains opt-in Production control
+
+**Decision:** Treat reference conditioning as a locally demonstrated Production research capability rather than an unvalidated future idea. Licon MSR has passed an initial one-subject LTX 2.5 new-scene identity/appearance test. Lightricks Ingredients Core IC-LoRA has reconstructed a new person + product + location scene locally on the LTX 2.3 stack. Neither system becomes a default control or a Helix Director concept; stronger tests remain required before broader Production reliance.
+
+**Reason:** Real local generations now prove that both mechanisms can influence reference-driven scene construction, superseding the earlier "not yet validated" status. Their remaining failure modes are different and still need controlled attribution: Licon needs stronger viewpoint/multi-subject testing, while Ingredients needs higher-quality settings and matched comparison. Prompt Relay still owns temporal semantic routing; reference conditioning owns visual identity/asset consistency.

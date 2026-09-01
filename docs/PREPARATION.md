@@ -1,16 +1,18 @@
 # Preparation Plan
 
-This is the active phase before Helix brain development begins.
+This remains the active phase before Helix brain development begins in earnest.
 
 ## Goal
 
 Create enough shared structure that Intelligence, Director, Experiment Engine, and Production can evolve independently without repeatedly breaking each other's interfaces.
 
+Production has already developed a real durable runtime/database boundary. Preparation is therefore no longer about deciding whether Helix can persist Production state; it is about defining the **cross-system vocabulary, contracts, provenance, and ownership boundaries** needed before the brain layers scale.
+
 ## 1. Preserve useful existing work
 
-Keep sanitized n8n exports and notes for workflows that already teach us something useful.
+Keep sanitized n8n exports and notes for workflows that teach us something useful.
 
-For each workflow preserve:
+For each important workflow preserve:
 
 - purpose;
 - trigger;
@@ -21,49 +23,51 @@ For each workflow preserve:
 - failure modes;
 - persistence requirements.
 
-The existing asynchronous video task workflow is **preserved as Production knowledge**, not promoted to the central Helix system contract.
+The asynchronous generation pattern remains useful Production knowledge, not the central Helix brain contract.
 
 ## 2. Establish shared vocabulary and IDs
 
-Initial draft domain objects:
+Initial draft domain objects include:
 
 ```text
 Niche
-ResearchSource
+EvidenceRef / ResearchSource
 ResearchFinding
 NicheModel
 ContentIdea
 ContentSpec
 Experiment
-Variant
+Variant / VariantPlan
 MediaAsset
 PublishedPost
 PerformanceSnapshot
 ```
 
-These names are provisional. The purpose is to prevent different subsystems from inventing incompatible concepts for the same object.
+Names remain provisional. The purpose is to prevent different subsystems from inventing incompatible concepts for the same thing.
+
+Production already has its own durable internal/job/backend identities and a numeric operator media-reference namespace. Do not force those execution identities upward into Intelligence/Director contracts unless a real cross-system requirement exists.
 
 ## 3. Establish system boundaries
 
-Preparation should make these boundaries explicit:
+Preparation should keep these boundaries explicit:
 
 ```text
-Intelligence → NicheModel
-Director → ContentSpec
-Experiment Engine → VariantPlan / Experiment lineage
-Production → MediaAsset
-Distribution → PublishedPost
-Analytics → PerformanceSnapshot
+Intelligence      -> NicheModel
+Director          -> ContentSpec
+Experiment Engine -> VariantPlan / experiment lineage
+Production        -> MediaAsset + production metadata
+Distribution      -> PublishedPost
+Analytics         -> PerformanceSnapshot
 ```
 
-The exact schemas come next and can change during design.
+Exact schemas come next and can evolve during design.
 
 ## 4. Define evidence discipline
 
-Intelligence will mix observations, external claims, inferred patterns, and our own experiment results. Every meaningful finding should be able to retain:
+Intelligence will mix observations, external claims, inferred patterns, and our own experiment results. Every meaningful finding should retain enough information to separate evidence from interpretation:
 
 - source/provenance;
-- observation time;
+- observation time/window;
 - evidence type;
 - confidence;
 - raw value where practical;
@@ -72,27 +76,49 @@ Intelligence will mix observations, external claims, inferred patterns, and our 
 
 This prevents assumptions from quietly becoming facts.
 
-## 5. Decide persistence boundaries
+## 5. Persistence boundaries
 
-Before implementing stateful algorithms, decide where durable records should live versus transient n8n execution state.
+### Already proven
 
-Likely durable categories include niche research, content specs, experiment lineage, media metadata, published-post identity, and performance snapshots. Exact technology is not selected yet.
+Production durable state lives outside n8n in `helix-runtime` + PostgreSQL. Media jobs, operator state, deliveries, settings, routing, and related execution truth are not delegated to transient n8n workflow memory.
+
+### Still to design
+
+Persistence technology and schemas for future brain data remain open, including:
+
+- niche/evidence records;
+- `NicheModel` snapshots;
+- `ContentSpec` versions;
+- experiment/variant lineage;
+- publishing identity;
+- analytics/performance snapshots.
+
+Do not reuse the Production database model by default merely because it already exists.
 
 ## 6. Keep Production preparation separate
 
-Production may later need provider-neutral jobs, task states, storage, queues, GPU workers, and media processing. We can preserve those patterns now, but they are not prerequisites for designing the Intelligence/Director/Experiment algorithms.
+Production can continue maturing its worker/runtime, semantic settings, generation backends, reference controls, delivery, and reliability independently.
+
+Those implementation details are not prerequisites for designing Intelligence/Director/Experiment logic. The upstream contract should remain stable even if Production later switches away from LTX, FLUX, ComfyUI, or the current worker topology.
 
 ## 7. Add custom services only for real boundaries
 
-Do not create microservices merely because the future diagram contains boxes. Introduce code when there is a clear state, performance, reliability, ownership, or API boundary that n8n/documents alone cannot handle well.
+Do not create microservices merely because the conceptual diagram has boxes.
+
+Introduce code/services when there is a clear state, performance, reliability, ownership, or API boundary that n8n/documents alone cannot handle well.
+
+The speech foundation is an example of a scoped technical service area: local STT has been validated, but it should not become a production service until the Telegram voice-input requirement is implemented and justified.
 
 ## Preparation exit condition
 
 Preparation is good enough to move into Niche Intelligence when:
 
-- the system divisions are documented;
+- system divisions are documented and accepted;
 - shared object vocabulary is drafted;
 - evidence/provenance rules are drafted;
 - stale generation-first assumptions are removed;
-- existing workflows are preserved without dictating the brain architecture;
+- Production identities/contracts are kept behind the correct boundary;
+- existing workflows are preserved without dictating brain architecture;
 - the next Intelligence design questions are explicit.
+
+The next main brain phase remains **Niche Intelligence design**, with platform-first evidence collection as the intended research direction.
