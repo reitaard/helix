@@ -112,18 +112,28 @@ Forum interaction is isolated by `(chatId, threadId, userId)`, uses selective Fo
 
 ### Lifecycle/progress deployment status
 
-The repository contains the newer lifecycle/progress implementation:
+**Verified live on the VPS on 2026-09-01.**
 
-- persistent Comfy execution WebSocket telemetry with a stable Helix client identity;
-- normalized execution/progress events;
-- compact Workflow + Sampling presentation;
-- durable Telegram lifecycle-message ownership;
-- primary artifact replacement through `editMessageMedia`;
-- delivery retry/failure presentation on the same lifecycle message.
+The production PostgreSQL schema contains the effects of `0014_telegram_job_lifecycle.sql`:
 
-Migration `0014_telegram_job_lifecycle.sql` exists in the repository.
+```text
+telegram_job_lifecycles
+operator_pending_t2i.confirmation_message_id
+operator_pending_t2v.confirmation_message_id
+```
 
-**The exact live VPS checkpoint is intentionally not asserted here until it is re-verified.** The last documentation checkpoint proved forum migration `0013` deployed, while later lifecycle/forum code continued changing. Verify the production database for `telegram_job_lifecycles` and the running container for lifecycle/progress code before saying `0014` is live.
+The running `helix-runtime:dev` container also contains the compiled lifecycle/progress implementation, including:
+
+```text
+/app/dist/telegram/progress-service.js
+/app/dist/delivery/telegram.js
+/app/dist/repositories/telegram-job-lifecycle-repository.js
+/app/dist/adapters/comfy/events.js
+```
+
+This verifies that both the lifecycle migration and the newer runtime code are deployed. The implementation includes persistent Comfy execution WebSocket telemetry with a stable Helix client identity, normalized execution/progress events, compact Workflow + Sampling presentation, durable lifecycle-message ownership, primary artifact replacement through `editMessageMedia`, and retry/failure presentation on the same lifecycle target.
+
+A successful recent end-to-end lifecycle smoke was **not** established by this verification output. The last 24-hour runtime log sample contained a Telegram command-poll `TypeError: fetch failed`, so Telegram transport health should be checked separately before treating the operator path as currently healthy.
 
 See:
 
@@ -301,7 +311,8 @@ Prompt Relay, LTX Director, MSR, Ingredients, samplers, node IDs, and model-spec
 - explicit at-least-once Telegram delivery semantics;
 - real Windows reboot / AtStartup validation;
 - worker output-retention cleanup;
-- image upload/staging for broader I2V flows.
+- image upload/staging for broader I2V flows;
+- investigate the observed Telegram command-poll `fetch failed` transport error and complete a live lifecycle smoke test.
 
 These are hardening tasks, not reasons to rewrite the current Production boundary.
 
@@ -327,11 +338,12 @@ These are hardening tasks, not reasons to rewrite the current Production boundar
 - [x] Validate Prompt Relay for temporal semantic routing.
 - [x] Validate first one-subject Licon MSR generation.
 - [x] Validate Ingredients Core IC-LoRA multi-asset reconstruction mechanism.
+- [x] Verify live `0014` Telegram lifecycle migration and lifecycle/progress runtime code.
 - [ ] Validate stronger MSR viewpoint/identity retention.
 - [ ] Validate multi-subject MSR separation.
 - [ ] Validate higher-quality Ingredients settings.
 - [ ] Validate/calibrate Fast and Quality modes with controlled benchmarks.
-- [ ] Verify the current live Telegram lifecycle migration/runtime checkpoint.
+- [ ] Complete a live Telegram lifecycle smoke test and investigate current command-poll fetch failures.
 - [ ] Validate real Windows reboot/AtStartup behavior.
 - [ ] Close Production reliability items from the repository audit.
 
