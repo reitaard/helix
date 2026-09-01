@@ -1,8 +1,6 @@
 # ComfyUI Worker
 
-This folder records the active ComfyUI execution workstream only.
-
-The goal is to keep the dedicated ComfyUI GPU worker reliable while workflow experiments continue changing. It does not define the rest of Helix.
+This folder records the active physical ComfyUI execution worker. It does not define the rest of Helix.
 
 ## Current path
 
@@ -23,40 +21,45 @@ C:\AI\ComfyUI-CLI\output
     ↓
 VPS temporary spool
     ↓
-Telegram original document + caption
+Telegram original artifact delivery
 ```
 
-## Stable worker
+## Stable physical worker
 
 ```text
 workerId: helix-rtx4060-01
-physical-worker display name: Helix RTX 4060
-Production Profile: nolan / Christopher Nolan
+physical display name: Helix RTX 4060
 Comfy revision: 7dde56176efa71fd74ef7b3930ab5882d1926288
 GPU: RTX 4060
 VRAM: 8188 MiB
 ComfyUI: 0.33.0
 Python: 3.12.11
 PyTorch: 2.10.0+cu130
-validated capabilities: video.i2v, video.t2v
-max concurrent GPU jobs: 1
+physical GPU concurrency: 1
 ```
 
-The durable ID remains `helix-rtx4060-01`; `Christopher Nolan` is a configurable human-facing name.
+Logical Production Profiles share this one endpoint/queue/GPU:
 
-LTX 2.3 and 2.5 assets are available. LTX 2.5 is the validated generation path.
+```text
+nolan / Christopher Nolan
+-> video.i2v
+-> video.t2v
+
+leibovitz / Annie Leibovitz
+-> image.t2i
+```
+
+The durable worker ID is infrastructure identity. Christopher Nolan and Annie Leibovitz are logical Production/operator identities, not separate workers.
 
 ## Installation/update model
 
-The worker is a standalone manual Git + Python virtual-environment ComfyUI install at:
+The worker is a standalone manual Git + Python virtual-environment ComfyUI installation at:
 
 ```text
 C:\AI\ComfyUI-CLI
 ```
 
-The folder name is historical/convenience naming. The separate `comfy-cli` Python package is not installed, and ComfyUI-Manager is not enabled on this worker.
-
-The production worker is intentionally pinned at a detached Git revision. Read-only update awareness and actual worker updates are separate operations.
+The production worker is intentionally pinned at a detached Git revision. Read-only upstream awareness and actual worker updates are separate operations.
 
 Safe check-only flow:
 
@@ -67,321 +70,157 @@ git status
 git log HEAD..origin/master --oneline
 ```
 
-A real update should be deliberate rather than automatic:
+A real update remains deliberate:
 
 ```text
 record current pin
     ↓
-git fetch + inspect upstream changes
+fetch + inspect upstream
     ↓
-move to the chosen revision
+move to chosen revision
     ↓
-refresh requirements if needed
+refresh dependencies if required
     ↓
 restart ComfyUI
     ↓
-validate LTX/custom nodes/models
+validate known workflows/custom nodes/models
     ↓
-change the Helix production revision pin only after validation
+update the Helix production pin only after validation
 ```
 
-`helix-runtime` reports upstream drift through `/status` by comparing the configured pinned revision with official `Comfy-Org/ComfyUI` `master`. This is informational only and never mutates the worker.
+Helix update awareness is informational only and must never auto-mutate the worker.
 
-## Live diagnostics
+## Current validated execution foundation
 
-Comfy `/system_stats` is the source of the live backend/system data displayed by Helix. The runtime currently surfaces:
-
-- ComfyUI version;
-- Python version;
-- PyTorch version;
-- GPU name;
-- dedicated VRAM total/free;
-- host RAM total/free.
-
-Windows Task Manager shared-GPU-memory usage is not exposed by Comfy `/system_stats`, so Helix does not invent or estimate a shared-memory value.
-
-The current Telegram presentation maps internal `cold_ready` to the operator-friendly state `Idle` while preserving the internal state model.
-
-A transient WebSocket events-probe timeout is advisory. Runtime reachability, queue access and capability inspection determine whether the worker is execution-ready.
-
-## Completed foundation
+Completed worker/runtime capabilities include:
 
 - standalone pinned ComfyUI worker on Windows;
-- private Tailscale connectivity from VPS to Comfy;
+- private Tailscale connectivity from the VPS;
 - HTTP and WebSocket connectivity;
-- `helix-runtime` container on `127.0.0.1:8787`;
-- dedicated PostgreSQL `helix-db`;
-- worker registration and readiness persistence;
-- human-friendly configurable worker name;
-- cheap `/live` and heavier `/readiness` probes;
-- live system diagnostics including host RAM and VRAM;
-- direct queue summary for lightweight operator checks;
-- read-only pinned-revision/upstream drift reporting;
-- `MediaAdapter -> ComfyAdapter -> ComfyClient` boundary;
-- durable media jobs/events;
-- Comfy `POST /prompt` submission;
-- Comfy `prompt_id` persisted as backend job ID;
-- asynchronous job API;
-- queue/history reconciliation;
-- restart recovery;
-- live `queued -> running -> succeeded` tracking;
-- artifact metadata capture from Comfy history;
-- semantic `LoadImage` override source;
-- artifact file retrieval through Comfy `/view`;
-- durable `media_deliveries` state;
-- Telegram original MP4 document delivery with metadata in the same caption;
-- ffprobe metadata inspection for resolution/duration/size/audio state;
-- delivery retries with durable claim state;
-- immediate VPS spool cleanup after every attempt;
-- prompt-specific cancellation through the pinned Comfy job API;
-- race-safe cancelled terminal state;
-- configurable running-job timeout;
-- delivery state exposed through the media-job API;
-- maximum five Telegram delivery attempts;
-- permanent malformed-artifact failures stop without retrying forever;
-- Telegram diagnostics/debug/operator commands;
-- durable confirmed Telegram cancellation;
-- durable confirmed native LTX 2.5 T2V submission;
-- tool-aware Telegram artifact captions.
+- runtime liveness/readiness diagnostics;
+- durable media jobs/events/delivery state in PostgreSQL;
+- Comfy `/prompt` submission and Prompt-ID persistence;
+- queue/history reconciliation and restart recovery;
+- artifact discovery and `/view` retrieval;
+- cancellation and running-job timeout;
+- original-file Telegram delivery with bounded retry;
+- Telegram operator diagnostics and guarded actions;
+- durable native LTX 2.5 T2V generation;
+- persisted semantic T2V settings and reset behavior;
+- Manual/Fast/Quality T2V modes;
+- logical Annie Leibovitz T2I generation;
+- one shared numeric media-reference namespace for Helix and direct Comfy artifacts;
+- forum-topic generation code and newer lifecycle/progress code in the repository;
+- persistent Comfy execution WebSocket telemetry in the repository implementation.
 
-## Proven generations
+The old roadmap statements that T2V settings were "NEXT" and persistent WebSocket tracking was only optional future work are obsolete.
 
-First runtime-controlled replay:
+## Proven Production paths
+
+### Native LTX 2.5 T2V
+
+The end-to-end path has been proven:
 
 ```text
-job_d305b8b3b4aa4336a455b35043e3060a
-  -> af67e3be-d307-4757-89fd-6606304c4c4d
-  -> succeeded
-  -> video/LTX-2.5_i2v_00004_.mp4
+Telegram intent
+    ↓
+confirmed Helix job
+    ↓
+native LTX 2.5 T2V
+    ↓
+queue/history reconciliation
+    ↓
+artifact retrieval
+    ↓
+Telegram original-file delivery
 ```
 
-C6 hybrid run:
+Current semantic baseline includes aspect, quality, duration, prompt enhancement, FPS, two seeds, negative prompt, megapixel override, sampler, and guidance. Prompt Enhance is generally kept OFF for directed Helix prompts.
 
-```text
-job_e2a4a9efff7a47b8b70cd41c068073ac
-  -> cc8e51f4-1799-4600-8ff0-6226c2e291e4
-  -> running observed live
-  -> succeeded
-  -> video/LTX-2.5_i2v_00005_.mp4
-```
+### FLUX.2 Klein T2I
 
-Native LTX 2.5 T2V production run:
+The current runtime workflow candidate is FLUX.2 Klein 4B INT8 W8A8. The prior Distilled FP8 workflow remains installed as a rollback path and was validated earlier.
 
-```text
-job_b270eea4177746d881c0c96d0f2f4b35
-  -> video.t2v
-  -> succeeded
-  -> video/LTX_2.5_t2v_00001_.mp4
-  -> 1280×704 / 5.0s / audio present
-  -> Telegram delivered in 1 attempt
-  -> 4m 10s runtime
-```
-
-The T2V run proved the complete Telegram intent -> durable Helix job -> native LTX generation -> reconciliation -> original-file Telegram delivery path.
+The narrow T2I binder mutates only prompt, width, height, and seed from semantic prompt/aspect/seed inputs.
 
 ## Execution/recovery model
 
-Correctness comes from Comfy history and queue state:
+Durable correctness remains:
 
 ```text
-PostgreSQL job
+PostgreSQL media job
     ↓
 backend_job_id / prompt_id
     ↓
-/history/{prompt_id}
+Comfy /history/{prompt_id}
     +
 /queue
     ↓
 reconcile durable state
 ```
 
-This means `helix-runtime` can restart and recover unfinished/completed jobs. Persistent WebSocket tracking can be added later for lower latency, but is not required for correctness.
+The newer persistent WebSocket path improves execution presentation/latency but does not replace this correctness model.
 
-Running jobs can also be cancelled through the prompt-specific Comfy cancellation endpoint. Helix persists `cancelled` as a terminal state and protects it from late reconciler transitions.
+## Persistent execution WebSocket
 
-A configurable running timeout reuses the same cancellation path. The deployed value is currently 3600 seconds; queued jobs do not consume this timeout.
+The repository runtime now maintains a persistent execution WebSocket with a stable Helix client identity and submits the same client identity with `/prompt`. This allows normalized Comfy execution/progress events to feed Telegram lifecycle presentation.
 
-## Output delivery state
+WebSocket progress is advisory. Queue/history plus PostgreSQL remain authoritative, and a WebSocket disconnect must not invalidate a running job.
 
-The current output path is:
+## Worker startup
 
-```text
-Comfy artifact
-    ↓
-/view retrieval
-    ↓
-VPS temporary spool
-    ↓
-ffprobe
-    ↓
-Telegram sendDocument
-    ├── original MP4 file
-    └── metadata caption
-    ↓
-durable document message ID
-    ↓
-spool removed
-```
+Windows Task Scheduler contains an AtStartup task that launches the standalone ComfyUI worker.
 
-Generation success and delivery success remain separate states.
+Manual task startup has been validated. A **real Windows reboot -> automatic AtStartup validation is still pending** and must not be claimed complete until tested.
 
-Delivery retries are bounded:
+## Filesystem and model storage
+
+Worker root:
 
 ```text
-attempt 1 failure -> retry after 30s
-attempt 2 failure -> retry after 60s
-attempt 3 failure -> retry after 120s
-attempt 4 failure -> retry after 240s
-attempt 5 failure -> terminal failed
+C:\AI\ComfyUI-CLI\
 ```
 
-Malformed artifact metadata is treated as a permanent delivery error immediately. A terminal delivery failure remains visible as `status = failed` with `nextAttemptAt = null` and is not claimed again.
-
-## Current T2V input state
-
-Telegram `/t2v` now provides a guarded native LTX 2.5 T2V path:
+Heavy model assets are consolidated under paths such as:
 
 ```text
-/t2v
-  ↓
-awaiting prompt
-  ↓
-prompt preview
-  ↓
-yes / no
-  ↓ yes
-video.t2v submission
+C:\AI\Models\LTX
+C:\AI\Models\WAN
+C:\AI\Models\FLUX
 ```
 
-Pending prompt/confirmation state is durable in `operator_pending_t2v`. No GPU job exists until the operator confirms `yes`.
+Keep migration/rollback backups until the standalone worker has been stable long enough that an explicit cleanup decision is made.
 
-The deployment-managed workflow lives at:
+## Known-good environment
+
+Pinned Comfy core:
 
 ```text
-/opt/helix-runtime/workflows/video_ltx2_5_t2v.api.json
+7dde56176efa71fd74ef7b3930ab5882d1926288
 ```
 
-It is intentionally not frozen into Git yet.
+Important known-good package pins include the current PyTorch/CUDA stack and the validated Kornia compatibility pin. Do not casually upgrade the worker environment while workflow compatibility is still being actively researched.
 
-The first semantic binding changes only the positive prompt at `405:376.inputs.value`. Helix verifies that prompt enhancement at `405:383` remains disabled before submission.
+## Current deferred worker work
 
-Current fixed baseline:
+- output-retention cleanup;
+- broader `/upload/image` staging and I2V/reference ingestion;
+- real reboot/AtStartup proof;
+- deliberate Comfy/custom-node upgrade validation when needed.
 
-```text
-aspect:      16:9
-resolution:  0.9 MP selector baseline
-fps:         24
-duration:    5 seconds
-enhance:     off
-negative:    workflow-defined
-sampler:     workflow-defined
-models:      workflow-defined
-```
-
-The next Production task is to add a small durable T2V settings layer without exposing raw Comfy node IDs. The initial semantic surface should concentrate on:
-
-```text
-aspect
-quality / resolution preset
-duration
-prompt enhancement
-```
-
-FPS remains fixed at 24 for the initial settings surface. Seed, negative prompt, sampler/scheduler/model controls remain internal/advanced until experiments prove that they deserve stable user-facing semantics.
-
-## Input state: keep semantic expansion narrow
-
-The existing semantic image override remains useful, but actual `/upload/image` staging and broader I2V workflow bindings remain postponed while the LTX graphs are still being optimized.
-
-Future I2V graphs may expose more prompt, Prompt Relay, sampler, Director, or temporal controls. Keep raw Comfy API workflow submission available and avoid hard-coding an unstable large input schema.
-
-When workflow families stabilize, add semantic bindings around the chosen graphs rather than temporary node layouts.
-
-## C6 workflow note
-
-The experimental executable graph currently lives on the VPS at:
-
-```text
-/opt/helix-runtime/workflows/c6.api.json
-```
-
-It is not frozen into the repository.
-
-The export had 54 nodes. A serialization mismatch was caught before generation: `temporal_overlap_cond_strength` exported as `0.5` even though the UI named value showed `0.35`. The test API copy was corrected to `0.35`, then successfully generated.
-
-Do not freeze/package this workflow until a stable baseline is explicitly chosen.
-
-## Focused roadmap
-
-```text
-Worker install/freeze                 DONE
-Local LTX generation                  DONE
-Private VPS connectivity              DONE
-Runtime liveness/readiness            DONE
-Dedicated DB + persistence            DONE
-Durable job acceptance                DONE
-POST /prompt                          DONE
-prompt_id persistence                 DONE
-Running/completion reconciliation     DONE
-Restart recovery                      DONE
-Artifact metadata capture             DONE
-Semantic image override source        DONE
-Artifact file retrieval               DONE
-Telegram delivery                     DONE
-Durable delivery retry/state          DONE
-VPS temporary cleanup                 DONE
-Media job cancellation                DONE
-Running-job timeout                   DONE
-Delivery status observability         DONE
-Delivery retry cap                    DONE
-Permanent delivery failure handling   DONE
-Telegram runtime diagnostics          DONE
-Live RAM/VRAM reporting               DONE
-Read-only Comfy update awareness      DONE
-Native LTX 2.5 T2V path               DONE
-T2V pre-submit confirmation           DONE
-
-T2V settings contract                 NEXT
-Worker retention cleanup              DEFERRED
-Image upload / staging                DEFERRED
-Broader I2V prompt/relay/sampler       DEFERRED
-Persistent WS tracking                OPTIONAL LATER
-Freeze workflow package               ONLY AFTER BASELINE IS CHOSEN
-```
-
-## Current pause point
-
-The workflow-independent runtime, Telegram operational checkpoint, and first native T2V production loop are proven.
-
-The next Production task is the T2V settings contract and workflow binder. Keep it small and semantic: map operator concepts to vetted workflow controls without making Comfy node IDs part of the public interface.
-
-Worker-output retention remains deferred rather than adding a worker-side deletion service just for cleanup. VPS temporary copies are already removed after every delivery attempt.
-
-One operational validation remains pending: the Windows scheduled task has been started successfully by hand, but a real reboot -> automatic ComfyUI worker startup has not yet been proven.
+Do not sweep the whole Comfy output directory: manual/experimental artifacts may coexist with Helix outputs.
 
 ## Operational rules
 
-- Raw ComfyUI remains private over Tailscale; do not expose port `8188` publicly.
-- Keep `maxConcurrentGpuJobs: 1` for the RTX 4060 worker.
-- Preserve durable ID `helix-rtx4060-01`; presentation names may change independently.
-- Keep the Comfy revision pinned until an update has been explicitly inspected and validated.
-- Do not auto-update ComfyUI from Telegram or the runtime.
-- Do not alter the pinned custom-node/model stack casually.
-- Avoid competing GPU workloads during LTX generation.
-- Do not let n8n own low-level Comfy polling/tracking.
-- Do not store Telegram tokens or other secrets in Git.
-- Do not package/freeze experimental LTX workflows yet.
-- Keep operator-facing T2V settings semantic; raw node IDs stay inside the Production workflow binder.
+- Keep raw ComfyUI private over Tailscale; do not expose `8188` publicly.
+- Keep physical GPU concurrency at one until deliberate concurrency testing says otherwise.
+- Preserve durable ID `helix-rtx4060-01` independently from presentation names.
+- Keep the Comfy revision pinned until an update is explicitly inspected and validated.
+- Do not auto-update ComfyUI/custom nodes from Telegram or runtime code.
+- Avoid competing GPU workloads during generation.
+- Do not let n8n own low-level Comfy tracking.
+- Do not store tokens or secrets in Git.
+- Keep operator-facing workflow controls semantic; raw node IDs belong inside binders/adapters.
+- Treat persistent WebSocket events as presentation telemetry, not durable execution truth.
 
-## Logical Production Profiles
-
-`helix-rtx4060-01` is one physical RTX 4060/ComfyUI worker and remains limited
-to one concurrent GPU job. Helix maps logical profiles onto that same endpoint:
-`nolan` (Christopher Nolan, validated LTX video) and `leibovitz` (Annie
-Leibovitz, FLUX.2 Klein image generation). Leibovitz does not have a separate
-GPU, Comfy instance, or queue. The runtime reads the active INT8 W8A8 API
-workflow candidate from configured `HELIX_T2I_WORKFLOW_PATH` (default
-`/app/workflows/image_flux2_klein_4b_int8_w8a8_t2i_v1.api.json`). The prior
-Distilled FP8 workflow remains installed for rollback until live validation.
-Migration `0010` is applied, and successful Telegram T2I generations plus
-original-file deliveries validate the narrow V1 path on this RTX 4060.
+For current system-wide Production state, see [`../README.md`](../README.md) and [`../../docs/PROJECT_STATE.md`](../../docs/PROJECT_STATE.md).
