@@ -215,7 +215,9 @@ Private operator chat provides diagnostics, job/download inspection, failures/ev
 
 The repository also contains Image/Video forum-topic generation routing with per-topic policy, isolated pending state, selective ForceReply prompt capture, and inline confirmation buttons.
 
-The newer lifecycle/progress implementation is present in the repository, including persistent Comfy execution WebSocket telemetry and in-place lifecycle delivery. The exact live VPS migration/container checkpoint must be re-verified before describing that feature as deployed.
+The lifecycle/progress implementation is **verified deployed on the VPS as of 2026-09-01**. The live PostgreSQL schema contains `telegram_job_lifecycles` and both pending-generation `confirmation_message_id` columns from migration `0014_telegram_job_lifecycle.sql`; the running `helix-runtime:dev` image contains the compiled lifecycle/progress, delivery, repository, and Comfy event code.
+
+This proves deployment of the schema and runtime implementation. It does not replace a fresh end-to-end operator smoke. The sampled recent logs showed a Telegram command-poll `TypeError: fetch failed`, which should be investigated separately as a transport/health issue.
 
 ## Production workflow policy
 
@@ -246,6 +248,6 @@ Prompt Relay, LTX Director, MSR, Ingredients, continuation samplers, model files
 - submission-window recovery and concurrent API idempotency hardening;
 - service authentication before broader network exposure;
 - CI/integration-test and migration-governance hardening;
-- verify current live Telegram lifecycle migration/runtime state.
+- investigate the Telegram command-poll `fetch failed` transport error and complete a live lifecycle smoke.
 
 Production should continue feature-by-feature behind the stable runtime/adapter boundary without reopening already-solved identity or worker-boundary decisions.
