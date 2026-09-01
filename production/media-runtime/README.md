@@ -125,13 +125,11 @@ Comfy's Prompt ID is stored as `backend_job_id`. Queue/history reconciliation re
 
 ## Persistent Comfy execution telemetry
 
-The repository now contains persistent WebSocket execution tracking for presentation telemetry.
+The runtime contains persistent WebSocket execution tracking for presentation telemetry.
 
 The runtime uses one stable client identity per physical worker and supplies it with `/prompt` submissions so Comfy execution events can be correlated to the backend Prompt ID. Normalized events include execution start/node/progress/success/interrupted/error families.
 
 This WebSocket is **not** durable job truth. A disconnect must not invalidate a generation; PostgreSQL plus queue/history reconciliation remain authoritative.
-
-The old statement that persistent WebSocket tracking is merely a future option is no longer correct.
 
 ## Telegram surfaces
 
@@ -158,11 +156,11 @@ Private operator chat remains the full bounded operator surface, including:
 
 T2V includes persisted semantic settings, reset behavior, and Manual/Fast/Quality modes. T2I intentionally remains narrow around prompt/aspect/seed.
 
-The repository also contains forum routing for one Image topic and one Video topic. Forum pending interactions are isolated by chat/thread/user; selective ForceReply is used only for bare prompt capture; confirmation/reset actions use inline buttons; operator-only commands and T2V developer settings remain private-chat-only.
+The runtime also supports forum routing for one Image topic and one Video topic. Forum pending interactions are isolated by chat/thread/user; selective ForceReply is used only for bare prompt capture; confirmation/reset actions use inline buttons; operator-only commands and T2V developer settings remain private-chat-only.
 
-## Telegram lifecycle/progress implementation
+## Telegram lifecycle/progress deployment
 
-Repository code contains the newer one-message lifecycle implementation:
+The one-message lifecycle implementation is **verified deployed on the VPS as of 2026-09-01**:
 
 ```text
 confirmation
@@ -176,24 +174,32 @@ uploading
 primary final artifact
 ```
 
-Running presentation can show separate Workflow and Sampling progress. The primary successful Telegram artifact can replace the original lifecycle text message through `editMessageMedia`; delivery retry/failure presentation also remains attached to the lifecycle target.
+Running presentation can show separate Workflow and Sampling progress. The primary successful Telegram artifact can replace the original lifecycle text message through `editMessageMedia`; delivery retry/failure presentation remains attached to the lifecycle target.
 
-The corresponding repository migration is:
+The live production schema contains the effects of:
 
 ```text
 0014_telegram_job_lifecycle.sql
 ```
 
-### Live deployment verification gate
+including:
 
-The repository proves the code/migration exists, but this README deliberately does **not** claim the current VPS has `0014` applied until production is re-checked.
+```text
+telegram_job_lifecycles
+operator_pending_t2i.confirmation_message_id
+operator_pending_t2v.confirmation_message_id
+```
 
-The last older documentation checkpoint proved forum migration `0013` deployed. To call lifecycle/progress live, verify both:
+The running `helix-runtime:dev` image was also verified to contain compiled lifecycle/progress code:
 
-1. production DB contains `telegram_job_lifecycles` and the pending-table confirmation-message columns;
-2. the running `helix-runtime` image contains the lifecycle/progress implementation.
+```text
+/app/dist/telegram/progress-service.js
+/app/dist/delivery/telegram.js
+/app/dist/repositories/telegram-job-lifecycle-repository.js
+/app/dist/adapters/comfy/events.js
+```
 
-`docs/PROJECT_STATE.md` is the canonical place to record the result after verification.
+This verifies deployment of both schema and runtime implementation. It does **not** constitute a successful fresh end-to-end lifecycle smoke. The sampled recent runtime log showed a Telegram command-poll `TypeError: fetch failed`; investigate Telegram transport health separately.
 
 ## T2V and T2I workflow binding
 
@@ -223,7 +229,7 @@ remove temporary copy
 
 Delivery claims use PostgreSQL state, stale-claim recovery, bounded retries, and backoff. Original media is handled as document/file media so Telegram does not intentionally transcode the generated artifact.
 
-For lifecycle-owned primary Telegram deliveries, the repository implementation may replace the existing lifecycle message rather than append a new bottom-of-chat artifact message.
+For lifecycle-owned primary Telegram deliveries, the deployed implementation can replace the existing lifecycle message rather than append a new bottom-of-chat artifact message.
 
 ## Database migrations
 
@@ -236,7 +242,7 @@ Repository migrations currently include at least:
 0014_telegram_job_lifecycle.sql
 ```
 
-Do not equate "migration exists in Git" with "migration is applied in Production". The live schema must be checked before deployment claims are updated.
+The 2026-09-01 VPS verification confirmed `0014` effects are present in the live production schema.
 
 ## Validation policy
 
@@ -278,6 +284,6 @@ Do not keep a historical test-count number in this README as if it were permanen
 
 ## Next direction
 
-Continue Production feature-by-feature behind the stable worker/runtime boundary. Current hardening priorities include the submission-before-`backend_job_id` recovery window, concurrent API idempotency, service authentication before broader network trust, CI/integration enforcement, migration governance, and explicit delivery semantics.
+Continue Production feature-by-feature behind the stable worker/runtime boundary. Current hardening priorities include the submission-before-`backend_job_id` recovery window, concurrent API idempotency, service authentication before broader network trust, CI/integration enforcement, migration governance, explicit delivery semantics, and investigation of the current Telegram polling transport failure followed by a live lifecycle smoke.
 
 The main Helix brain direction remains Niche Intelligence.
