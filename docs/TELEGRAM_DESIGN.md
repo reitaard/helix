@@ -1,6 +1,6 @@
 # Telegram Operator Design
 
-> Canonical presentation and interaction guidance for the Helix Telegram surface. Updated 2026-09-01 to reconcile private-operator behavior, forum-topic generation, and lifecycle/progress implementation.
+> Canonical presentation and interaction guidance for the Helix Telegram surface. Updated 2026-09-01 to reconcile private-operator behavior, forum-topic generation, lifecycle/progress implementation, and scoped prompt capture.
 
 ## Purpose
 
@@ -112,12 +112,25 @@ Forum routing exposes only the allowed generation surface for each configured to
 
 ### Prompt capture
 
-Selective ForceReply is used only by bare `/t2i` and `/t2v` commands when free-text prompt capture is required.
+**ForceReply is not used anywhere in the current Telegram implementation.**
 
-- Settings, modes, help, usage, and result/toast messages must not force a reply.
-- Image generation may also accept `/t2i <prompt>` inline and proceed directly to confirmation.
-- Group free text is accepted only for the matching pending user/conversation and, for bare-command capture, only when replying to the expected ForceReply message.
-- Delete the consumed ForceReply card after successful prompt capture so Telegram cannot reactivate it when the user switches topics.
+For a bare `/t2i` or `/t2v` command in its allowed forum topic:
+
+1. Helix creates durable `awaiting_prompt` state scoped to the exact `(chatId, threadId, userId)` conversation.
+2. Helix sends an ordinary prompt card such as `Send the generation prompt.` with no `force_reply`, `selective`, or reply requirement.
+3. The next plain-text message from that same scoped conversation is accepted while the state remains `awaiting_prompt`.
+4. The prompt card is removed after successful capture.
+5. A new slash command abandons the pending prompt state and removes the old prompt card when possible.
+
+Additional rules:
+
+- Image generation may accept `/t2i <prompt>` inline and proceed directly to confirmation.
+- A user does **not** need to reply to the prompt card.
+- Reply-message identity is not the authorization boundary for prompt capture.
+- Free text from another user, topic, or chat cannot consume the scoped pending state.
+- Plain text is not accepted as a generation prompt once the state has advanced beyond `awaiting_prompt`.
+
+This state-scoped next-message model replaces the earlier reply-bound/ForceReply design.
 
 ### Forum confirmation buttons
 
@@ -135,7 +148,7 @@ Forum reset confirmation uses:
 
 Callbacks must be bound to the originating `(chatId, threadId, userId)`, the exact confirmation message, expected action family, and unexpired pending state.
 
-Reject repeated, expired, wrong-user, wrong-topic, and mismatched callbacks. Remove the keyboard after the first valid action.
+Reject repeated, expired, wrong-user, wrong-topic, and mismatched callbacks. Remove the keyboard after the first valid action. Current code clears callback markup without sending an empty inline-keyboard object.
 
 Private operator chat retains its text-confirmation behavior; do not force the forum button UX into private chat unless a separate decision changes that policy.
 
@@ -252,10 +265,11 @@ Do not invent many aliases for destructive actions.
 - Keep command parsing, routing, state transitions, repositories, and presentation separate.
 - Prefer small named presenters over large inline HTML concatenation.
 - Treat lifecycle/Telegram output as a tested contract.
-- The repository now includes focused Telegram tests for routing, lifecycle/progress, forum buttons, delivery routing, and related behavior; the old note claiming there was no project-owned Telegram presentation test coverage is obsolete.
+- The repository includes focused Telegram tests for routing, lifecycle/progress, forum buttons, delivery routing, scoped next-message prompt capture, and related behavior.
+- The transport regression suite explicitly checks that ordinary prompt-card delivery does not emit `force_reply` or `selective` markup.
 
 ## Deployment-state note
 
-Forum routing and lifecycle/progress code are separate concerns from whether the corresponding production migration/container revision is live.
+Migration `0014_telegram_job_lifecycle.sql` and the lifecycle/progress runtime were verified deployed on the VPS on 2026-09-01.
 
-The repository contains forum routing plus the newer lifecycle implementation. Before documentation says lifecycle/progress is live, verify the production database has migration `0014_telegram_job_lifecycle.sql` effects and verify the running runtime image contains the lifecycle/progress code.
+The later scoped-prompt-capture and callback-keyboard fixes are on repository `main` and passed the local media-runtime regression suite (`57/57`) after rebase. Because the previously inspected `helix-runtime` container had already been running for several days, treat deployment of these **latest interaction fixes** as unverified until the runtime is rebuilt/restarted and a live forum smoke is completed.
