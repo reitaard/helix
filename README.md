@@ -29,8 +29,8 @@ Current Production facts:
 - logical Production Profiles `nolan` / Christopher Nolan for video and `leibovitz` / Annie Leibovitz for image generation;
 - validated native LTX 2.5 T2V plus persisted semantic T2V settings and Manual/Fast/Quality modes;
 - active FLUX.2 Klein 4B INT8 W8A8 T2I workflow candidate, with the prior Distilled FP8 path retained for rollback;
-- Telegram private-operator controls plus forum-topic Image/Video generation routing in the codebase;
-- Telegram lifecycle/progress code, including persistent Comfy execution WebSocket telemetry and in-place lifecycle delivery, is merged; the exact live migration/container checkpoint must be verified against the VPS before describing it as deployed.
+- Telegram private-operator controls plus forum-topic Image/Video generation routing;
+- Telegram lifecycle/progress schema and runtime code are deployed: migration `0014_telegram_job_lifecycle.sql` is present in the live PostgreSQL schema and the running `helix-runtime` image contains lifecycle/progress, `editMessageMedia`, and persistent Comfy event handling code.
 
 The current generation direction is **open/self-hosted first**. Runway is not part of the active Production plan. Seedance-class systems remain behavioral/quality references where useful.
 
