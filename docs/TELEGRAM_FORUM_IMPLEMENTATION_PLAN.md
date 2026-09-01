@@ -1,377 +1,124 @@
-# Telegram Forum Topics — Autonomous Implementation Plan
+# Telegram Forum Topics — Historical Implementation Record
 
-Status: implemented and deployed for forum routing; lifecycle/progress integration is merged to `main` but not yet deployed.
-Date: 2026-08-26
-Integration branch: `feature/telegram-forum-lifecycle-integration` (merged into `main` at `cf07d25`)
-Runtime: `production/media-runtime`
+Status: **forum routing is implemented in the repository and was previously verified deployed; this file is no longer the active execution plan. Lifecycle/progress deployment status is tracked separately and must be verified against the VPS.**
 
-## 1. Mission
+Original implementation date: 2026-08-26
 
-Extend the existing single Telegram bot so it continues serving the Creator's private chat and also serves one private forum supergroup with two strictly separated generation topics. Keep one bot, one Helix runtime, one Comfy worker, and one GPU execution queue.
+Current canonical behavior: [`TELEGRAM_DESIGN.md`](TELEGRAM_DESIGN.md)
 
-The implementation must be complete, tested, migrated, deployed, and smoke-tested. Do not create a second bot or a second worker identity.
+Lifecycle implementation record: [`TELEGRAM_LIFECYCLE_PROGRESS_IMPLEMENTATION.md`](TELEGRAM_LIFECYCLE_PROGRESS_IMPLEMENTATION.md)
 
-## 2. Verified live routing data
+Canonical project checkpoint: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 
-- Bot: existing configured bot (`@christolanbot`); do not request, print, rotate, or commit its token.
-- Forum group title: `Absolute Cinema`
-- Forum chat ID: `-1004369617758`
-- Image Generation thread ID: `5`
-- Video Generation thread ID: `7`
-- Existing private operator destination remains the current `HELIX_TELEGRAM_CHAT_ID`.
+## Mission that was implemented
 
-Live Bot API transport test completed on 2026-08-26:
+Extend the existing single Telegram bot so it serves both the Creator's private operator chat and one private forum supergroup with strictly separated Image and Video generation topics while preserving:
 
-- A silent test message sent with `message_thread_id=5` was returned by Telegram with thread ID `5`.
-- A silent test message sent with `message_thread_id=7` was returned by Telegram with thread ID `7`.
-- Both test messages were deleted successfully.
-- `getChat` confirms the destination is a forum supergroup.
-
-Do not repeat visible connection tests unnecessarily.
-
-## 3. Product policy (fixed)
-
-### Private chat
-
-The existing private chat remains the operator surface and retains all current commands and capabilities, including diagnostics, queue inspection, downloads, job inspection, failures, cancellation, T2I, T2V, and developer settings.
-
-### Image topic (`chat=-1004369617758`, `thread=5`)
-
-Allow only the image-generation surface:
-
-- `/t2i`
-- `/t2i settings`
-- `/t2i set asp ...`
-- `/t2i set seed ...`
-- `/t2i reset`
-- topic-specific `/help`
-
-Do not expose T2V, queue, downloads, outbox, diagnostics, failures, events, global job listings, or cancellation here.
-
-### Video topic (`chat=-1004369617758`, `thread=7`)
-
-Allow only the production video-generation surface:
-
-- `/t2v`
-- `/t2v settings`
-- `/t2v mode` and normal mode changes
-- `/t2v set asp ...`
-- `/t2v set qual ...`
-- `/t2v set time ...`
-- `/t2v set enh ...`
-- `/t2v reset` for core settings
-- topic-specific `/help`
-
-Do not expose `-dev`, FPS, seeds, negative prompt, megapixel override, sampler, CFG, diagnostics, downloads, queue, outbox, failures, events, global job listings, or cancellation here. Developer controls remain private-chat only.
-
-### Membership and authorization
-
-Any user who can post in `Absolute Cinema` may use generation and the allowed topic-specific production settings. No static generation-user allowlist is required.
-
-Nevertheless, every update must retain `userId`, and pending interactions must be isolated by `(chatId, threadId, userId)`. Group membership is authorization for the allowed topic surface only; it does not grant the private operator surface.
-
-Ignore channel posts, anonymous-admin posts without a usable sender identity, edited messages, and messages outside the configured private chat or the two configured forum routes.
-
-### Wrong-topic behavior
-
-- An image command in Video returns one compact pointer to the Image topic.
-- A video command in Image returns one compact pointer to the Video topic.
-- Operator commands in either generation topic return a compact “private operator chat only” response.
-- Ordinary group conversation with no pending interaction is ignored.
-- Validate an `@botusername` command suffix. Ignore commands explicitly addressed to another bot; do not strip and accept every suffix.
-
-### Settings semantics
-
-Keep the current persisted production-profile settings model. Settings are shared at profile/tool level, not per user. Every confirmed job must continue using a concrete settings snapshot so later changes cannot alter an already-started interaction.
-
-Do not mix the known Telegram presentation cleanup into this feature. Reuse existing presenters where possible and change presentation only where routing requires it.
-
-## 4. Required architecture
-
-### 4.1 Telegram context
-
-Introduce one canonical context type and pass it through routing, pending services, job creation, replies, and delivery:
-
-```ts
-interface TelegramContext {
-  botId: string;
-  botUsername: string;
-  updateId: number;
-  chatId: string;
-  threadId: string | null;
-  userId: string;
-  messageId: string;
-}
+```text
+one bot
+one helix-runtime
+one Comfy worker
+one physical GPU queue
 ```
 
-Use string IDs at domain/database boundaries to avoid JavaScript numeric precision assumptions. Keep `updateId` as a validated safe integer and pass it unchanged into generation submission so idempotency can be derived from `(botId, updateId)`. Parse Telegram's `message_thread_id`, `message.from.id`, `message.message_id`, `message.chat.type`, `message.is_topic_message`, and `reply_to_message` fields explicitly.
+No second bot, worker identity, or runtime process was introduced.
 
-Add a route classification with exactly these outcomes:
+## Verified forum routing
 
-```ts
-type TelegramRoute =
-  | { kind: "private_operator" }
-  | { kind: "forum_image" }
-  | { kind: "forum_video" }
-  | { kind: "ignored" };
+The implemented forum uses one Image generation topic and one Video generation topic.
+
+Policy:
+
+```text
+Image topic
+-> image.t2i surface only
+
+Video topic
+-> video.t2v surface + normal T2V settings/modes
+
+Private operator chat
+-> diagnostics, jobs/downloads, failures/events/outbox,
+   cancellation, T2I/T2V, and T2V developer controls
 ```
 
-Keep route policy centralized; do not scatter raw chat/thread comparisons through feature services.
+Operator-only commands and T2V `-dev` controls remain private-chat-only.
 
-### 4.2 Configuration
+## Authorization and conversation isolation
 
-Preserve the existing token and private chat variables. Add an all-or-none forum configuration:
+Forum membership authorizes only the topic-appropriate generation surface.
 
-- `HELIX_TELEGRAM_FORUM_CHAT_ID=-1004369617758`
-- `HELIX_TELEGRAM_T2I_THREAD_ID=5`
-- `HELIX_TELEGRAM_T2V_THREAD_ID=7`
+Every interaction retains user identity and pending state is isolated by:
 
-Requirements:
-
-- Validate IDs as integer strings; forum chat must be negative and thread IDs must be positive.
-- Require all three forum values together or none.
-- Forum configuration is invalid unless the Telegram token and private operator chat are configured.
-- Reject identical image/video thread IDs and reject a forum chat ID equal to the private operator chat ID.
-- Classify private traffic only when `chat.type === "private"`; classify forum traffic only when `chat.type === "supergroup"` and `is_topic_message === true`.
-- Keep forum configuration optional so private-only deployments still work.
-- Update `production/media-runtime/.env.example` and runtime README without secrets.
-- Update `/opt/helix-runtime/telegram.env` only during the deployment phase; back it up first.
-
-Do not replace `HELIX_TELEGRAM_CHAT_ID`; it remains the private operator chat.
-
-### 4.3 Outbound transport
-
-Refactor Telegram sending so every operation accepts an explicit destination:
-
-```ts
-interface TelegramDestination {
-  chatId: string;
-  threadId: string | null;
-}
+```text
+(chatId, threadId, userId)
 ```
 
-For forum destinations, include `message_thread_id` in all relevant Bot API requests:
+A user's Image interaction cannot consume another user's state or that same user's Video interaction.
 
-- `sendMessage`
-- multipart `sendDocument`
-- downloads initiated from a topic, if those are ever enabled later
+Unknown chats/threads, unsupported update forms, and wrong-surface commands fail closed or return compact routing guidance without mutating unrelated pending state.
 
-Private sends must omit `message_thread_id`, not send `0` or `null`.
+## Prompt capture and confirmation
 
-The current private destination may remain the default only for legacy/operator alerts. Generation replies and artifact deliveries must always use the explicit originating destination.
+The final forum interaction differs from the earliest implementation draft and should be understood from current code/design rather than the original plan text.
 
-### 4.4 Pending interaction isolation
+Current forum rules:
 
-Migrate T2I and T2V generation/reset pending tables from a `chat_id` primary key to a composite conversation key:
+- bare `/t2i` and `/t2v` use selective ForceReply only for free-text prompt capture;
+- Image also supports inline `/t2i <prompt>` capture;
+- group free text is accepted only for the correct pending conversation/user and expected prompt-capture reply;
+- the consumed ForceReply card is deleted after prompt capture;
+- generation confirmation uses inline `[ Generate ] [ Cancel ]` buttons;
+- reset confirmation uses `[ Reset ] [ Cancel ]`;
+- callbacks are bound to exact chat/thread/user/message/action state;
+- repeated, expired, wrong-user, wrong-topic, and mismatched callbacks fail closed;
+- private operator chat retains direct text confirmation.
 
-- `chat_id TEXT NOT NULL`
-- `thread_id TEXT NOT NULL` (`"0"` represents no thread)
-- `user_id TEXT NOT NULL`
-- primary key `(chat_id, thread_id, user_id)`
+This supersedes the earlier draft assumption that inline callbacks were unnecessary.
 
-Backfill existing private rows with `thread_id='0'` and `user_id=chat_id` so the migration is non-destructive.
+## Durable origin and delivery routing
 
-Tables in scope:
+Telegram-created jobs persist their delivery origin so completed artifacts can return to the exact originating destination after runtime restart.
 
-- `operator_pending_t2v`
-- `operator_pending_t2v_reset`
-- `operator_pending_t2i`
-- `operator_pending_t2i_reset`
+The forum migration introduced durable routing state and conversation-key changes rather than relying on in-memory maps.
 
-The operator cancellation table may remain private-chat keyed because cancellation is not exposed in forum topics.
+Delivery-time validation must continue to fail closed on unknown destinations or tool/topic mismatch:
 
-Update repositories and services to accept a conversation key/context instead of constructor-captured `chatId`. Expiry sweeps must expire all due records, not only one configured chat.
-
-A new slash command should clear pending state only for that same `(chat, thread, user)`. It must never clear another user's or another topic's interaction.
-
-### 4.5 ForceReply and privacy-safe interaction
-
-Do not depend on the bot being an administrator or on receiving all group conversation. Keep compatibility with Telegram privacy mode.
-
-The initial “send prompt” message must request a reply using both:
-
-- `reply_parameters` referencing the initiating user's message; and
-- `reply_markup: { force_reply: true, selective: true }`.
-
-ForceReply applies only to bare `/t2i` and `/t2v` free-text prompt capture. Settings, setting changes, modes, help, usage, and ordinary result/toast messages must not force a reply.
-
-The forum confirmation card remains editable and carries inline `[ Generate ] [ Cancel ]` buttons; reset carries `[ Reset ] [ Cancel ]`. Persist the returned confirmation message ID and accept a callback only from the same `(chatId, threadId, userId)`, exact message, expected action family, and unexpired pending state. Remove the keyboard after the first valid action. Repeated, expired, wrong-user, wrong-topic, and mismatched callbacks fail closed without creating a job.
-
-Group free text is accepted only while the matching bare-command prompt is awaiting input and only as a reply to its exact selective ForceReply message. Private-chat behavior retains direct `yes` / `no` confirmation without buttons.
-
-Define state recovery for partial failures: if Telegram send fails, remove/abort newly created pending state; if Telegram send succeeds but persisting its message ID fails, log privately, attempt to delete the orphaned bot message, and abort pending state. Never leave a group interaction accepting arbitrary text.
-
-### 4.6 Durable job origin and delivery destination
-
-A completed group job must return to its originating topic even after runtime restart. Do not rely on in-memory maps.
-
-Persist an optional Telegram delivery destination with the accepted job and copy it into each generated `media_deliveries` row when the job succeeds. A concrete acceptable schema is:
-
-- `media_jobs.delivery_context JSONB NULL`
-- `media_deliveries.destination JSONB NULL`
-
-Validate the JSON at TypeScript boundaries as:
-
-```ts
-{
-  provider: "telegram";
-  chatId: string;
-  threadId: string | null;
-  userId: string;
-}
+```text
+image.t2i -> Image topic only
+video.t2v -> Video topic only
 ```
 
-Requirements:
+Operational alerts remain private.
 
-- Telegram-created jobs pass this context into `JobService.create()`.
-- `JobRepository.createAccepted()` stores it separately from workflow data.
-- `markSucceeded()` copies it into delivery rows transactionally.
-- `DeliveryRepository.claimDue()` returns the destination.
-- `DeliveryWorker` sends the artifact to that destination.
-- Inject the configured route map into a delivery-time validator. Fail closed on every non-null destination that is not the configured private chat or configured forum route.
-- Enforce tool/route invariants at delivery time: `image.t2i` may target only Image thread `5`; `video.t2v` may target only Video thread `7`; no group artifact may target General or an unknown thread. Private legacy/operator fallback remains allowed.
-- Existing jobs/deliveries with a null destination retain the current private-chat fallback.
-- API-created jobs retain current behavior unless an explicit destination is supplied internally.
-- Never store the bot token in a job, event, request, or delivery row.
+## Polling durability and idempotency
 
-Include destination details (with IDs but no token) in relevant delivery audit events. A malformed or tool-mismatched destination must mark delivery failed with a sanitized reason and must never be sent.
+Forum work also introduced durable Telegram polling progress and update-aware/idempotent generation submission behavior so a restart/replayed update cannot freely create duplicate GPU work.
 
-### 4.7 Polling offsets
+There must remain only one `getUpdates` consumer for the configured bot token.
 
-Replace unconditional startup discard with durable polling progress:
+## Migration checkpoint
 
-- Add `telegram_poll_offsets(bot_id TEXT PRIMARY KEY, next_update_id BIGINT NOT NULL, updated_at TIMESTAMPTZ NOT NULL)`.
-- Resolve both `botId` and `botUsername` once with `getMe` during startup. If `getMe` fails or returns no username, polling fails closed.
-- On first-ever startup with no row, initialize from Telegram's latest update to preserve the current no-backlog bootstrap behavior.
-- Afterwards load the stored offset and persist progress after each handled or intentionally ignored update.
-- PostgreSQL `BIGINT` is returned by `pg` as a string: parse it with explicit bounds checks into a JavaScript safe integer before constructing the Bot API payload. Never JSON-serialize a JavaScript `bigint`.
-- A duplicate update must not create a duplicate GPU job. Use an idempotency key derived from bot ID and Telegram update ID for both T2I and T2V submissions.
-- Pass `updateId` into both generation services. In confirmation handling, create the idempotent job before removing pending state; remove pending only after successful `JobService.create()`. Add crash/replay coverage for the boundary between creation and pending removal.
+Forum routing migration:
 
-Do not run more than one `getUpdates` consumer for the same bot token.
+```text
+0013_telegram_forum_topics.sql
+```
 
-### 4.8 Command routing
+was previously recorded as applied in Production.
 
-Split update parsing/routing from command presentation. The command service should:
+The later lifecycle/progress migration is separate:
 
-1. Parse and validate the Telegram update.
-2. Build `TelegramContext`.
-3. Classify the route.
-4. Validate command suffix.
-5. Apply the route's command allowlist before mutating pending state.
-6. Only an accepted command may clear pending state, and only for the same `(chat, thread, user)` key. Forbidden operator commands and wrong-topic pointers must not mutate pending state.
-7. Dispatch to T2I/T2V/private operator services with context.
-8. Send the response to the same destination.
+```text
+0014_telegram_job_lifecycle.sql
+```
 
-Avoid cloning the full `TelegramCommandService` for each topic. There must remain one poller and one bot instance.
+Do not infer `0014` deployment from forum deployment. Verify the live production schema/runtime before updating lifecycle deployment claims.
 
-Do not register a misleading global Bot API command menu because Telegram command scopes are not topic-specific. Dynamic `/help` is authoritative unless a carefully scoped menu can be proven correct.
+## Regression expectations
 
-### 4.9 Alerts
+The repository contains focused tests for forum routing, conversation isolation, delivery routing, polling behavior, lifecycle integration, confirmation buttons, and ForceReply behavior.
 
-Keep operational alerts in the existing private operator chat. Do not post worker failures or internal diagnostics into generation topics.
-
-Immediate user-facing validation/submission errors should be returned to the originating topic. Introduce safe forum-facing error classes/codes and map unknown failures to a generic message with a correlation/job reference. Never send an arbitrary `Error.message`, workflow path, Comfy node ID, HTTP body, stack, or backend detail to a group topic; log full details privately/runtime-side. Backend failure alerts remain private; optionally add a compact originating-topic failure notice only if it can be durably routed and does not expose internal details.
-
-### 4.10 GPU concurrency
-
-Do not create `helix-worker-02` and do not run a second runtime. Both topics submit to `helix-rtx4060-01` and the same Comfy queue.
-
-This feature does not claim that `maxConcurrentGpuJobs: 1` is an enforced Helix semaphore; it is currently worker metadata. Do not silently introduce an untested scheduler in this topic-routing change. Preserve the existing single Comfy queue and document that execution remains serial at the backend. A central admission scheduler can be a separate follow-up.
-
-## 5. Migration safety
-
-Create the next numbered migration; inspect the current highest migration before choosing the number. The migration must:
-
-- run inside a transaction;
-- preserve existing private pending state;
-- add durable delivery destination fields;
-- add polling offset storage;
-- recreate required indexes and constraints;
-- be idempotent where the repository's migration practice expects it;
-- include comments for the private-row backfill assumptions.
-
-Before production migration:
-
-1. Back up the production database.
-2. Record current pending-row counts.
-3. Apply migration to a disposable/local database first.
-4. Verify schema and backfill queries.
-5. Apply once to production while the old runtime is stopped, because old code is incompatible with composite pending keys.
-
-Provide and rehearse an explicit rollback strategy. At minimum:
-
-- stop `helix-runtime` before backup/migration and keep it stopped until the new image is ready;
-- create a timestamped custom-format backup with `pg_dump -Fc` from the database container/network context;
-- run `pg_restore --list` to verify the archive is readable;
-- record the exact old image ID and preserve the pre-change environment file;
-- rehearse restore into a disposable database with `createdb`, `pg_restore --clean --if-exists`, and row/schema checks;
-- document the production restore command and the fact that restoring discards jobs, deliveries, and polling offsets written after the backup.
-
-A code rollback after the schema migration should either be supported by compatibility columns/views or require stopping all writers, restoring the verified pre-migration database backup, restoring the old environment, and starting the recorded old image. Do not improvise during deployment.
-
-## 6. Required tests
-
-Use project-owned `node:test` tests. Existing tests must continue passing.
-
-At minimum add focused tests for:
-
-### Routing
-
-- Private configured chat becomes `private_operator`.
-- Group thread 5 becomes `forum_image`.
-- Group thread 7 becomes `forum_video`.
-- General topic, unknown thread, other group, channel post, edited message, and senderless message are ignored.
-- Commands addressed to another bot are ignored.
-- Image command in Video and video command in Image produce the correct pointer.
-- Operator commands are unavailable in both generation topics.
-- Topic `/help` contains only that topic's commands/settings.
-- `-dev` T2V access is rejected in the forum and remains available privately.
-
-### Isolation
-
-- Two users can have simultaneous pending Image interactions in thread 5.
-- One user can have simultaneous Image and Video interactions.
-- A command or reply in one topic does not abandon another topic's state.
-- One user's reply cannot complete another user's prompt or confirmation.
-- Group free-text prompts not replying to the expected bare-generation ForceReply message are ignored.
-- Non-pending `yes`/`no` in a forum is ignored.
-- Forbidden operator commands and wrong-topic pointers leave pending state unchanged.
-- Bare generation ForceReply includes both `reply_parameters` and selective reply markup; other command responses do not force replies.
-- Telegram send failure after pending creation aborts that pending state.
-- Expiry removes only due records and handles all routes.
-
-### Transport
-
-- Private `sendMessage` omits `message_thread_id`.
-- Forum `sendMessage` includes the correct thread ID.
-- Forum multipart `sendDocument` includes the correct thread ID.
-- ForceReply payload is present only where intended.
-- Telegram API errors do not leak the token.
-
-### Delivery durability
-
-- Job origin is persisted.
-- Succeeded-job delivery rows copy the origin destination.
-- Claimed delivery returns the destination.
-- Artifact delivery after a simulated restart uses the stored topic.
-- Legacy/null destination falls back to the private chat.
-- Image output cannot route to Video and vice versa.
-- Malformed, unknown-chat, General-topic, and tool/thread-mismatched non-null destinations fail closed without sending.
-- Group-facing failures are sanitized and internal details remain in logs/private alerts.
-
-### Polling
-
-- First bootstrap initializes without replaying historical updates.
-- Restart resumes from the stored offset.
-- Intentionally ignored updates advance the offset.
-- A repeated generation update uses the same idempotency key and does not create a duplicate job.
-- PostgreSQL string `BIGINT` offsets are bounds-checked and converted correctly.
-- A crash/replay between idempotent job creation and pending removal does not lose or duplicate a job.
-
-### Regression
-
-Run:
+For current regression validation run:
 
 ```bash
 cd production/media-runtime
@@ -379,88 +126,33 @@ npm run typecheck
 npm test
 ```
 
-The final test suite must include Telegram routing/transport tests; a successful TypeScript build alone is insufficient.
+Do not rely on the historical test-count numbers from the original implementation session as if they are permanently current.
 
-## 7. Autonomous execution sequence
+## Acceptance properties that remain current
 
-1. Confirm `git status` is clean and create `feature/telegram-forum-topics` from current `main`.
-2. Read all files under `production/media-runtime/src/telegram`, delivery code, job/repository code, migrations, config, startup wiring, and existing tests before editing.
-3. Implement pure context parsing and route policy first with unit tests.
-4. Add configuration validation and examples.
-5. Add migration and repository changes; test against disposable PostgreSQL.
-6. Refactor pending services to context keys and expiry-all behavior.
-7. Add explicit-destination Telegram transport and ForceReply support.
-8. Persist job origin and delivery destination end-to-end.
-9. Refactor command dispatch to route allowlists while preserving private behavior.
-10. Add durable polling offsets and Telegram update idempotency.
-11. Run typecheck and the complete test suite.
-12. Request/read a focused code audit before deployment; fix concrete correctness findings.
-13. Back up production DB and `/opt/helix-runtime/telegram.env`.
-14. Stop the old runtime, apply migration, add the three forum environment variables, rebuild, and start exactly one runtime.
-15. Verify `/v1/health`, logs, database connectivity, command poller readiness, and no polling conflict.
-16. Smoke-test `/help` in each topic and private chat; delete test messages if practical.
-17. Run one real T2I job from Image, restart `helix-runtime` while that job or its delivery is pending, and verify its document still returns only to thread 5.
-18. Run one real T2V job from Video and verify its document returns only to thread 7.
-19. Verify simultaneous pending sessions for two users if a second test user is available; otherwise cover this with integration tests and record the limitation.
-20. Verify forbidden/wrong-topic commands do not disturb a pending interaction.
-21. Verify no internal alerts or diagnostics appeared in either generation topic.
-22. Record deployment commit, migration, image/container state, test results, verified backup/restore commands, and rollback checkpoint.
-
-Never print or commit environment values containing tokens or database credentials.
-
-## 8. Deployment acceptance criteria
-
-The work is complete only when all are true:
-
-- Existing private bot behavior still works.
-- Any member of `Absolute Cinema` can start T2I in thread 5 and T2V in thread 7.
-- Prompt and confirmation conversations are isolated by chat, topic, and user.
-- Wrong-topic and unauthorized-surface commands cannot invoke hidden operations.
-- Video developer settings are inaccessible from the group.
-- Image topic exposes only image production settings.
-- Video topic exposes only video production/core settings and modes.
-- Artifacts return to the exact originating topic after runtime restart.
+- Existing private operator behavior continues to work.
+- Forum members can invoke only the allowed Image/Video generation surfaces.
+- Pending interactions are isolated by chat/topic/user.
+- Wrong-topic and operator-only commands cannot invoke hidden operations.
+- T2V developer settings remain private.
+- Artifacts persist their intended destination rather than depending on process memory.
 - Operational alerts remain private.
-- One bot poller and one runtime are running.
-- Existing and new tests pass.
-- Live Image and Video smoke jobs route correctly.
-- A documented, tested rollback checkpoint exists.
+- One bot poller and one runtime serve the configured bot.
+- Both forum topics share the same physical RTX 4060/Comfy queue.
 
-## 9. Explicit non-goals
+## Non-goals that remain current
 
-- A second Telegram bot
-- A second worker identity
-- A second media-runtime process
-- New generation tools for the “Other” topic
-- AI/LLM command parsing
-- Broad Telegram presentation cleanup
-- Per-user production settings
-- Group diagnostics or global cancellation
-- A new GPU admission scheduler
-- Webhook migration
+- second Telegram bot;
+- second physical worker identity;
+- second media-runtime process;
+- group diagnostics/global cancellation;
+- arbitrary LLM command parsing inside Telegram routing;
+- broad shell/control-plane access;
+- per-user Production settings;
+- an unvalidated GPU scheduler hidden inside the routing feature.
 
-## 10. Known files likely to change
+## Why this file was condensed
 
-This list is directional, not exhaustive:
+The original document was an autonomous implementation plan containing step-by-step instructions that became stale after the feature shipped and received follow-up fixes. Keeping those steps as if they were today's plan created contradictions with current code and `TELEGRAM_DESIGN.md`.
 
-- `production/media-runtime/src/config.ts`
-- `production/media-runtime/src/index.ts`
-- `production/media-runtime/src/telegram/command-service.ts`
-- `production/media-runtime/src/telegram/t2i-service.ts`
-- `production/media-runtime/src/telegram/t2v-service.ts`
-- `production/media-runtime/src/telegram/t2i-reset-service.ts`
-- `production/media-runtime/src/telegram/t2v-reset-service.ts`
-- `production/media-runtime/src/delivery/telegram.ts`
-- `production/media-runtime/src/delivery/worker.ts`
-- `production/media-runtime/src/jobs/service.ts`
-- `production/media-runtime/src/repositories/job-repository.ts`
-- `production/media-runtime/src/repositories/delivery-repository.ts`
-- T2I/T2V pending repositories
-- a new route/context module under `src/telegram/`
-- a new polling-offset repository
-- the next SQL migration
-- `production/media-runtime/.env.example`
-- `production/media-runtime/README.md`
-- new tests under `production/media-runtime/test/`
-
-The implementing agent may improve module boundaries, but must preserve the fixed policy and acceptance criteria above.
+Git history remains the source for the original implementation sequence. This file now preserves the architectural intent, safety boundaries, migration identity, and acceptance properties while pointing current work to canonical docs.
