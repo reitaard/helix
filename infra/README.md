@@ -124,6 +124,7 @@ Production runtime:
 
 ```text
 container: helix-runtime
+image: helix-runtime:dev
 host binding: 127.0.0.1:8787
 runtime target: Node 24 container
 ```
@@ -137,11 +138,13 @@ private Docker network
 persistent volume: helix-db-data
 ```
 
+The 2026-09-01 verification observed `helix-runtime` up for four days and `helix-db` up for nine days with the database healthy.
+
 The runtime exposes worker/readiness routes and asynchronous media-job create/read/cancel routes. n8n does not own low-level Comfy polling or node-event interpretation.
 
 ## Database / migration state
 
-The repository currently contains Production migrations through at least:
+The repository contains Production migrations through at least:
 
 ```text
 0011_job_numbers.sql
@@ -160,9 +163,17 @@ one number -> one media execution
 
 Direct ComfyUI generations do not create fake `media_jobs` rows; they receive durable reference mappings to their Comfy Prompt IDs.
 
-The last older documentation checkpoint proved `0013_telegram_forum_topics.sql` applied in Production. **Do not assume `0014` is live merely because the migration exists in Git.** Re-check the live production schema and running image before updating deployment claims.
+### Verified live schema — 2026-09-01
 
-This README intentionally avoids the stale statement that migrations are applied only through `0012`.
+The production PostgreSQL schema contains:
+
+```text
+telegram_job_lifecycles
+operator_pending_t2i.confirmation_message_id
+operator_pending_t2v.confirmation_message_id
+```
+
+This verifies that the effects of `0014_telegram_job_lifecycle.sql` are applied in Production.
 
 ## Execution/recovery model
 
@@ -178,9 +189,28 @@ Comfy /history + /queue
 reconcile durable state
 ```
 
-The repository now also contains persistent Comfy WebSocket execution telemetry using a stable Helix client identity. This improves progress presentation but does not replace queue/history reconciliation.
+The deployed runtime also contains persistent Comfy WebSocket execution telemetry using a stable Helix client identity. This improves progress presentation but does not replace queue/history reconciliation.
 
-The old infrastructure note that persistent WebSocket execution tracking is simply deferred is obsolete.
+## Lifecycle runtime verification
+
+The running `helix-runtime:dev` image was verified to contain the compiled lifecycle/progress implementation:
+
+```text
+/app/dist/telegram/progress-service.js
+/app/dist/delivery/telegram.js
+/app/dist/repositories/telegram-job-lifecycle-repository.js
+/app/dist/adapters/comfy/events.js
+```
+
+This proves that the lifecycle/progress code and `0014` schema are both deployed. A successful fresh Telegram lifecycle smoke remains a separate validation step.
+
+The sampled 24-hour runtime logs showed:
+
+```text
+[telegram] command poll failed [TypeError: fetch failed]
+```
+
+That error should be treated as a Telegram transport/health issue, not as evidence that the migration or lifecycle code is absent.
 
 ## Cancellation and timeout
 
@@ -210,7 +240,7 @@ remove temporary copy
 
 Delivery uses PostgreSQL claim/retry state with bounded retries and stale-claim recovery.
 
-The newer Telegram lifecycle implementation can target an existing lifecycle message for primary artifact replacement; whether that code/migration is currently live on the VPS must be verified separately.
+The deployed Telegram lifecycle implementation can target an existing lifecycle message for primary artifact replacement through the runtime delivery path.
 
 ## Deferred infrastructure work
 
@@ -220,9 +250,10 @@ The newer Telegram lifecycle implementation can target an existing lifecycle mes
 - migration ledger/checksum automation;
 - CI/integration-test enforcement;
 - stronger submission-window recovery and idempotency hardening;
+- investigate current Telegram polling transport failure and complete a live lifecycle smoke;
 - real Windows reboot/AtStartup proof.
 
-Persistent WebSocket execution telemetry is no longer listed as deferred because the repository implementation now exists.
+Persistent WebSocket execution telemetry is no longer listed as deferred because the implementation is deployed.
 
 ## Operational rules
 
