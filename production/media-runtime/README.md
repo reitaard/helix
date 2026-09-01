@@ -156,7 +156,9 @@ Private operator chat remains the full bounded operator surface, including:
 
 T2V includes persisted semantic settings, reset behavior, and Manual/Fast/Quality modes. T2I intentionally remains narrow around prompt/aspect/seed.
 
-The runtime also supports forum routing for one Image topic and one Video topic. Forum pending interactions are isolated by chat/thread/user; selective ForceReply is used only for bare prompt capture; confirmation/reset actions use inline buttons; operator-only commands and T2V developer settings remain private-chat-only.
+The repository supports forum routing for one Image topic and one Video topic. Forum pending interactions are isolated by `(chatId, threadId, userId)`. **ForceReply is not used.** A bare `/t2i` or `/t2v` enters scoped `awaiting_prompt` state, sends an ordinary prompt card, and accepts the next plain-text message from that exact conversation while the state remains active. Confirmation/reset actions use inline buttons; operator-only commands and T2V developer settings remain private-chat-only.
+
+The current repository transport includes a regression assertion that prompt-card delivery emits no `force_reply` or `selective` markup.
 
 ## Telegram lifecycle/progress deployment
 
@@ -190,7 +192,7 @@ operator_pending_t2i.confirmation_message_id
 operator_pending_t2v.confirmation_message_id
 ```
 
-The running `helix-runtime:dev` image was also verified to contain compiled lifecycle/progress code:
+The inspected `helix-runtime:dev` image was also verified to contain compiled lifecycle/progress code:
 
 ```text
 /app/dist/telegram/progress-service.js
@@ -199,7 +201,9 @@ The running `helix-runtime:dev` image was also verified to contain compiled life
 /app/dist/adapters/comfy/events.js
 ```
 
-This verifies deployment of both schema and runtime implementation. It does **not** constitute a successful fresh end-to-end lifecycle smoke. The sampled recent runtime log showed a Telegram command-poll `TypeError: fetch failed`; investigate Telegram transport health separately.
+This verifies deployment of both lifecycle schema and runtime implementation. It does **not** prove that commits `d81e78f` (scoped prompt capture) and `02c2aa1` (callback keyboard cleanup) are in the currently running container, because those commits were pushed after the container checkpoint and the inspected container had already been running for several days.
+
+The sampled runtime log also showed a Telegram command-poll `TypeError: fetch failed`; investigate Telegram transport health separately before closing the live forum/lifecycle smoke.
 
 ## T2V and T2I workflow binding
 
@@ -229,7 +233,7 @@ remove temporary copy
 
 Delivery claims use PostgreSQL state, stale-claim recovery, bounded retries, and backoff. Original media is handled as document/file media so Telegram does not intentionally transcode the generated artifact.
 
-For lifecycle-owned primary Telegram deliveries, the deployed implementation can replace the existing lifecycle message rather than append a new bottom-of-chat artifact message.
+For lifecycle-owned primary Telegram deliveries, the deployed lifecycle implementation can replace the existing lifecycle message rather than append a new bottom-of-chat artifact message.
 
 ## Database migrations
 
@@ -254,7 +258,15 @@ npm run typecheck
 npm test
 ```
 
-Do not keep a historical test-count number in this README as if it were permanently current. Record exact counts in implementation/deployment checkpoints where they were observed.
+Post-rebase checkpoint on 2026-09-01:
+
+```text
+57 tests
+57 pass
+0 fail
+```
+
+Exact counts are dated checkpoints, not permanent invariants.
 
 ## Runtime stack
 
@@ -281,9 +293,10 @@ Do not keep a historical test-count number in this README as if it were permanen
 - Do not create fake `media_jobs` rows for direct ComfyUI generations.
 - Keep raw node IDs behind Production binders.
 - Treat WebSocket progress as advisory presentation telemetry, not durable job truth.
+- Keep forum prompt capture state-scoped by chat/topic/user; do not reintroduce reply-bound ForceReply behavior.
 
 ## Next direction
 
-Continue Production feature-by-feature behind the stable worker/runtime boundary. Current hardening priorities include the submission-before-`backend_job_id` recovery window, concurrent API idempotency, service authentication before broader network trust, CI/integration enforcement, migration governance, explicit delivery semantics, and investigation of the current Telegram polling transport failure followed by a live lifecycle smoke.
+Continue Production feature-by-feature behind the stable worker/runtime boundary. Current hardening priorities include the submission-before-`backend_job_id` recovery window, concurrent API idempotency, service authentication before broader network trust, CI/integration enforcement, migration governance, explicit delivery semantics, deployment/smoke of the latest scoped prompt-capture fixes, and investigation of the current Telegram polling transport failure.
 
 The main Helix brain direction remains Niche Intelligence.
