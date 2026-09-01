@@ -1,6 +1,6 @@
 # Telegram lifecycle progress implementation
 
-Status: **implemented in the repository and merged to `main`; exact live VPS migration/container state must be re-verified before calling the feature deployed.**
+Status: **implemented, merged to `main`, and verified deployed on the VPS on 2026-09-01. A fresh end-to-end lifecycle smoke is still pending.**
 
 This document records the implementation contract for the Telegram one-message generation lifecycle. It is not the canonical production-deployment ledger; use `docs/PROJECT_STATE.md` for the current verified project checkpoint.
 
@@ -154,35 +154,41 @@ Repository tests cover lifecycle/progress and forum integration areas including 
 
 Do not freeze a historical total test count in this document as if it remains permanently current. Exact counts belong in deployment/test checkpoints.
 
-## Deployment verification gate
+## Verified deployment checkpoint — 2026-09-01
 
-An earlier checkpoint established:
-
-```text
-forum migration 0013 -> deployed
-lifecycle code -> merged
-```
-
-but later code continued changing after that checkpoint.
-
-Before saying lifecycle/progress is live now, verify both production layers:
+The VPS verification established both required production layers.
 
 ### Database
 
-Production must contain the effects of `0014_telegram_job_lifecycle.sql`, including:
+The live `helix-db` schema contains:
 
 ```text
 telegram_job_lifecycles
-operator_pending_t2v.confirmation_message_id
 operator_pending_t2i.confirmation_message_id
+operator_pending_t2v.confirmation_message_id
 ```
+
+This confirms the effects of `0014_telegram_job_lifecycle.sql` are applied.
 
 ### Running runtime image
 
-The running `helix-runtime` container must contain the newer lifecycle/progress implementation, including persistent progress-event handling and in-place media editing support.
+The running `helix-runtime:dev` container contains compiled lifecycle/progress code including:
 
-Until both are verified, use the wording:
+```text
+/app/dist/telegram/progress-service.js
+/app/dist/delivery/telegram.js
+/app/dist/repositories/telegram-job-lifecycle-repository.js
+/app/dist/adapters/comfy/events.js
+```
 
-> lifecycle/progress is implemented in the repository; current live VPS deployment state is being verified.
+This confirms the newer lifecycle/progress runtime is deployed, including the delivery path and Comfy execution-event layer.
 
-After verification, update `docs/PROJECT_STATE.md` and this status line together.
+### What this verification does not prove
+
+The verification did not include a successful fresh `/t2i` or `/t2v` end-to-end lifecycle run. The sampled 24-hour runtime logs instead showed:
+
+```text
+[telegram] command poll failed [TypeError: fetch failed]
+```
+
+Treat this as a separate Telegram transport/health issue to investigate. Deployment of the migration/runtime code is verified; current end-to-end operator-path health is not yet re-proven by this checkpoint.
