@@ -56,6 +56,8 @@ leibovitz / Annie Leibovitz
 
 Profiles are tool authority/operator presentation. They do not imply separate GPUs, Comfy instances, queues, or adapters.
 
+`lowry / John D. Lowry` is an active **research candidate only** for future upscaling/restoration authority. It is not registered in the runtime and no `image.upscale` or `video.upscale` Production tool currently exists.
+
 ## T2V semantic settings
 
 `Christopher Nolan / video.t2v` has persisted semantic base settings.
@@ -209,6 +211,49 @@ seed
 
 The binder mutates only vetted prompt, width, height, and seed inputs. T2I modes and model switching remain deferred.
 
+## Upscaling / restoration research checkpoint
+
+Upscaling research is active under [`upscaling/`](upscaling/) but remains outside the Production runtime contract.
+
+### SeedVR2 video
+
+SeedVR2 7B FP16 and 7B Sharp FP16 were proven runnable on the RTX 4060 through CPU offload/BlockSwap and tiled VAE operation.
+
+A full ~8 second 704x1280 LTX clip took about **128 minutes** with regular 7B FP16. A controlled one-second Sharp run took about **12.5 minutes**. Matched-frame comparison showed Sharp besting regular/Lanczos, but only modestly.
+
+Decision:
+
+```text
+clean LTX output
+-> no default SeedVR2 finishing stage
+
+true low-quality/restoration case
+-> SeedVR2 remains an unclosed specialist candidate
+```
+
+Video upscaler integration is halted for now.
+
+### SeedVR2 image
+
+On a clean 1024x1024 FLUX portrait, 2x SeedVR2 7B Sharp produced only subtle improvement over Lanczos. A 1024 -> 512 -> 1024 ground-truth restoration test was also not visually decisive enough to select SeedVR2 as the final image upscaler.
+
+The lesson is behavioral: faithful reconstruction, restoration, and generative enhancement are different jobs.
+
+### Current image direction
+
+Current community/workflow research indicates that the visible enhancement sought for already-good AI images is closer to **controlled generative refinement** than conservative SR.
+
+Because Helix already has a working FLUX.2 Klein 4B INT8 W8A8 stack, the immediate next benchmark uses that existing model before adding PiSA-SR/VOSR or another dependency stack.
+
+The controlled test uses the source image as both reference and starting latent, with a fixed prompt/sampler and denoise sweep to measure the fidelity-versus-detail curve.
+
+See:
+
+- [`upscaling/README.md`](upscaling/README.md)
+- [`upscaling/KLEIN4B_ENHANCEMENT_TEST.md`](upscaling/KLEIN4B_ENHANCEMENT_TEST.md)
+
+No Lowry profile/tool should be added until this research closes.
+
 ## Telegram Production surface
 
 Private operator chat provides diagnostics, job/download inspection, failures/events/outbox, guarded cancellation, T2V/T2I generation, settings, and developer controls.
@@ -237,13 +282,14 @@ workflow binder / adapter
 backend workflow
 ```
 
-Prompt Relay, LTX Director, MSR, Ingredients, continuation samplers, model files, raw node IDs, and backend timing details stay inside Production unless repeated evidence proves a higher-level concept belongs in the stable Helix contract.
+Prompt Relay, LTX Director, MSR, Ingredients, continuation samplers, upscale models, enhancement denoise, model files, raw node IDs, and backend timing details stay inside Production unless repeated evidence proves a higher-level concept belongs in the stable Helix contract.
 
 ## Remaining Production work
 
 - controlled Fast vs Quality vs Manual calibration;
 - stronger MSR viewpoint and multi-subject validation;
 - higher-quality Ingredients validation;
+- close image upscaling/enhancement research before any Lowry integration;
 - broader image upload/staging for I2V/reference flows;
 - worker output-retention policy;
 - real Windows reboot / AtStartup validation;
