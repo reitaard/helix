@@ -32,6 +32,9 @@ interface LiveProgress {
   lastRenderedNode: number | null;
   lastRenderedStage: string | null;
   lastRenderedAt: number;
+  rendering: boolean;
+  renderPending: boolean;
+  forcePending: boolean;
 }
 
 function percentage(
@@ -75,8 +78,9 @@ export class TelegramProgressService {
     private readonly telegram:
       TelegramDelivery,
     private readonly intervalMs = 3000,
-    private readonly minPercentDelta = 5,
-    private readonly maxSilenceMs = 10000
+    private readonly minPercentDelta = 10,
+    private readonly maxSilenceMs = 15000,
+    private readonly minEditIntervalMs = 5000
   ) {}
 
   start() {
@@ -162,7 +166,10 @@ export class TelegramProgressService {
       lastRenderedWorkflow: null,
       lastRenderedNode: null,
       lastRenderedStage: null,
-      lastRenderedAt: 0
+      lastRenderedAt: 0,
+      rendering: false,
+      renderPending: false,
+      forcePending: false
     };
 
     this.progress.set(
@@ -181,6 +188,14 @@ export class TelegramProgressService {
 
     const now = Date.now();
     const snapshot = state.snapshot;
+
+    if (
+      state.lastRenderedAt > 0 &&
+      now - state.lastRenderedAt <
+        this.minEditIntervalMs
+    ) {
+      return false;
+    }
 
     if (
       snapshot.stage !==
@@ -225,35 +240,84 @@ export class TelegramProgressService {
     state: LiveProgress,
     force = false
   ) {
+    if (state.rendering) {
+      state.renderPending = true;
+      state.forcePending =
+        state.forcePending || force;
+      return;
+    }
+
     if (!this.shouldRender(state, force)) {
       return;
     }
 
-    try {
-      await this.telegram.editHtml(
-        state.lifecycle.messageId,
-        runningProgressHtml(
-          state.lifecycle,
-          this.workerName(state.lifecycle),
-          state.snapshot
-        ),
-        { chatId: state.lifecycle.chatId, threadId: null }
-      );
+    state.rendering = true;
+    let forceNext = force;
 
-      state.lastRenderedWorkflow =
-        state.snapshot.workflowPercent;
-      state.lastRenderedNode =
-        state.snapshot.nodePercent;
-      state.lastRenderedStage =
-        state.snapshot.stage;
-      state.lastRenderedAt =
-        Date.now();
+    try {
+      do {
+        const effectiveForce =
+          forceNext ||
+          state.forcePending;
+
+        forceNext = false;
+        state.renderPending = false;
+        state.forcePending = false;
+
+        if (
+          !this.shouldRender(
+            state,
+            effectiveForce
+          )
+        ) {
+          continue;
+        }
+
+        const renderedSnapshot: ProgressSnapshot = {
+          workflowPercent:
+            state.snapshot.workflowPercent,
+          nodePercent:
+            state.snapshot.nodePercent,
+          stage:
+            state.snapshot.stage
+        };
+
+        await this.telegram.editHtml(
+          state.lifecycle.messageId,
+          runningProgressHtml(
+            state.lifecycle,
+            this.workerName(state.lifecycle),
+            renderedSnapshot
+          ),
+          {
+            chatId:
+              state.lifecycle.chatId,
+            threadId: null
+          }
+        );
+
+        state.lastRenderedWorkflow =
+          renderedSnapshot.workflowPercent;
+        state.lastRenderedNode =
+          renderedSnapshot.nodePercent;
+        state.lastRenderedStage =
+          renderedSnapshot.stage;
+        state.lastRenderedAt =
+          Date.now();
+      }
+      while (
+        state.renderPending ||
+        state.forcePending
+      );
     }
     catch (error) {
       console.error(
         `[telegram-progress] edit ${state.lifecycle.jobId} failed`,
         error
       );
+    }
+    finally {
+      state.rendering = false;
     }
   }
 
@@ -378,7 +442,10 @@ export class TelegramProgressService {
       await this.telegram.editHtml(
         lifecycle.messageId,
         html,
-        { chatId: lifecycle.chatId, threadId: null }
+        {
+          chatId: lifecycle.chatId,
+          threadId: null
+        }
       );
 
       if (terminal) {
