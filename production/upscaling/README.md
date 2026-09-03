@@ -1,6 +1,6 @@
 # Upscaling Research
 
-This folder records active Helix Production research into local image/video upscaling and restoration. It is **not** a production capability yet.
+This folder records active Helix Production research into local image/video upscaling, restoration, and controlled image enhancement. It is **not** a production capability yet.
 
 ## Status
 
@@ -15,13 +15,39 @@ candidate semantic capabilities:
 
 `lowry` is only a candidate Production profile. It is not registered in `media-runtime`, the public job tool enum does not expose upscale tools, and no upscale workflow binder is production-wired.
 
-The current rule is:
+The current rule remains:
 
 ```text
 research -> controlled benchmark -> choose behavior/model -> define semantic contract -> integrate
 ```
 
-Do not expose model names, raw Comfy node IDs, BlockSwap values, VAE tile sizes, or similar implementation details as the eventual Helix contract.
+Do not expose model names, raw Comfy node IDs, denoise values, BlockSwap values, VAE tile sizes, or similar implementation details as the eventual Helix contract.
+
+## The research question changed
+
+The initial work treated image upscaling as one problem. Controlled tests plus a later community/workflow audit show that at least three different jobs matter:
+
+```text
+faithful enlargement
+-> make a good image larger while changing as little as possible
+
+restoration
+-> recover a weak / blurry / compressed source
+
+generative enhancement
+-> preserve the image while deliberately rebuilding richer micro-detail
+```
+
+This distinction matters for Helix. SeedVR2 is a strong conservative reconstruction path, but the visual effect the project wants for already-good FLUX images is closer to **controlled generative enhancement**.
+
+A future semantic split such as:
+
+```text
+faithful / restore
+creative / enhance
+```
+
+is now a useful hypothesis, not an approved runtime contract. It should be promoted only if repeated experiments prove the distinction durable.
 
 ## SeedVR2 local integration used for research
 
@@ -134,169 +160,202 @@ SeedVR2 7B Sharp FP16
 
 Again, SeedVR2 looked somewhat more processed/resolved, but the difference was not large enough to justify selecting it as the final Helix image upscaler.
 
-### Image conclusion so far
+### SeedVR2 image conclusion
 
-The SeedVR2 result is consistent with a **conservative restoration/upscale** behavior: it preserves source structure well but does not strongly re-imagine detail in already-clean generated images.
+The observed behavior is consistent with a **conservative restoration/upscale** path: good structural fidelity, modest visible reconstruction on already-clean generated images.
 
-That means the research question has changed from:
+Do not lock SeedVR2 7B or the community 1.4B distillation as the final `image.upscale` implementation yet.
+
+## Community/workflow audit — 2026-09-03
+
+A focused audit of current Stable Diffusion / ComfyUI community workflows added an important insight: users repeatedly distinguish between SeedVR2-style faithful reconstruction and FLUX/Klein-style generative refinement.
+
+The strongest concrete workflow found uses FLUX.2 Klein as a controlled image-to-image refinement stage rather than as a classical SR model.
+
+Its first-pass pattern is:
 
 ```text
-Which conservative upscaler is best?
+source image
+    ↓
+bilinear scale to about 1 MP
+    ↓
+same scaled image used as:
+    - reference latent
+    - starting latent
+    ↓
+FLUX.2 Klein
+    ↓
+short descriptive enhancement prompt
+    ↓
+8 steps / CFG 1 / Euler / beta
+    ↓
+denoise roughly 0.7 - 0.9
 ```
 
-to:
+The published reference workflow uses:
 
 ```text
-Which local method gives a controllable fidelity <-> detail trade-off
-for clean AI-generated images while remaining production-safe?
+prompt:
+High resolution image 1. Preserve exact color saturation and exposure from image 1.
+
+seed: 252
+steps: 8
+cfg: 1
+sampler: euler
+scheduler: beta
+denoise: 0.8
 ```
 
-Do not lock SeedVR2 7B or the community 1.4B distillation as `image.upscale` yet.
+The workflow deliberately uses the bilinear-scaled source as both a reference and the KSampler starting latent. That gives Klein enough freedom to rebuild detail while keeping the source image strongly anchored.
 
-## Research insight: upscale vs enhancement
-
-Current ComfyUI guidance distinguishes two different jobs:
+Community reports also expose the important failure modes:
 
 ```text
-upscaling
--> increase resolution / reconstruct detail
-
-enhancement
--> improve perceived detail, denoise, sharpen, restore or creatively rebuild texture
+too much denoise / generative freedom
+-> changed skin texture
+-> added wrinkles / apparent aging
+-> changed small objects
+-> background detail created where blur should remain
+-> exposure / saturation drift
+-> seed dependence
 ```
 
-It also classifies SeedVR2 as conservative. That explains why our clean FLUX comparisons are subtle: the model is behaving close to its intended fidelity-preserving role rather than acting as a creative refiner.
+This is precisely the fidelity-versus-detail curve that Helix needs to measure rather than hide.
 
-For Helix, this suggests that a future image-upscale capability may need internal modes such as:
+### SeedVR2 remains useful as a reference behavior
+
+The same community material broadly supports the local result:
 
 ```text
-faithful / restore
-creative / enhance
+good but small source
+-> SeedVR2 is strong and coherent
+
+weak / blurry source
+-> restoration/edit before final enlargement may be necessary
+
+clean AI image where more visible detail is desired
+-> generative refinement is a different task
 ```
 
-Those are only candidate semantics. They should not be added to the runtime until repeated tests show that the distinction is durable and useful.
+The repeatedly suggested SeedVR2 downscale trick also supports the local 1024 -> 512 -> 1024 experiment: deliberate reduction can suppress high-frequency junk and give reconstruction more freedom. It did not, however, create enough visible improvement on the clean portrait to answer the project's enhancement goal.
 
-## Current local research shortlist
+## Current highest-priority path: existing FLUX.2 Klein 4B
 
-### 1. PiSA-SR — highest-priority next benchmark
-
-CVPR 2025, one-step diffusion SR.
-
-Why it is especially relevant to Helix:
-
-- explicitly demonstrates **AIGC enhancement**;
-- exposes separate pixel-level and semantic-level LoRA strengths;
-- lets us intentionally trade fidelity against added semantic detail;
-- supports tiled diffusion/VAE inference for lower VRAM;
-- Apache 2.0 project license.
-
-The important knobs are conceptually:
+Helix already has a validated local FLUX.2 Klein 4B generation stack on the same RTX 4060, including:
 
 ```text
-lambda_pix
--> degradation cleanup / pixel-level fidelity
-
-lambda_sem
--> additional semantic detail
+FLUX.2 Klein 4B INT8 W8A8
+qwen_3_4b.safetensors
+flux2-vae.safetensors
 ```
 
-This is much closer to the behavior we were expecting when SeedVR2 looked too conservative.
+This changes the immediate research priority. Before adding PiSA-SR, VOSR, or another dependency stack, test whether the already-working Klein 4B model can provide the desired controlled enhancement behavior.
 
-### 2. VOSR — strongest new architecture candidate
-
-CVPR 2026 vision-only generative super-resolution framework.
-
-Relevant released variants include:
+The first controlled experiment is documented in:
 
 ```text
-VOSR 0.5B multi-step
-VOSR 0.5B one-step
-VOSR 1.4B multi-step
-VOSR 1.4B one-step
+production/upscaling/KLEIN4B_ENHANCEMENT_TEST.md
 ```
 
-Reasons to test:
-
-- no text-to-image prior is required for the SR task;
-- one-step distilled checkpoints are available;
-- 0.5B is especially interesting for the RTX 4060;
-- tiled inference supports large inputs;
-- authors emphasize fine structures and text readability;
-- multi-step variants expose a fidelity/generative-strength trade-off;
-- Apache 2.0 project license.
-
-The 0.5B one-step checkpoint is the practical first VOSR candidate. The 1.4B path can be tested later if the smaller model is promising.
-
-### 3. TVT — fine-structure/reference candidate
-
-ICCV 2025 Transfer VAE Training targets a known weakness of diffusion SR: losing small characters and fine texture through aggressive VAE downsampling.
-
-The paper reports stronger fidelity/fine-structure metrics than earlier one-step diffusion SR methods while also providing tiled inference. This makes TVT particularly interesting for:
+The benchmark starts at the original 1024x1024 portrait resolution. It is deliberately **not** a 2x/4x size benchmark yet. The question is first:
 
 ```text
-small text
-product labels
-logos
-fine texture
-hard structure
+How much useful micro-detail can Klein add
+before identity / geometry / blur / color drift becomes unacceptable?
 ```
 
-It is not the first implementation target because the stack is more involved and there is no clean first-party Comfy integration currently selected for Helix.
+Only after that curve is understood should physical enlargement or tiled 4K generation be tested.
 
-### 4. AdcSR — speed reference
+## Tiled generative refinement
 
-CVPR 2025 compressed one-step diffusion SR.
+If the single-image Klein test succeeds, the next research class is tiled generative refinement for larger outputs.
 
-Useful as a later speed/efficiency control because it removes/prunes much of the OSEDiff stack and is dramatically cheaper while retaining generative behavior. It is not currently the quality-first master candidate.
+Two community directions are relevant:
 
-### 5. Traditional SR baselines
+### Divide & Conquer
 
-Keep deterministic/local baselines available:
+Conceptually:
 
 ```text
+upscale
+-> divide into tiles
+-> generative diffusion per tile
+-> stitch
+```
+
+This is useful when the goal is effectively to **generate a believable high-resolution version**, not merely interpolate pixels. It should not be used just to tile SeedVR2 because SeedVR2 already has its own tiling path.
+
+### Klein-specific tiled workflows
+
+New Klein tiled upscalers expose useful concepts such as source anchoring, adaptive work per tile, color matching and consistent noise. These concepts are relevant to Lowry, but current community custom nodes require source audit before any Production consideration.
+
+Do not install an unaudited tiled custom node into the pinned worker merely because its output examples look good.
+
+## Independent model shortlist if Klein 4B is insufficient
+
+### 1. PiSA-SR
+
+CVPR 2025 one-step diffusion SR with separately controllable pixel-level and semantic-detail LoRA strengths.
+
+Still important because it directly exposes a fidelity/detail trade-off and demonstrates AIGC enhancement, but it is now an **independent comparison after the existing Klein 4B experiment**, not the immediate next installation.
+
+### 2. VOSR
+
+CVPR 2026 vision-only generative SR. The 0.5B one-step variant remains especially interesting for the RTX 4060 and tiled 4x operation.
+
+### 3. TVT
+
+ICCV 2025 Transfer VAE Training remains a strong fine-structure/text candidate, particularly for small characters, product labels, logos and hard geometry.
+
+### 4. AdcSR
+
+Useful later as an efficiency reference for compressed one-step generative SR.
+
+### 5. Traditional controls
+
+Keep deterministic baselines available:
+
+```text
+Lanczos
 RealESRGAN
 BSRGAN
 SwinIR
-Lanczos
+4xFFHQLDAT-class faithful photographic SR
 ```
 
-They are useful controls for measuring whether a generative model is actually adding value. They should not be expected to produce the same visible semantic enhancement as a generative SR/refinement model.
+They are controls for whether a generative path is earning its added complexity.
 
 ## Candidates intentionally deprioritized
 
 ### SeedVR2 1.4B Sharp distillation
 
-A community 1.4B / six-layer Sharp distillation exists and is attractive for memory/runtime, but it is distilled from the same conservative SeedVR2 Sharp teacher. It may solve **cost**, but it does not directly solve the behavioral issue discovered in our tests: insufficient visible enhancement on clean AI images.
-
-Therefore it is not the next benchmark.
+The community 1.4B / six-layer Sharp distillation is attractive for memory/runtime, but it primarily solves **cost**. It does not directly solve the observed behavioral issue: insufficient visible enhancement on clean AI images.
 
 ### CCSRv2
 
-Interesting content-consistent diffusion SR with adjustable step counts, but the current Comfy wrapper is explicitly not a native/efficient implementation and warns of memory issues. That makes it a poor first choice for an 8 GB Production worker.
+Interesting content-consistent diffusion SR, but the current Comfy wrapper is not the clean first fit for an 8 GB Production worker.
 
 ### DiT4SR
 
-Strong research results, but its released stack depends on SD3.5 Medium plus large auxiliary language/vision components and has a less convenient license/integration profile for the current Helix worker. Not an early Production candidate.
+Strong research results but a heavier dependency/license/integration profile than the current Helix path.
 
 ### SUPIR / older heavy multi-step restoration stacks
 
-Still capable, but computationally heavy relative to newer one-step approaches and not the best first fit for the RTX 4060.
+Still capable, but computationally heavy relative to newer one-step or existing-Klein approaches.
 
-## Next benchmark design
+## Benchmark matrix
 
-The next controlled image benchmark should compare behavior, not just output resolution.
-
-Use a small representative set:
+The image benchmark should grow into a small fixed set:
 
 ```text
 A. clean AI portrait
-   identity, eyes, skin, hair, fabric
+   identity, age, eyes, skin, hair, intended depth of field
 
 B. product / object with text
-   label edges, logos, tiny characters, geometry
+   labels, logos, tiny characters, geometry, reflections
 
 C. environment
-   foliage, branches, rocks, repeated texture
+   foliage, branches, rocks, repeated texture, depth
 
 D. degraded copy with known ground truth
    restoration fidelity and hallucination
@@ -308,9 +367,11 @@ For each candidate record:
 fidelity to source / ground truth
 visible useful detail gained
 hallucinated or changed detail
-identity stability
+identity and apparent-age stability
 small-text correctness
 hard-edge / geometry stability
+intended blur / depth-of-field preservation
+color / exposure stability
 texture naturalness
 runtime
 peak VRAM
@@ -318,8 +379,6 @@ system RAM
 installation/integration complexity
 license / redistribution constraints
 ```
-
-The next model to benchmark is **PiSA-SR**, because its separate pixel/semantic controls directly test the behavior SeedVR2 could not provide. VOSR 0.5B one-step is the next architecture comparison after PiSA-SR.
 
 ## Production integration remains deferred
 
@@ -345,4 +404,4 @@ regression tests
 Telegram/operator surface if desired
 ```
 
-The model/workflow winner should be selected before this code is added.
+The behavior and workflow winner must be selected before this code is added.
