@@ -300,6 +300,53 @@ export class TelegramT2VService {
       return this.settingsUi.help(setting, dev);
     }
 
+    const ownerForum =
+      !allowDev &&
+      typeof key !== "string" &&
+      key.userId === this.chatId;
+
+    const normalizedSetting =
+      setting
+        .trim()
+        .toLowerCase()
+        .replace(/[\s._-]+/g, "");
+
+    if (
+      ownerForum &&
+      !dev &&
+      (
+        normalizedSetting === "t" ||
+        normalizedSetting === "time" ||
+        normalizedSetting === "duration"
+      )
+    ) {
+      const lowerValue =
+        value.toLowerCase();
+      const candidate =
+        Number(value);
+
+      if (
+        lowerValue !== "reset" &&
+        (
+          !Number.isInteger(candidate) ||
+          candidate < 1 ||
+          candidate > 15
+        )
+      ) {
+        return (
+          `<b>Invalid value.</b>\n` +
+          `<i>Duration must be an integer from 1 to 15 seconds</i>\n` +
+          `<i>Inspect</i> · <code>/t2v set ${escapeHtml(setting)}</code>`
+        );
+      }
+
+      return this.settingsUi.set(
+        setting,
+        value,
+        true
+      );
+    }
+
     return this.settingsUi.set(setting, value, dev);
   }
 
