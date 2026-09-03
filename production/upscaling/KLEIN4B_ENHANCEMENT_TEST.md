@@ -134,12 +134,14 @@ Do not add a longer preservation prompt yet. The first test should reproduce the
 
 ## Sampler baseline
 
+The published Klein 9B community reference uses 8 steps. Helix's current local Klein 4B INT8 W8A8 path is the **4-step distilled** model, so this adaptation keeps the model's known-good 4-step inference budget instead of blindly copying the 9B step count.
+
 Keep these constant:
 
 ```text
 seed: 252
 control_after_generate: fixed
-steps: 8
+steps: 4
 cfg: 1
 sampler: euler
 scheduler: beta
