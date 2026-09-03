@@ -53,19 +53,19 @@ const otherUserKey = {
   userId: "999999999"
 };
 
-test("forum owner may set T2V duration to 15 seconds without opening dev controls", async () => {
+test("forum owner may use t alias to set T2V duration to 15 seconds without opening dev controls", async () => {
   const { service, calls } = fixture();
 
   const response = await service.handleCommand(
-    ["set", "time", "15"],
+    ["set", "t", "15"],
     ownerKey,
     false,
     true
   );
 
-  assert.equal(response, "override:time:15");
+  assert.equal(response, "override:t:15");
   assert.deepEqual(calls, [
-    { setting: "time", value: "15", dev: true }
+    { setting: "t", value: "15", dev: true }
   ]);
 });
 
