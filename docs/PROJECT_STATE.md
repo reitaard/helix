@@ -1,6 +1,6 @@
 # Project State
 
-Last documentation reconciliation: **2026-09-01**.
+Last documentation reconciliation: **2026-09-03**.
 
 ## Current phase
 
@@ -64,6 +64,8 @@ leibovitz / Annie Leibovitz
 ```
 
 Profiles describe tool authority and operator presentation, not additional hardware or queues.
+
+`lowry / John D. Lowry` is currently only a **research candidate** for future image/video upscale/restoration authority. It is not registered in `media-runtime`; no upscale tool is currently part of the Production contract.
 
 ## Operator media identity
 
@@ -220,6 +222,59 @@ seed
 
 The workflow binder mutates only vetted prompt, width, height, and seed inputs. Model switching and T2I generation modes remain deferred.
 
+## Upscaling / restoration research checkpoint
+
+Upscaling is an active Production research track but is **not** a Production capability yet.
+
+Candidate logical identity:
+
+```text
+lowry / John D. Lowry
+```
+
+No `image.upscale` or `video.upscale` tool has been added to the runtime.
+
+### SeedVR2 video result
+
+The worker experimentally contains `numz/ComfyUI-SeedVR2_VideoUpscaler` pinned at `v2.5.23` / commit `5a4bf428f3735cc72ac760d40f372f94dec28422`, with 7B regular/Sharp FP16 research models.
+
+A full ~8 second 704x1280 LTX clip completed with 7B regular FP16 in about **128 minutes**. A one-second 24-frame 7B Sharp test took about **12.5 minutes**. Sharp was visually best against regular/Lanczos, but the gain was modest.
+
+Decision:
+
+```text
+clean generated LTX video
+-> do not default to SeedVR2
+
+truly degraded / low-resolution video
+-> SeedVR2 remains an unclosed restoration candidate
+```
+
+Video upscale integration is halted for now.
+
+### SeedVR2 image result
+
+A clean 1024x1024 FLUX portrait was tested with Lanczos and SeedVR2 7B Sharp at 2x. SeedVR2 took roughly 68 seconds and produced only subtle improvements. A known-ground-truth 1024 -> 512 -> 1024 restoration test was likewise not decisive enough to select SeedVR2 as the final image path.
+
+The main lesson is that faithful enlargement, restoration, and generative enhancement are different jobs.
+
+### Revised image direction — 2026-09-03
+
+Community/workflow research showed that the desired visible improvement on already-good AI images is closer to **controlled generative refinement** than conservative super-resolution.
+
+Helix already has a working FLUX.2 Klein 4B INT8 W8A8 stack, so the immediate next experiment reuses it rather than installing another model family.
+
+The benchmark uses a source image as both reference latent and starting latent, with a fixed Klein prompt/sampler and denoise sweep. The first test stays at 1024x1024 to measure the fidelity-versus-detail curve before testing physical 2x/4x enlargement or tiled 4K generation.
+
+Research docs:
+
+- `production/upscaling/README.md`
+- `production/upscaling/KLEIN4B_ENHANCEMENT_TEST.md`
+
+PiSA-SR, VOSR, TVT and other independent SR architectures remain comparison candidates if the existing Klein 4B enhancement ceiling is insufficient.
+
+Do not add Lowry to `config.ts` or expose upscale tools until this benchmark closes.
+
 ## LTX Production research checkpoint
 
 Native LTX 2.5 remains the first Production choice for focused shots inside its proven comfort zone.
@@ -302,7 +357,7 @@ workflow binder / adapter
 ComfyUI
 ```
 
-Prompt Relay, LTX Director, MSR, Ingredients, samplers, node IDs, and model-specific graph state remain Production implementation details unless repeated experiments prove that a higher-level concept belongs in a stable cross-system contract.
+Prompt Relay, LTX Director, MSR, Ingredients, upscale models, enhancement denoise, samplers, node IDs, and model-specific graph state remain Production implementation details unless repeated experiments prove that a higher-level concept belongs in a stable cross-system contract.
 
 ## Reliability work still outstanding
 
@@ -345,6 +400,8 @@ These are hardening tasks, not reasons to rewrite the current Production boundar
 - [x] Verify live `0014` Telegram lifecycle migration and lifecycle/progress runtime code.
 - [x] Replace forum ForceReply behavior with scoped next-message prompt capture in repository code.
 - [x] Pass post-rebase media-runtime regression suite (`57/57`).
+- [x] Record SeedVR2 video/image upscale research and halt default clean-video integration.
+- [ ] Benchmark FLUX.2 Klein 4B controlled image enhancement before choosing a Lowry image path.
 - [ ] Deploy/restart latest scoped prompt-capture fixes and complete a live Telegram lifecycle/forum smoke.
 - [ ] Validate stronger MSR viewpoint/identity retention.
 - [ ] Validate multi-subject MSR separation.
