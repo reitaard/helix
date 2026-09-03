@@ -6,6 +6,10 @@ import type {
   TelegramDestination
 } from "../telegram/context.js";
 
+import {
+  telegramRetryDelayMs
+} from "../telegram/rate-limit.js";
+
 export interface TelegramMessageResult {
   messageId: string;
 }
@@ -153,6 +157,19 @@ function parseEditMessageResult(
   );
 }
 
+function delay(
+  milliseconds: number
+) {
+  return new Promise<void>(
+    resolve => {
+      setTimeout(
+        resolve,
+        milliseconds
+      );
+    }
+  );
+}
+
 export class TelegramDelivery {
   constructor(
     private readonly botToken:
@@ -170,6 +187,64 @@ export class TelegramDelivery {
       this.botToken +
       "/" +
       method
+    );
+  }
+
+  private async postJson(
+    method: string,
+    body: unknown,
+    timeoutMs = 30_000
+  ): Promise<unknown> {
+    for (
+      let attempt = 0;
+      attempt < 2;
+      attempt += 1
+    ) {
+      const response =
+        await fetch(
+          this.endpoint(method),
+          {
+            method: "POST",
+            headers: {
+              "content-type":
+                "application/json"
+            },
+            body:
+              JSON.stringify(body),
+            signal:
+              AbortSignal.timeout(
+                timeoutMs
+              )
+          }
+        );
+
+      const parsed =
+        await response.json();
+
+      const retryDelay =
+        telegramRetryDelayMs(
+          parsed
+        );
+
+      if (
+        retryDelay !== null &&
+        attempt === 0
+      ) {
+        console.warn(
+          `[telegram] ${method} rate limited; retrying in ${retryDelay}ms`
+        );
+
+        await delay(
+          retryDelay
+        );
+        continue;
+      }
+
+      return parsed;
+    }
+
+    throw new Error(
+      `${method} retry loop exhausted`
     );
   }
 
@@ -245,37 +320,20 @@ export class TelegramDelivery {
     html: string,
     destination: TelegramDestination = { chatId: this.chatId, threadId: null }
   ): Promise<TelegramMessageResult> {
-    const response =
-      await fetch(
-        this.endpoint(
-          "sendMessage"
-        ),
-        {
-          method: "POST",
-          headers: {
-            "content-type":
-              "application/json"
-          },
-          body:
-            JSON.stringify({
-              chat_id: destination.chatId,
-              ...(destination.threadId ? { message_thread_id: destination.threadId } : {}),
-              text: html,
-              parse_mode:
-                "HTML",
-              link_preview_options: {
-                is_disabled: true
-              }
-            }),
-          signal:
-            AbortSignal.timeout(
-              30_000
-            )
-        }
-      );
-
     return parseMessageResult(
-      await response.json(),
+      await this.postJson(
+        "sendMessage",
+        {
+          chat_id: destination.chatId,
+          ...(destination.threadId ? { message_thread_id: destination.threadId } : {}),
+          text: html,
+          parse_mode:
+            "HTML",
+          link_preview_options: {
+            is_disabled: true
+          }
+        }
+      ),
       "Telegram sendMessage"
     );
   }
@@ -284,21 +342,25 @@ export class TelegramDelivery {
     messageId: string,
     destination: TelegramDestination = { chatId: this.chatId, threadId: null }
   ): Promise<void> {
-    const response = await fetch(
-      this.endpoint("deleteMessage"),
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+    const body =
+      await this.postJson(
+        "deleteMessage",
+        {
           chat_id: destination.chatId,
-          message_id: telegramMessageId(messageId)
-        }),
-        signal: AbortSignal.timeout(30_000)
-      }
-    );
-    const body = await response.json() as { ok?: boolean; description?: string };
+          message_id:
+            telegramMessageId(
+              messageId
+            )
+        }
+      ) as {
+        ok?: boolean;
+        description?: string;
+      };
+
     if (body.ok !== true) {
-      throw new Error(`Telegram deleteMessage failed: ${body.description ?? "unknown Telegram error"}`);
+      throw new Error(
+        `Telegram deleteMessage failed: ${body.description ?? "unknown Telegram error"}`
+      );
     }
   }
 
@@ -307,25 +369,22 @@ export class TelegramDelivery {
     destination: TelegramDestination,
     buttons: Array<Array<{ text: string; callback_data: string }>>
   ): Promise<TelegramMessageResult> {
-    const response = await fetch(
-      this.endpoint("sendMessage"),
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+    return parseMessageResult(
+      await this.postJson(
+        "sendMessage",
+        {
           chat_id: destination.chatId,
           ...(destination.threadId ? { message_thread_id: destination.threadId } : {}),
           text: html,
           parse_mode: "HTML",
-          link_preview_options: { is_disabled: true },
-          reply_markup: { inline_keyboard: buttons }
-        }),
-        signal: AbortSignal.timeout(30_000)
-      }
-    );
-
-    return parseMessageResult(
-      await response.json(),
+          link_preview_options: {
+            is_disabled: true
+          },
+          reply_markup: {
+            inline_keyboard: buttons
+          }
+        }
+      ),
       "Telegram sendMessage"
     );
   }
@@ -335,41 +394,24 @@ export class TelegramDelivery {
     html: string,
     destination: TelegramDestination = { chatId: this.chatId, threadId: null }
   ): Promise<TelegramMessageResult> {
-    const response =
-      await fetch(
-        this.endpoint(
-          "editMessageText"
-        ),
-        {
-          method: "POST",
-          headers: {
-            "content-type":
-              "application/json"
-          },
-          body:
-            JSON.stringify({
-              chat_id:
-                destination.chatId,
-              message_id:
-                telegramMessageId(
-                  messageId
-                ),
-              text: html,
-              parse_mode:
-                "HTML",
-              link_preview_options: {
-                is_disabled: true
-              }
-            }),
-          signal:
-            AbortSignal.timeout(
-              30_000
-            )
-        }
-      );
-
     return parseEditMessageResult(
-      await response.json(),
+      await this.postJson(
+        "editMessageText",
+        {
+          chat_id:
+            destination.chatId,
+          message_id:
+            telegramMessageId(
+              messageId
+            ),
+          text: html,
+          parse_mode:
+            "HTML",
+          link_preview_options: {
+            is_disabled: true
+          }
+        }
+      ),
       "Telegram editMessageText",
       messageId
     );
