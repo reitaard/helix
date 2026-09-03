@@ -644,7 +644,6 @@ export class TelegramCommandService {
   private sendHtml(
     html: string,
     destination: TelegramDestination = this.replyDestination ?? { chatId: this.chatId, threadId: null },
-    replyTo?: string,
     inlineKeyboard?: Array<Array<{ text: string; callback_data: string }>>
   ) {
     return this.postJson(
@@ -657,9 +656,6 @@ export class TelegramCommandService {
         link_preview_options: {
           is_disabled: true
         },
-        ...(replyTo ? {
-          reply_parameters: { message_id: replyTo }
-        } : {}),
         ...(inlineKeyboard ? {
           reply_markup: { inline_keyboard: inlineKeyboard }
         } : {})
@@ -1746,7 +1742,7 @@ export class TelegramCommandService {
         if (!accepted) return;
         const response = await this.t2i.handlePlainText(text, key, context);
         if (response) {
-          const sent = await this.sendHtml(response, undefined, context.messageId) as { message_id?: number | string };
+          const sent = await this.sendHtml(response) as { message_id?: number | string };
           if (sent.message_id !== undefined) await this.t2i.setExpectedReply(key, String(sent.message_id));
         }
         return;
@@ -1757,7 +1753,7 @@ export class TelegramCommandService {
         if (!await this.t2v.acceptsGroupReply(key, replyTo)) return;
         const response = await this.t2v.handlePlainText(text, key, context);
         if (response) {
-          const sent = await this.sendHtml(response, undefined, context.messageId) as { message_id?: number | string };
+          const sent = await this.sendHtml(response) as { message_id?: number | string };
           if (sent.message_id !== undefined) await this.t2v.setExpectedReply(key, String(sent.message_id));
         }
         return;
@@ -1857,7 +1853,6 @@ export class TelegramCommandService {
             const sent = await this.sendHtml(
               response,
               undefined,
-              promptInput ? context.messageId : undefined,
               resetConfirmation ? [[
                 { text: "Reset", callback_data: "helix:t2i:reset" },
                 { text: "Cancel", callback_data: "helix:t2i:cancel" }
@@ -1880,7 +1875,6 @@ export class TelegramCommandService {
           const sent = await this.sendHtml(
             response,
             undefined,
-            promptInput ? context.messageId : undefined,
             resetConfirmation ? [[
               { text: "Reset", callback_data: "helix:t2v:reset" },
               { text: "Cancel", callback_data: "helix:t2v:cancel" }
