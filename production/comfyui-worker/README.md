@@ -51,6 +51,8 @@ leibovitz / Annie Leibovitz
 
 The durable worker ID is infrastructure identity. Christopher Nolan and Annie Leibovitz are logical Production/operator identities, not separate workers.
 
+`lowry / John D. Lowry` is currently only an **upscaling research candidate**. It is not registered as a Production profile and does not own a runtime capability yet.
+
 ## Installation/update model
 
 The worker is a standalone manual Git + Python virtual-environment ComfyUI installation at:
@@ -143,6 +145,39 @@ The current runtime workflow candidate is FLUX.2 Klein 4B INT8 W8A8. The prior D
 
 The narrow T2I binder mutates only prompt, width, height, and seed from semantic prompt/aspect/seed inputs.
 
+## Experimental upscaling research state
+
+The worker currently contains experimental assets used only for controlled upscaling research.
+
+SeedVR2 custom node:
+
+```text
+numz/ComfyUI-SeedVR2_VideoUpscaler
+version: v2.5.23
+commit: 5a4bf428f3735cc72ac760d40f372f94dec28422
+```
+
+Research models include:
+
+```text
+seedvr2_ema_7b_fp16.safetensors
+seedvr2_ema_7b_sharp_fp16.safetensors
+ema_vae_fp16.safetensors
+```
+
+The 7B FP16 model has been proven runnable on the 8 GB worker with aggressive CPU offload/BlockSwap and tiled VAE operation. That is an experimental feasibility result, **not** a Production validation.
+
+Video tests showed too little benefit on clean LTX output for the compute cost, so video integration is halted. Image tests also showed SeedVR2 behaving conservatively on clean FLUX images.
+
+Current image research has therefore moved to controlled generative enhancement with the already-working FLUX.2 Klein 4B INT8 W8A8 stack before adding another model family.
+
+Canonical research details and benchmark instructions live in:
+
+- [`../upscaling/README.md`](../upscaling/README.md)
+- [`../upscaling/KLEIN4B_ENHANCEMENT_TEST.md`](../upscaling/KLEIN4B_ENHANCEMENT_TEST.md)
+
+Do not infer `image.upscale` or `video.upscale` Production capability from these installed research assets.
+
 ## Execution/recovery model
 
 Durable correctness remains:
@@ -206,7 +241,8 @@ Important known-good package pins include the current PyTorch/CUDA stack and the
 - output-retention cleanup;
 - broader `/upload/image` staging and I2V/reference ingestion;
 - real reboot/AtStartup proof;
-- deliberate Comfy/custom-node upgrade validation when needed.
+- deliberate Comfy/custom-node upgrade validation when needed;
+- Production integration of any upscale capability until the research benchmark is closed.
 
 Do not sweep the whole Comfy output directory: manual/experimental artifacts may coexist with Helix outputs.
 
@@ -222,5 +258,6 @@ Do not sweep the whole Comfy output directory: manual/experimental artifacts may
 - Do not store tokens or secrets in Git.
 - Keep operator-facing workflow controls semantic; raw node IDs belong inside binders/adapters.
 - Treat persistent WebSocket events as presentation telemetry, not durable execution truth.
+- Keep experimental research assets distinct from Production capabilities.
 
 For current system-wide Production state, see [`../README.md`](../README.md) and [`../../docs/PROJECT_STATE.md`](../../docs/PROJECT_STATE.md).
