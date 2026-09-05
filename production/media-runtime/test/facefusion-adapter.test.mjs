@@ -22,7 +22,7 @@ function readiness(overrides = {}) {
     capabilities: ["face.swap"],
     productionModel: { displayName: "HyperSwap B", facefusionModel: "hyperswap_1b_256" },
     capacity: { maxActiveJobs: 1, activeJobId: null },
-    apiAuthConfigured: false,
+    apiAuthConfigured: true,
     checks: {
       facefusionRoot: true,
       facefusionEntry: true,
@@ -87,6 +87,24 @@ test("FaceFusion adapter maps the exact worker 0.2.0 contract", async () => {
     assert.equal(JSON.stringify(JSON.parse(create.init.body)).includes("model"), false);
   }
   finally { globalThis.fetch = original; }
+});
+
+test("FaceFusion readiness requires overall readiness, authentication, and every required check", async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const [body, expected] of [
+      [readiness(), { transportReady: true, runtime: true, error: null }],
+      [readiness({ ready: false, apiAuthConfigured: false }), { transportReady: false, runtime: false, error: /API authentication is not configured/ }],
+      [readiness({ checks: { ...readiness().checks, outputRoot: false } }), { transportReady: false, runtime: false, error: /outputRoot/ }]
+    ]) {
+      globalThis.fetch = async () => json(body);
+      const result = await new FaceFusionAdapter("http://worker", "test-token").readiness();
+      assert.equal(result.transportReady, expected.transportReady);
+      assert.equal(result.checks.runtime, expected.runtime);
+      if (expected.error) assert.match(result.errors.join("\n"), expected.error);
+      assert.doesNotMatch(result.errors.join("\n"), /test-token/);
+    }
+  } finally { globalThis.fetch = original; }
 });
 
 test("FaceFusion wire parsers reject aliases and contract drift", () => {

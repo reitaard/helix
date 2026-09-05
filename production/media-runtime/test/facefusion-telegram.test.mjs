@@ -93,7 +93,7 @@ test("private and forum /face flows persist and reply to their originating desti
   finally { globalThis.fetch = original; }
 });
 
-async function faceFusionServiceHarness(catalog = { async list() { return []; }, async get() { return null; }, async queue() { return []; } }) {
+async function faceFusionServiceHarness(catalog = { async list() { return []; }, async get() { return null; }, async queue() { return []; } }, jobs = {}) {
   const states = new Map();
   const sent = [];
   const deleted = [];
@@ -117,11 +117,13 @@ async function faceFusionServiceHarness(catalog = { async list() { return []; },
       if (!value || value.phase !== "awaiting_target") return false;
       states.set(key(botId, chatId, threadId, userId), { ...value, phase: "confirming", targetInputHandle: handle, targetMediaKind: mediaKind, settings }); return true;
     },
-    async setConfirmation(botId, chatId, threadId, userId, messageId) { states.get(key(botId, chatId, threadId, userId)).confirmationMessageId = messageId; }
+    async setConfirmation(botId, chatId, threadId, userId, messageId) { states.get(key(botId, chatId, threadId, userId)).confirmationMessageId = messageId; },
+    async setSettings(botId, chatId, threadId, userId, settings) { const value = states.get(key(botId, chatId, threadId, userId)); if (value) states.set(key(botId, chatId, threadId, userId), { ...value, settings: structuredClone(settings) }); }
   };
   const telegram = {
     async sendHtml(html, destination) { sent.push({ html, destination }); return { messageId: String(sent.length) }; },
-    async sendHtmlWithInlineKeyboard(html, destination) { sent.push({ html, destination, keyboard: true }); return { messageId: String(sent.length) }; }
+    async sendHtmlWithInlineKeyboard(html, destination) { sent.push({ html, destination, keyboard: true }); return { messageId: String(sent.length) }; },
+    async editHtmlClearingKeyboard(_messageId, html, destination) { sent.push({ html, destination, edited: true }); return { messageId: String(sent.length) }; }
   };
   const workers = {
     async uploadInput() { uploaded += 1; return { handle: `handle-${uploaded}` }; },
@@ -142,8 +144,8 @@ async function faceFusionServiceHarness(catalog = { async list() { return []; },
     async save(scope, value) { profiles.set(key(scope.botId, scope.chatId, scope.threadId, scope.userId), structuredClone(value)); }
   };
   const service = new TelegramFaceFusionService(
-    "runtime-test-token", "42", "facefusion-worker", {}, conversations, settings, {},
-    { async get() { return 0; }, async save() {} }, workers, telegram, spool, 1024,
+    "runtime-test-token", "42", "facefusion-worker", jobs, conversations, settings, { async attach() {} },
+    { async get() { return 0; }, async save() {} },  workers, telegram, spool, 1024,
     catalog,
     { chatId: "-10099", threadId: "154" }, 1800,
     async (_path, filename, mediaKind) => ({ mediaKind, width: 1080, height: 1920, durationSeconds: mediaKind === "video" ? (filename.match(/([0-9]+(?:\.[0-9]+)?)s/) ? Number(filename.match(/([0-9]+(?:\.[0-9]+)?)s/)[1]) : 42.3) : null })
@@ -460,4 +462,75 @@ test("FaceFusion result delivery remains private or in the originating forum top
   assert.deepEqual(parseDestination({ provider: "telegram", botKey: "facefusion", chatId: "42", threadId: null }, "face.swap", "42", forum), { chatId: "42", threadId: null });
   assert.deepEqual(parseDestination({ provider: "telegram", botKey: "facefusion", chatId: "-10099", threadId: "154" }, "face.swap", "42", forum), { chatId: "-10099", threadId: "154" });
   assert.throws(() => parseDestination({ provider: "telegram", botKey: "facefusion", chatId: "-10099", threadId: "155" }, "face.swap", "42", forum), /does not match job tool/);
+});
+
+test("FaceFusion active-session profile changes preserve captured handles and update generation", async () => {
+  const created = [];
+  const h = await faceFusionServiceHarness(undefined, { async create(input) { created.push(input); return { id: "job-1", jobNumber: "123" }; } });
+  try {
+    await h.service.processUpdate(privateMessage({ text: "/f -d" }));
+    await h.service.processUpdate(privateMessage({ photo: [{ file_id: "source" }] }));
+    await h.service.processUpdate(privateMessage({ video: { file_id: "target", file_name: "target-42s.mp4" } }));
+    await h.service.processUpdate(privateMessage({ text: "/f set strength 0.5" }));
+    await h.service.processUpdate(privateMessage({ text: "/f set boost 512" }));
+    await h.service.processUpdate(privateMessage({ text: "/f set mode one" }));
+    await h.service.processUpdate(privateMessage({ text: "/f set time 30" }));
+    await h.service.processUpdate(privateMessage({ text: "/f set -d time 90" }));
+    let state = [...h.states.values()][0];
+    assert.equal(state.phase, "confirming");
+    assert.equal(state.sourceInputHandle, "handle-1");
+    assert.equal(state.targetInputHandle, "handle-2");
+    assert.deepEqual(state.settings.generation, { weight: 0.5, pixelBoost: "512x512", faceSelectorMode: "one" });
+    assert.equal(state.settings.normalDurationSeconds, 30);
+    assert.equal(state.settings.devDurationSeconds, 90);
+    await h.service.processUpdate(privateMessage({ text: "/f reset -d" }));
+    assert.equal([...h.states.values()][0].settings.devDurationSeconds, null);
+    await h.service.processUpdate(privateMessage({ text: "/f set -d time 90" }));
+    state = [...h.states.values()][0];
+    assert.equal(state.settings.dev, true);
+    assert.equal(state.settings.target.mediaKind, "video");
+    await h.service.processUpdate({ update_id: 77, callback_query: { id: "cb", data: "ff:generate", from: { id: "42" }, message: { message_id: state.confirmationMessageId, chat: { id: "42", type: "private" } } } });
+    assert.deepEqual(created[0].workflow.settings, { faceSelectorMode: "one", weight: 0.5, pixelBoost: "512x512" });
+    assert.equal(created[0].generation.durationLimitSeconds, 90);
+  } finally { await h.restore(); }
+});
+
+test("FaceFusion reset syncs only its owned active session", async () => {
+  const h = await faceFusionServiceHarness();
+  try {
+    await h.service.processUpdate(forumMessage(154, { text: "/f", from: { id: "7" } }));
+    await h.service.processUpdate(forumMessage(154, { text: "/f", from: { id: "8" } }));
+    await h.service.processUpdate(forumMessage(154, { text: "/f set strength 0.5", from: { id: "7" } }));
+    await h.service.processUpdate(forumMessage(154, { text: "/f set strength 0.65", from: { id: "8" } }));
+    await h.service.processUpdate(forumMessage(154, { text: "/f reset", from: { id: "7" } }));
+    const states = [...h.states.values()];
+    assert.deepEqual(states.find(state => state.userId === "7").settings.generation, {});
+    assert.deepEqual(states.find(state => state.userId === "8").settings.generation, { weight: 0.65 });
+    assert.equal(states.find(state => state.userId === "7").phase, "awaiting_source");
+  } finally { await h.restore(); }
+});
+
+test("FaceFusion numbered cancellation is owned and bare cancellation remains conversational", async () => {
+  const jobs = new Map([["123", { id: "waiting", jobNumber: "123", status: "queued" }], ["124", { id: "running", jobNumber: "124", status: "running" }], ["125", { id: "done", jobNumber: "125", status: "succeeded" }]]);
+  const seen = [];
+  const catalog = { async list() { return []; }, async queue() { return []; }, async get(owner, number) { seen.push(owner); return owner.userId === "42" && owner.threadId === null ? jobs.get(number) ?? null : owner.userId === "7" && owner.threadId === "154" && number === "126" ? { id: "forum", jobNumber: "126", status: "queued" } : null; } };
+  const h = await faceFusionServiceHarness(catalog, { async cancel(id) { return id === "done" ? { cancelled: false, status: "succeeded" } : { cancelled: true, status: "cancelled" }; } });
+  try {
+    await h.service.processUpdate(privateMessage({ text: "/c 123" }));
+    assert.match(rendered(h.sent.at(-1).html), /Job #123 cancelled/);
+    await h.service.processUpdate(privateMessage({ text: "/cc 124" }));
+    assert.match(rendered(h.sent.at(-1).html), /Job #124 cancelled/);
+    await h.service.processUpdate(privateMessage({ text: "/cancel 125" }));
+    assert.match(rendered(h.sent.at(-1).html), /already succeeded/);
+    await h.service.processUpdate(forumMessage(154, { text: "/c 126", from: { id: "7" } }));
+    assert.match(rendered(h.sent.at(-1).html), /Job #126 cancelled/);
+    await h.service.processUpdate(forumMessage(154, { text: "/c 123", from: { id: "8" } }));
+    assert.match(rendered(h.sent.at(-1).html), /Job not found/);
+    await h.service.processUpdate(forumMessage(155, { text: "/c 123", from: { id: "42" } }));
+    assert.equal(seen.length, 5, "wrong thread is ignored before catalog lookup");
+    await h.service.processUpdate(privateMessage({ text: "/f" }));
+    await h.service.processUpdate(privateMessage({ text: "/c" }));
+    assert.equal(h.states.size, 0);
+    assert.equal(seen[4].threadId, "154");
+  } finally { await h.restore(); }
 });

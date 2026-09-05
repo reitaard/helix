@@ -259,6 +259,34 @@ export class TelegramFaceFusionService {
     await this.telegram.sendHtml(`${profileTitle("FaceFusion")}\n${removed ? "Request cancelled." : "Nothing to cancel."}`, destination);
   }
 
+  /** Profile changes affect an in-flight session without replacing its media handles or phase. */
+  private async syncActiveSessionSettings(userId: string, destination: FaceFusionDestination, profile: FaceFusionProfileSettings) {
+    if (!this.bot) throw new Error("FaceFusion bot is not initialized");
+    const state = await this.conversations.get(this.bot.id, destination.chatId, destination.threadId, userId);
+    if (!state) return;
+    const current = normalizeFaceFusionSessionSettings(state.settings);
+    await this.conversations.setSettings(this.bot.id, destination.chatId, destination.threadId, userId, {
+      ...profile,
+      dev: current.dev,
+      ...(current.target ? { target: current.target } : {})
+    });
+  }
+
+  private async cancelJob(userId: string, destination: FaceFusionDestination, jobNumber: string) {
+    const job = await this.catalog.get(this.owner(userId, destination), jobNumber);
+    if (!job) return `${profileTitle("FaceFusion")}\n<i>Job not found.</i>`;
+    try {
+      const result = await this.jobs.cancel(job.id);
+      if (!result) return `${profileTitle("FaceFusion")}\n<i>Job not found.</i>`;
+      if (result.cancelled) return `${profileTitle("FaceFusion")}\nJob <code>#${escapeHtml(job.jobNumber)}</code> cancelled.`;
+      if (["succeeded", "failed", "cancelled", "timed_out"].includes(result.status)) {
+        return `${profileTitle("FaceFusion")}\nJob <code>#${escapeHtml(job.jobNumber)}</code> is already ${escapeHtml(result.status)}.`;
+      }
+    }
+    catch (error) { console.error("[facefusion-telegram] job cancellation failed", error); }
+    return `${profileTitle("FaceFusion")}\nJob <code>#${escapeHtml(job.jobNumber)}</code> could not be cancelled.`;
+  }
+
   private async downloadAndUpload(media: TelegramMedia, role: "source" | "target", session: FaceFusionSessionSettings) {
     if (media.size !== null && media.size > this.maxInputBytes) throw new InvalidFaceFusionMediaError("Telegram media exceeds the configured input limit");
     const file = await this.api<{ file_path?: string; file_size?: number }>("getFile", { file_id: media.fileId });
@@ -338,6 +366,7 @@ export class TelegramFaceFusionService {
     }
     profile.generation = normalizeFaceFusionSettings(generation);
     await this.settings.save(this.scope(userId, destination), profile);
+    await this.syncActiveSessionSettings(userId, destination, profile);
     return this.settingsPanel(profile, dev);
   }
 
@@ -353,7 +382,11 @@ export class TelegramFaceFusionService {
   }
 
   private async handleFaceCommand(command: string, args: string[], userId: string, destination: FaceFusionDestination) {
-    if (["/cancel", "/cc", "/c"].includes(command)) { await this.cancel(userId, destination); return true; }
+    if (["/cancel", "/cc", "/c"].includes(command)) {
+      if (args[0]) await this.telegram.sendHtml(await this.cancelJob(userId, destination, args[0]), destination);
+      else await this.cancel(userId, destination);
+      return true;
+    }
     if (["/help", "/h"].includes(command)) { await this.telegram.sendHtml(this.help(this.isPrivateOperator(destination, userId)), destination); return true; }
     if (command === "/fq") { await this.telegram.sendHtml(await this.queueHtml(userId, destination), destination); return true; }
     if (command === "/fj") { await this.telegram.sendHtml(await this.jobsHtml(userId, destination, args[0]), destination); return true; }
@@ -387,6 +420,7 @@ export class TelegramFaceFusionService {
           ? { ...current, devDurationSeconds: null }
           : { ...current, generation: {}, normalDurationSeconds: FACEFUSION_NORMAL_DURATION_DEFAULT };
         await this.settings.save(this.scope(userId, destination), reset);
+        await this.syncActiveSessionSettings(userId, destination, reset);
         await this.telegram.sendHtml(this.settingsPanel(reset, dev), destination);
       }
       return true;

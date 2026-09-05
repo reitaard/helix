@@ -67,22 +67,26 @@ export class FaceFusionAdapter implements MediaAdapter {
     try {
       const { body } = await this.client.readiness();
       const failedChecks = Object.entries(body.checks).filter(([, passed]) => !passed).map(([name]) => name);
+      const executionReady = body.ready && body.apiAuthConfigured && failedChecks.length === 0;
+      const errors = [
+        ...(!body.apiAuthConfigured ? ["FaceFusion worker API authentication is not configured"] : []),
+        ...(!body.ready ? ["FaceFusion worker reported ready=false"] : []),
+        ...failedChecks.map(check => `FaceFusion readiness check failed: ${check}`)
+      ];
       return {
         adapter: this.kind,
-        transportReady: body.ready,
+        transportReady: executionReady,
         checks: {
-          runtime: failedChecks.length === 0,
-          queue: body.capacity.maxActiveJobs === 1,
-          capabilities: true,
+          runtime: executionReady,
+          queue: executionReady && body.capacity.maxActiveJobs === 1,
+          capabilities: executionReady,
           events: false
         },
         latencyMs: Math.round(performance.now() - started),
         backend: { version: FACEFUSION_WORKER_VERSION, runtime: body.worker },
         queue: { running: body.capacity.activeJobId === null ? 0 : 1, pending: 0 },
         capabilityCount: body.capabilities.length,
-        errors: body.ready ? [] : failedChecks.length > 0
-          ? failedChecks.map(check => `FaceFusion readiness check failed: ${check}`)
-          : ["FaceFusion worker reported ready=false"]
+        errors
       };
     }
     catch (error) {

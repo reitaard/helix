@@ -330,7 +330,7 @@ export class JobService {
           input.tool,
 
         workerId:
-          input.workerId,
+          worker.id,
 
         profileId:
           profile.id,
@@ -353,7 +353,7 @@ export class JobService {
             input.tool,
 
           workerId:
-            input.workerId,
+            worker.id,
 
           profileId:
             profile.id,
