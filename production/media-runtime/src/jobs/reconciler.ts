@@ -30,6 +30,18 @@ export class JobReconciler {
       60 * 60 * 1000
   ) {}
 
+  private async cleanupFaceFusionInputs(job: { adapter: string | null; workerId: string | null; request: unknown }) {
+    if (job.adapter !== "facefusion" || !job.workerId || !job.request || typeof job.request !== "object" || Array.isArray(job.request)) return;
+    const workflow = (job.request as Record<string, unknown>).workflow;
+    if (!workflow || typeof workflow !== "object" || Array.isArray(workflow)) return;
+    const payload = workflow as Record<string, unknown>;
+    const handles = [payload.sourceInputId, payload.targetInputId].filter((handle): handle is string => typeof handle === "string");
+    const results = await Promise.allSettled(handles.map(handle => this.workers.deleteInput(job.workerId!, handle)));
+    for (const result of results) {
+      if (result.status === "rejected") console.error("[jobs] FaceFusion input cleanup failed", result.reason);
+    }
+  }
+
   start() {
     if (this.timer) {
       return;
@@ -101,6 +113,7 @@ export class JobReconciler {
                   );
 
               if (cancelled === true) {
+                await this.cleanupFaceFusionInputs(job);
                 const marked =
                   await this.jobs
                     .markTimedOut(
@@ -153,6 +166,7 @@ export class JobReconciler {
             backend.state ===
             "succeeded"
           ) {
+            await this.cleanupFaceFusionInputs(job);
             await this.jobs
               .markSucceeded(
                 job.id,
@@ -178,13 +192,32 @@ export class JobReconciler {
 
           if (
             backend.state ===
+            "cancelled"
+          ) {
+            await this.cleanupFaceFusionInputs(job);
+            await this.jobs
+              .markCancelled(
+                job.id,
+                job.backendJobId
+              );
+
+            console.log(
+              `[jobs] ${job.id} -> cancelled`
+            );
+
+            continue;
+          }
+
+          if (
+            backend.state ===
             "failed"
           ) {
+            await this.cleanupFaceFusionInputs(job);
             await this.jobs
               .markBackendFailed(
                 job.id,
                 backend.error ??
-                  "Comfy execution failed"
+                  "Backend execution failed"
               );
 
             console.log(

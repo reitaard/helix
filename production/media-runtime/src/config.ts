@@ -45,6 +45,30 @@ const envSchema = z.object({
   HELIX_TELEGRAM_CHAT_ID:
     z.string().min(1).optional(),
 
+  HELIX_FACEFUSION_WORKER_URL:
+    z.string().url().optional(),
+
+  HELIX_FACEFUSION_WORKER_REVISION:
+    z.string().min(1).default("0.2.0"),
+
+  HELIX_FACEFUSION_WORKER_TOKEN:
+    z.string().min(1).optional(),
+
+  HELIX_FACEFUSION_TELEGRAM_BOT_TOKEN:
+    z.string().min(1).optional(),
+
+  HELIX_FACEFUSION_TELEGRAM_CHAT_ID:
+    z.string().min(1).optional(),
+
+  HELIX_FACEFUSION_TELEGRAM_FORUM_CHAT_ID:
+    z.string().regex(/^-\d+$/).optional(),
+
+  HELIX_FACEFUSION_TELEGRAM_THREAD_ID:
+    z.string().regex(/^\d+$/).optional(),
+
+  HELIX_FACEFUSION_INPUT_MAX_MB:
+    z.coerce.number().int().min(1).max(2048).default(512),
+
   HELIX_TELEGRAM_FORUM_CHAT_ID:
     z.string().regex(/^-\d+$/).optional(),
 
@@ -86,6 +110,30 @@ const env =
 
 if (Boolean(env.HELIX_TELEGRAM_BOT_TOKEN) !== Boolean(env.HELIX_TELEGRAM_CHAT_ID)) {
   throw new Error("Telegram token and chat ID must be configured together");
+}
+
+if (Boolean(env.HELIX_FACEFUSION_TELEGRAM_BOT_TOKEN) !== Boolean(env.HELIX_FACEFUSION_TELEGRAM_CHAT_ID)) {
+  throw new Error("FaceFusion Telegram token and chat ID must be configured together");
+}
+
+if (env.HELIX_FACEFUSION_TELEGRAM_BOT_TOKEN && !env.HELIX_FACEFUSION_WORKER_URL) {
+  throw new Error("FaceFusion Telegram requires the FaceFusion worker URL");
+}
+if (env.HELIX_FACEFUSION_WORKER_URL && !env.HELIX_FACEFUSION_WORKER_TOKEN) {
+  throw new Error("FaceFusion worker URL requires the worker bearer token");
+}
+
+if (Boolean(env.HELIX_FACEFUSION_TELEGRAM_FORUM_CHAT_ID) !== Boolean(env.HELIX_FACEFUSION_TELEGRAM_THREAD_ID)) {
+  throw new Error("FaceFusion Telegram forum chat and thread ID must be configured together");
+}
+if (env.HELIX_FACEFUSION_TELEGRAM_FORUM_CHAT_ID && (!env.HELIX_FACEFUSION_TELEGRAM_BOT_TOKEN || !env.HELIX_FACEFUSION_TELEGRAM_CHAT_ID)) {
+  throw new Error("FaceFusion Telegram forum routing requires the bot and private operator chat");
+}
+if (env.HELIX_FACEFUSION_TELEGRAM_THREAD_ID === "0") {
+  throw new Error("FaceFusion Telegram thread ID must be positive");
+}
+if (env.HELIX_FACEFUSION_TELEGRAM_FORUM_CHAT_ID === env.HELIX_FACEFUSION_TELEGRAM_CHAT_ID) {
+  throw new Error("FaceFusion Telegram forum and private operator chat IDs must differ");
 }
 
 const forumValues = [
@@ -142,6 +190,21 @@ export const config = {
         }
       : null,
 
+  facefusionTelegram:
+    env.HELIX_FACEFUSION_TELEGRAM_BOT_TOKEN &&
+    env.HELIX_FACEFUSION_TELEGRAM_CHAT_ID
+      ? {
+          botToken: env.HELIX_FACEFUSION_TELEGRAM_BOT_TOKEN,
+          chatId: env.HELIX_FACEFUSION_TELEGRAM_CHAT_ID,
+          forum: env.HELIX_FACEFUSION_TELEGRAM_FORUM_CHAT_ID && env.HELIX_FACEFUSION_TELEGRAM_THREAD_ID
+            ? { chatId: env.HELIX_FACEFUSION_TELEGRAM_FORUM_CHAT_ID, threadId: env.HELIX_FACEFUSION_TELEGRAM_THREAD_ID }
+            : null
+        }
+      : null,
+
+  facefusionInputMaxBytes:
+    env.HELIX_FACEFUSION_INPUT_MAX_MB * 1024 * 1024,
+
   spoolDir:
     env.HELIX_SPOOL_DIR,
 
@@ -155,23 +218,21 @@ export const config = {
     env.HELIX_JOB_TIMEOUT_SECONDS *
     1000,
 
+  executionResources: [
+    {
+      id: "helix-gpu-rtx4060-01",
+      maxConcurrentGpuJobs: 1
+    }
+  ],
+
   workers: [
     {
-      id:
-        "helix-rtx4060-01",
-
-      name:
-        env.HELIX_WORKER_RTX4060_NAME,
-
-      revision:
-        env.HELIX_WORKER_RTX4060_REVISION,
-
-      adapter:
-        "comfy",
-
-      endpoint:
-        env.HELIX_WORKER_RTX4060_URL,
-
+      id: "helix-comfy-rtx4060-01",
+      name: env.HELIX_WORKER_RTX4060_NAME,
+      revision: env.HELIX_WORKER_RTX4060_REVISION,
+      adapter: "comfy",
+      endpoint: env.HELIX_WORKER_RTX4060_URL,
+      resourceId: "helix-gpu-rtx4060-01",
       productionProfiles: [
         {
           id: "nolan",
@@ -192,6 +253,29 @@ export const config = {
       ],
 
       maxConcurrentGpuJobs: 1
-    }
+    },
+    ...(env.HELIX_FACEFUSION_WORKER_URL
+      ? [{
+          id: "helix-facefusion-rtx4060-01",
+          name: "FaceFusion",
+          revision: env.HELIX_FACEFUSION_WORKER_REVISION,
+          adapter: "facefusion" as const,
+          endpoint: env.HELIX_FACEFUSION_WORKER_URL,
+          ...(env.HELIX_FACEFUSION_WORKER_TOKEN ? { authToken: env.HELIX_FACEFUSION_WORKER_TOKEN } : {}),
+          resourceId: "helix-gpu-rtx4060-01",
+          productionProfiles: [{
+            id: "faceswap",
+            displayName: "FaceFusion",
+            capabilities: ["face.swap"],
+            modelFamilies: {
+              hyperswap: {
+                available: ["hyperswap_1b_256"],
+                validated: ["hyperswap_1b_256"]
+              }
+            }
+          }],
+          maxConcurrentGpuJobs: 1
+        }]
+      : [])
   ] satisfies WorkerDefinition[]
 };

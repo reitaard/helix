@@ -113,15 +113,15 @@ Production owns generation/editing execution and backend-specific controls.
 The active Production boundary is now real rather than hypothetical:
 
 ```text
-caller / n8n / Telegram
+caller / n8n / Telegram bots
         ↓
-helix-runtime + PostgreSQL
+helix-runtime + PostgreSQL durable dispatch
         ↓
-semantic Production settings / binders
+semantic Production settings / adapter boundaries
         ↓
-Comfy adapter
-        ↓
-helix-rtx4060-01
+physical resource: helix-gpu-rtx4060-01 (capacity 1)
+        ├── helix-comfy-rtx4060-01 -> Comfy adapter
+        └── helix-facefusion-rtx4060-01 -> FaceFusion adapter
 ```
 
 One physical RTX 4060 worker currently exposes logical Production Profiles:
@@ -135,7 +135,7 @@ leibovitz / Annie Leibovitz
 -> image.t2i
 ```
 
-These are logical tool authorities on one Comfy endpoint, one queue, and one physical GPU concurrency limit.
+These are logical tool authorities on the Comfy backend. A separate `faceswap / FaceFusion` profile exposes `face.swap` through a native FaceFusion backend. Both software backends share the same physical RTX 4060 resource, so Helix claims capacity durably in PostgreSQL before submitting either job. The Windows FaceFusion worker 0.2.0 contract is deployed through bearer-authenticated PC↔VPS communication; migration 0015 is applied.
 
 The operator-facing identity model uses one durable numeric media-reference namespace shared across Helix jobs and direct ComfyUI artifacts. Internal Helix IDs and Comfy Prompt IDs remain separate.
 

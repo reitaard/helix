@@ -13,8 +13,9 @@ export interface TelegramContext extends TelegramDestination {
 
 export interface TelegramForumConfig {
   chatId: string;
-  imageThreadId: string;
-  videoThreadId: string;
+  imageThreadId?: string;
+  videoThreadId?: string;
+  faceFusionThreadId?: string;
 }
 
 export type TelegramRoute =
@@ -53,7 +54,9 @@ export function classifyTelegramRoute(
 export function commandForBot(text: string, botUsername: string): string | null {
   const token = text.trim().split(/\s+/, 1)[0]?.toLowerCase() ?? "";
   if (!token.startsWith("/")) return null;
-  const [command, suffix] = token.split("@", 2);
+  const parts = token.split("@");
+  if (parts.length > 2 || !parts[0] || (parts.length === 2 && !parts[1])) return null;
+  const [command, suffix] = parts;
   if (suffix && suffix !== botUsername.toLowerCase()) return null;
   return command ?? null;
 }

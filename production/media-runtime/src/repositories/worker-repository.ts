@@ -34,11 +34,26 @@ export class WorkerRepository {
     private readonly db: Pool
   ) {}
 
+  async upsertExecutionResource(
+    input: { id: string; capacity: number }
+  ) {
+    await this.db.query(
+      `
+      INSERT INTO execution_resources (id, capacity)
+      VALUES ($1, $2)
+      ON CONFLICT (id)
+      DO UPDATE SET capacity = EXCLUDED.capacity, updated_at = NOW()
+      `,
+      [input.id, input.capacity]
+    );
+  }
+
   async upsertWorker(
     input: {
       id: string;
       profile: string;
       adapter: string;
+      resourceId: string;
     }
   ) {
     await this.db.query(
@@ -46,20 +61,23 @@ export class WorkerRepository {
       INSERT INTO workers (
         id,
         profile,
-        adapter
+        adapter,
+        resource_id
       )
-      VALUES ($1, $2, $3)
+      VALUES ($1, $2, $3, $4)
 
       ON CONFLICT (id)
       DO UPDATE SET
         profile = EXCLUDED.profile,
         adapter = EXCLUDED.adapter,
+        resource_id = EXCLUDED.resource_id,
         updated_at = NOW()
       `,
       [
         input.id,
         input.profile,
-        input.adapter
+        input.adapter,
+        input.resourceId
       ]
     );
   }

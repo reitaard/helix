@@ -4,7 +4,9 @@ import type {
 
 interface LifecycleRow {
   job_id: string;
+  bot_key: string;
   chat_id: string;
+  thread_id: string | null;
   message_id: string;
   presentation_state:
     | "active"
@@ -27,7 +29,9 @@ interface LifecycleRow {
 
 export interface TelegramLifecycleJob {
   jobId: string;
+  botKey: string;
   chatId: string;
+  threadId: string | null;
   messageId: string;
   presentationState:
     | "active"
@@ -53,7 +57,9 @@ function mapRow(
 ): TelegramLifecycleJob {
   return {
     jobId: row.job_id,
+    botKey: row.bot_key,
     chatId: row.chat_id,
+    threadId: row.thread_id,
     messageId: row.message_id,
     presentationState:
       row.presentation_state,
@@ -83,7 +89,9 @@ function mapRow(
 const SELECT_LIFECYCLE = `
   SELECT
     l.job_id,
+    l.bot_key,
     l.chat_id,
+    l.thread_id,
     l.message_id,
     l.presentation_state,
     l.last_job_status,
@@ -112,7 +120,9 @@ export class TelegramJobLifecycleRepository {
     input: {
       jobId: string;
       chatId: string;
+      threadId?: string | null;
       messageId: string;
+      botKey?: string;
       lastJobStatus?: string | null;
     }
   ) {
@@ -120,7 +130,9 @@ export class TelegramJobLifecycleRepository {
       `
       INSERT INTO telegram_job_lifecycles (
         job_id,
+        bot_key,
         chat_id,
+        thread_id,
         message_id,
         presentation_state,
         last_job_status
@@ -129,12 +141,16 @@ export class TelegramJobLifecycleRepository {
         $1,
         $2,
         $3,
+        $4,
+        $5,
         'active',
-        $4
+        $6
       )
       ON CONFLICT (job_id)
       DO UPDATE SET
+        bot_key = EXCLUDED.bot_key,
         chat_id = EXCLUDED.chat_id,
+        thread_id = EXCLUDED.thread_id,
         message_id = EXCLUDED.message_id,
         presentation_state = 'active',
         last_job_status = EXCLUDED.last_job_status,
@@ -142,7 +158,9 @@ export class TelegramJobLifecycleRepository {
       `,
       [
         input.jobId,
+        input.botKey ?? "primary",
         input.chatId,
+        input.threadId ?? null,
         input.messageId,
         input.lastJobStatus ?? null
       ]

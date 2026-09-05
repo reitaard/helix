@@ -7,6 +7,7 @@ import {
 } from "./execution-status.js";
 
 import type {
+  AdapterArtifact,
   AdapterExecutionEventListener,
   AdapterLiveness,
   AdapterReadiness,
@@ -105,7 +106,8 @@ export class ComfyAdapter
 
   async submit(
     workflow:
-      Record<string, unknown>
+      Record<string, unknown>,
+    _context?: { jobId: string; dispatchToken?: string }
   ) {
     const response =
       await this.client.prompt(
@@ -153,20 +155,17 @@ export class ComfyAdapter
   }
 
   downloadArtifact(
-    artifact: {
-      filename: string;
-      subfolder: string;
-      type: string;
-    },
-
-    destinationPath:
-      string
+    artifact: AdapterArtifact,
+    destinationPath: string
   ) {
-    return this.client
-      .downloadArtifact(
-        artifact,
-        destinationPath
-      );
+    return this.client.downloadArtifact(
+      {
+        filename: artifact.filename,
+        subfolder: artifact.subfolder ?? "",
+        type: artifact.type
+      },
+      destinationPath
+    );
   }
 
   subscribeExecutionEvents(

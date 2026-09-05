@@ -12,8 +12,16 @@ import {
 } from "../workers/registry.js";
 
 import {
-  TelegramDelivery
-} from "../delivery/telegram.js";
+  TelegramDeliveryRouter
+} from "../delivery/telegram-router.js";
+import type { TelegramDelivery } from "../delivery/telegram.js";
+
+import {
+  faceFusionDeliveringProgressHtml,
+  faceFusionQueuedProgressHtml,
+  faceFusionRunningProgressHtml,
+  faceFusionTerminalProgressHtml
+} from "./facefusion-progress-presentation.js";
 
 import {
   deliveringProgressHtml,
@@ -70,13 +78,16 @@ export class TelegramProgressService {
   private readonly progress =
     new Map<string, LiveProgress>();
 
+  /** FaceFusion has no trustworthy structured percent; this only rate-limits durable loader edits. */
+  private readonly faceFusionRenderedAt = new Map<string, number>();
+
   constructor(
     private readonly workerId: string,
     private readonly workers: WorkerRegistry,
     private readonly lifecycles:
       TelegramJobLifecycleRepository,
     private readonly telegram:
-      TelegramDelivery,
+      TelegramDeliveryRouter | TelegramDelivery,
     private readonly intervalMs = 3000,
     private readonly minPercentDelta = 10,
     private readonly maxSilenceMs = 15000,
@@ -124,6 +135,16 @@ export class TelegramProgressService {
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.progress.clear();
+    this.faceFusionRenderedAt.clear();
+  }
+
+  private deliveryFor(lifecycle: TelegramLifecycleJob) {
+    if ("get" in this.telegram) {
+      const route = this.telegram.get(lifecycle.botKey ?? "primary");
+      if (!route) throw new Error(`Telegram bot is not configured: ${lifecycle.botKey}`);
+      return route.delivery;
+    }
+    return this.telegram;
   }
 
   private workerName(
@@ -282,7 +303,7 @@ export class TelegramProgressService {
             state.snapshot.stage
         };
 
-        await this.telegram.editHtml(
+        await this.deliveryFor(state.lifecycle).editHtml(
           state.lifecycle.messageId,
           runningProgressHtml(
             state.lifecycle,
@@ -292,7 +313,7 @@ export class TelegramProgressService {
           {
             chatId:
               state.lifecycle.chatId,
-            threadId: null
+            threadId: state.lifecycle.threadId
           }
         );
 
@@ -439,12 +460,12 @@ export class TelegramProgressService {
     terminal = false
   ) {
     try {
-      await this.telegram.editHtml(
+      await this.deliveryFor(lifecycle).editHtml(
         lifecycle.messageId,
         html,
         {
           chatId: lifecycle.chatId,
-          threadId: null
+          threadId: lifecycle.threadId
         }
       );
 
@@ -500,6 +521,11 @@ export class TelegramProgressService {
 
         const workerName =
           this.workerName(lifecycle);
+
+        if (lifecycle.tool === "face.swap") {
+          await this.syncFaceFusionStatus(lifecycle);
+          continue;
+        }
 
         if (
           lifecycle.status === "accepted" ||
@@ -620,6 +646,31 @@ export class TelegramProgressService {
     }
     finally {
       this.ticking = false;
+    }
+  }
+
+  private async syncFaceFusionStatus(lifecycle: TelegramLifecycleJob) {
+    const previous = lifecycle.lastJobStatus;
+    const lastRendered = this.faceFusionRenderedAt.get(lifecycle.jobId) ?? 0;
+    const shouldAnimate = (lifecycle.status === "running" || lifecycle.status === "finalizing") && Date.now() - lastRendered >= this.minEditIntervalMs;
+    if ((lifecycle.status === "accepted" || lifecycle.status === "queued") && previous === lifecycle.status) return;
+    if ((lifecycle.status === "running" || lifecycle.status === "finalizing") && previous === lifecycle.status && !shouldAnimate) return;
+
+    if (lifecycle.status === "accepted" || lifecycle.status === "queued") {
+      await this.editStatus(lifecycle, faceFusionQueuedProgressHtml(lifecycle));
+      return;
+    }
+    if (lifecycle.status === "running" || lifecycle.status === "finalizing") {
+      const updated = await this.editStatus(lifecycle, faceFusionRunningProgressHtml(lifecycle));
+      if (updated) this.faceFusionRenderedAt.set(lifecycle.jobId, Date.now());
+      return;
+    }
+    if (lifecycle.status === "succeeded") {
+      if (previous !== "succeeded") await this.editStatus(lifecycle, faceFusionDeliveringProgressHtml(lifecycle));
+      return;
+    }
+    if (["failed", "cancelled", "timed_out"].includes(lifecycle.status)) {
+      await this.editStatus(lifecycle, faceFusionTerminalProgressHtml(lifecycle), true);
     }
   }
 }

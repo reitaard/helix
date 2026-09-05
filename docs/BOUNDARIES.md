@@ -40,7 +40,9 @@ This document exists to prevent Helix from collapsing into one giant agent or on
 
 **Produces:** `MediaAsset` plus production metadata.
 
-**Owns later:** generation providers/models, editing, rendering, audio, captions, QC, retries, upscale, cost/latency.
+**Owns:** generation providers/models, editing, rendering, audio, captions, QC, retries, physical execution-resource scheduling, backend adapters, delivery routing, upscale, and cost/latency.
+
+A physical GPU resource is distinct from a software backend and from a logical Production profile. Helix PostgreSQL dispatch owns shared-resource exclusivity; Comfy and native FaceFusion must not coordinate by racing backend busy checks.
 
 ## Distribution
 

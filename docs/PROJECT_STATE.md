@@ -1,6 +1,6 @@
 # Project State
 
-Last documentation reconciliation: **2026-09-03**.
+Last documentation reconciliation: **2026-09-04**.
 
 ## Current phase
 
@@ -30,19 +30,22 @@ helix-runtime :8787
     │   └── Production profile/settings state
     │
     ├── JobService / WorkerService
-    ├── Telegram operator + generation services
-    ├── DeliveryWorker
-    └── Comfy adapter boundary
+    ├── PostgreSQL JobDispatcher
+    ├── physical resource helix-gpu-rtx4060-01 (capacity 1)
+    │   ├── helix-comfy-rtx4060-01 -> Comfy adapter
+    │   └── helix-facefusion-rtx4060-01 -> FaceFusion adapter (optional)
+    ├── primary + FaceFusion Telegram services
+    └── bot-keyed DeliveryWorker
     ↓ Tailscale
-helix-rtx4060-01
-    ↓
-ComfyUI :8188
+RTX 4060 PC software backends
 ```
 
 Current worker facts:
 
 ```text
-durable worker ID: helix-rtx4060-01
+physical resource ID: helix-gpu-rtx4060-01
+Comfy backend ID: helix-comfy-rtx4060-01
+FaceFusion backend ID: helix-facefusion-rtx4060-01 (when configured)
 physical worker: Helix RTX 4060
 GPU: RTX 4060
 ComfyUI: 0.33.0
@@ -64,6 +67,18 @@ leibovitz / Annie Leibovitz
 ```
 
 Profiles describe tool authority and operator presentation, not additional hardware or queues.
+
+The repository now also defines:
+
+```text
+faceswap / FaceFusion
+-> face.swap
+-> HyperSwap B / hyperswap_1b_256
+```
+
+FaceFusion is a separate native worker adapter, not a Comfy profile. Jobs become durable before dispatch, and PostgreSQL locks the shared physical-resource row so Comfy and FaceFusion cannot be dispatched concurrently by multiple runtime instances. Waiting jobs can be cancelled before obtaining a backend ID. Ambiguous crash-window claims remain capacity-blocking instead of being automatically retried.
+
+The dedicated FaceFusion Telegram bot supports destination-scoped private-operator and configured FaceFusion forum-topic source-image -> target image/video -> confirmation flows with bot-owned lifecycle delivery. Windows worker 0.2.0 implements the exact contract, and the deployed runtime uses bearer-authenticated PC↔VPS worker communication. Migration 0015 is applied; worker-side input TTL/garbage collection and ambiguous dispatch-claim recovery remain hardening work.
 
 `lowry / John D. Lowry` is currently only a **research candidate** for future image/video upscale/restoration authority. It is not registered in `media-runtime`; no upscale tool is currently part of the Production contract.
 

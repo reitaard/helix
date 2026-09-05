@@ -1,8 +1,8 @@
 # Helix Media Runtime
 
-Execution service used to control the dedicated ComfyUI GPU worker and expose the bounded Helix Production operator/generation surface.
+Durable multi-backend Production execution service for ComfyUI and the separately operated native FaceFusion worker.
 
-Its active scope is intentionally narrow: durably accept media jobs, submit vetted Comfy API workflows, reconcile execution, support cancellation/timeouts, capture artifacts, deliver generated media, expose Telegram controls, and keep backend-specific behavior behind semantic Production boundaries.
+The runtime accepts jobs before backend submission, dispatches them through PostgreSQL-owned physical-resource capacity, reconciles backend execution, supports cancellation/timeouts, captures artifacts, routes delivery to the owning Telegram bot identity, and keeps backend wire behavior behind adapters. The FaceFusion worker 0.2.0 contract is implemented exactly in the client and deployed through authenticated PC↔VPS integration.
 
 See [`../comfyui-worker/README.md`](../comfyui-worker/README.md) for the physical worker checkpoint.
 
@@ -12,36 +12,30 @@ See [`../comfyui-worker/README.md`](../comfyui-worker/README.md) for the physica
 caller / n8n / Telegram
     ↓
 helix-runtime :8787
-    ├── WorkerService + JobService
-    │     ↓
-    │   helix-db
-    │     ├── workers + observations
-    │     ├── media_jobs
-    │     ├── media_references
-    │     ├── media_job_events
-    │     ├── media_deliveries
-    │     ├── operator / pending state
-    │     ├── production profile/settings state
-    │     └── Telegram routing/lifecycle state
-    │
-    ├── WorkerRegistry
-    │     ↓
-    │   ComfyAdapter / ComfyClient
-    │     ↓ Tailscale
-    │   helix-rtx4060-01
-    │     ↓
-    │   ComfyUI :8188
-    │
-    ├── DeliveryWorker
-    ├── Telegram operator/generation services
-    └── persistent execution-event telemetry
+    ├── JobService -> durable accepted job
+    ├── JobDispatcher -> PostgreSQL atomic resource claim
+    ├── execution resource: helix-gpu-rtx4060-01 (capacity 1)
+    │     ├── backend helix-comfy-rtx4060-01
+    │     │     └── ComfyAdapter -> ComfyUI over Tailscale
+    │     └── backend helix-facefusion-rtx4060-01 (optional)
+    │           └── FaceFusionAdapter -> native PC worker over Tailscale
+    ├── helix-db
+    │     ├── execution_resources + workers
+    │     ├── media_jobs + dispatch claims + events
+    │     ├── media_references + media_deliveries
+    │     └── Telegram polling/conversation/lifecycle state
+    ├── DeliveryWorker + bot-keyed Telegram delivery router
+    ├── primary Telegram operator/generation services
+    └── dedicated FaceFusion private-chat poller/service
 ```
 
-## Current worker
+## Physical resource and backends
 
-- Durable ID: `helix-rtx4060-01`
+- Physical execution resource: `helix-gpu-rtx4060-01`
+- Capacity: one active GPU job
+- Comfy backend ID: `helix-comfy-rtx4060-01`; adapter `comfy`
+- Optional FaceFusion backend ID: `helix-facefusion-rtx4060-01`; adapter `facefusion`
 - Physical-worker name: `Helix RTX 4060`
-- Adapter: `comfy`
 - Profile `nolan`: Christopher Nolan; validated `video.i2v`, `video.t2v`
 - Profile `leibovitz`: Annie Leibovitz; `image.t2i`
 - GPU: RTX 4060, 8188 MiB VRAM
@@ -51,7 +45,9 @@ helix-runtime :8787
 - PyTorch: 2.10.0+cu130
 - Physical GPU concurrency: 1
 
-Profiles are logical Production identities on one physical worker, not separate workers or queues.
+Profiles are logical Production identities. Backends are software endpoints. The execution resource represents the shared physical GPU; PostgreSQL resource-row locking serializes Comfy and FaceFusion dispatch without racing backend busy checks.
+
+The FaceFusion `faceswap` profile exposes only `face.swap`, displays `FaceFusion`, and fixes normal production execution to HyperSwap B (`hyperswap_1b_256`).
 
 ## API
 
@@ -110,14 +106,16 @@ The same numeric reference therefore works across Jobs/Downloads/media detail:
 Normal Helix-managed success path:
 
 ```text
-accepted
-  ↓
-queued
+accepted (durable; waiting for resource)
+  ↓ PostgreSQL atomic claim
+queued (backend_job_id persisted)
   ↓
 running
   ↓
 succeeded
 ```
+
+A pending accepted job can be cancelled before it receives a backend ID. A durable `claimed` dispatch holds physical capacity while submission is in flight. Claims are never automatically stolen: if the process dies after backend submission but before persisting the backend ID, the ambiguous claim remains capacity-blocking for manual reconciliation rather than risking duplicate GPU execution.
 
 Additional terminal paths include `cancelled`, `timed_out`, and `failed`.
 
@@ -133,7 +131,7 @@ This WebSocket is **not** durable job truth. A disconnect must not invalidate a 
 
 ## Telegram surfaces
 
-Private operator chat remains the full bounded operator surface, including:
+The existing primary bot remains the full bounded operator surface, including:
 
 ```text
 /status
@@ -159,6 +157,12 @@ T2V includes persisted semantic settings, reset behavior, and Manual/Fast/Qualit
 The repository supports forum routing for one Image topic and one Video topic. Forum pending interactions are isolated by `(chatId, threadId, userId)`. **ForceReply is not used.** A bare `/t2i` or `/t2v` enters scoped `awaiting_prompt` state, sends an ordinary prompt card, and accepts the next plain-text message from that exact conversation while the state remains active. Confirmation/reset actions use inline buttons; operator-only commands and T2V developer settings remain private-chat-only.
 
 The current repository transport includes a regression assertion that prompt-card delivery emits no `force_reply` or `selective` markup.
+
+An optional second bot is dedicated to FaceFusion. It accepts the configured private operator chat and, when both `HELIX_FACEFUSION_TELEGRAM_FORUM_CHAT_ID` and `HELIX_FACEFUSION_TELEGRAM_THREAD_ID` are set, normal-user requests in exactly that forum topic. Other chats and topics are ignored; developer mode is private-operator-only. It reuses `telegram_poll_offsets` under its own Telegram bot ID and owns conversations/settings scoped by bot, chat, thread, and user. Commands follow the primary bot conventions: `/face|/f`, `/fs`, `/face settings|s`, `/face set|s`, `/cancel|/cc|/c`, `/help|/h`, optional matching `@botusername`, and private-only `-d|-dev`.
+
+Inputs are downloaded through a size-bounded temporary spool and decoded with bounded `ffprobe` before worker upload. Source accepts decoded JPG/JPEG/PNG/WEBP images only. Target accepts those image formats or decoded MP4/MOV/M4V/MKV/WEBM video with a valid stream, dimensions, and finite positive duration. Normal video duration defaults to 60 seconds and can be lowered to 1–60 seconds. Private developer sessions use an explicit 1–3600-second override, or the defensive 3600-second ceiling when the override is Native. Duration policy never bypasses decoding, supported formats, authentication, or the configured input-size ceiling.
+
+Default generation submits `settings: {}` so native worker defaults remain unchanged. Telegram V1 exposes only Native/One face mode, Native/0.35/0.50/0.65 strength, and Native/256/512 pixel boost. HyperSwap B is locked. Reference mode, output quality, raw CLI arguments, and model selection are not exposed; worker-side reference capability remains intact for future target-reference UX.
 
 ## Telegram lifecycle/progress deployment
 
@@ -244,7 +248,10 @@ Repository migrations currently include at least:
 0012_media_references.sql
 0013_telegram_forum_topics.sql
 0014_telegram_job_lifecycle.sql
+0015_multi_backend_dispatch_and_telegram_bots.sql
 ```
+
+`0015` adds physical resources, durable dispatch claims, backend-to-resource association, backward-compatible Telegram lifecycle bot identity (`primary` default/backfill), and FaceFusion conversation state.
 
 The 2026-09-01 VPS verification confirmed `0014` effects are present in the live production schema.
 
@@ -295,8 +302,14 @@ Exact counts are dated checkpoints, not permanent invariants.
 - Treat WebSocket progress as advisory presentation telemetry, not durable job truth.
 - Keep forum prompt capture state-scoped by chat/topic/user; do not reintroduce reply-bound ForceReply behavior.
 
-## Next direction
+## FaceFusion worker 0.2.0 contract and integration gate
 
-Continue Production feature-by-feature behind the stable worker/runtime boundary. Current hardening priorities include the submission-before-`backend_job_id` recovery window, concurrent API idempotency, service authentication before broader network trust, CI/integration enforcement, migration governance, explicit delivery semantics, deployment/smoke of the latest scoped prompt-capture fixes, and investigation of the current Telegram polling transport failure.
+Local integration endpoint: `http://100.110.21.79:8791`. It is for testing only and must not be deployed while `apiAuthConfigured=false`. The VPS client supports `Authorization: Bearer <HELIX_FACEFUSION_WORKER_TOKEN>` without committing a token.
+
+The fixed identity is `helix-facefusion-worker` / `facefusion` / `faceswap` / `face.swap`, with HyperSwap B (`hyperswap_1b_256`) and worker capacity one. Helix does not send a model, processor, provider, path, CLI argument, or thread setting. Job creation sends exactly `jobId`, `sourceInputId`, `targetInputId`, and `settings`; the Helix job ID is the worker idempotency key, and no `Idempotency-Key` header is sent. Statuses are exactly `queued|running|succeeded|failed|cancelled`. Successful artifacts are `result.png` (`image/png`) or `result.mp4` (`video/mp4`).
+
+Worker input IDs are random UUID4 hex but currently have no TTL, client scoping, ownership transfer, or automatic terminal cleanup. The VPS performs explicit best-effort deletion for abandoned conversations, cancellation, and observed terminal jobs. Worker-side TTL/garbage collection remains required hardening for crash windows and failed deletions.
+
+Remaining hardening includes worker-side input TTL/garbage collection, upload/artifact retention confirmation, and an operator procedure for ambiguous dispatch-claim recovery.
 
 The main Helix brain direction remains Niche Intelligence.

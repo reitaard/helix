@@ -13,7 +13,8 @@ import {
 } from "../workers/registry.js";
 
 import {
-  applyImageInput
+  applyImageInput,
+  type Workflow
 } from "./workflow-inputs.js";
 
 import type {
@@ -28,10 +29,7 @@ export interface CreateMediaJobInput {
   profileId?: string;
 
   workflow:
-    Record<
-      string,
-      Record<string, unknown>
-    >;
+    Record<string, unknown>;
 
   inputs: {
     image?: string;
@@ -43,6 +41,7 @@ export interface CreateMediaJobInput {
   deliveryContext?: TelegramDestination & {
     provider: "telegram";
     userId: string;
+    botKey?: string;
   };
 
   idempotencyKey:
@@ -106,6 +105,18 @@ export class JobCancellationError
 }
 
 export class JobService {
+  private async cleanupFaceFusionInputs(job: { adapter: string | null; workerId: string | null; request: unknown }) {
+    if (job.adapter !== "facefusion" || !job.workerId || !job.request || typeof job.request !== "object" || Array.isArray(job.request)) return;
+    const workflow = (job.request as Record<string, unknown>).workflow;
+    if (!workflow || typeof workflow !== "object" || Array.isArray(workflow)) return;
+    const payload = workflow as Record<string, unknown>;
+    const handles = [payload.sourceInputId, payload.targetInputId].filter((handle): handle is string => typeof handle === "string");
+    const results = await Promise.allSettled(handles.map(handle => this.workers.deleteInput(job.workerId!, handle)));
+    for (const result of results) {
+      if (result.status === "rejected") console.error("[jobs] FaceFusion input cleanup failed", result.reason);
+    }
+  }
+
   constructor(
     private readonly jobs:
       JobRepository,
@@ -160,15 +171,19 @@ export class JobService {
       };
     }
 
-    if (
-      !job.workerId ||
-      !job.backendJobId
-    ) {
+    if (!job.backendJobId) {
+      const cancelled = await this.jobs.cancelWaiting(id);
+      if (cancelled) await this.cleanupFaceFusionInputs(job);
+      const current = await this.jobs.get(id);
       return {
         jobId: id,
-        cancelled: false,
-        status: job.status
+        cancelled,
+        status: current?.status ?? (cancelled ? "cancelled" : job.status)
       };
+    }
+
+    if (!job.workerId) {
+      return { jobId: id, cancelled: false, status: job.status };
     }
 
     try {
@@ -203,6 +218,8 @@ export class JobService {
             id,
             job.backendJobId
           );
+
+      if (marked) await this.cleanupFaceFusionInputs(job);
 
       const current =
         await this.jobs.get(id);
@@ -295,7 +312,7 @@ export class JobService {
     ) {
       workflow =
         applyImageInput(
-          workflow,
+          workflow as Workflow,
           input.inputs.image
         );
     }
@@ -320,6 +337,9 @@ export class JobService {
 
         adapter:
           worker.runtime,
+
+        resourceId:
+          worker.resourceId,
 
         idempotencyKey:
           input.idempotencyKey,
@@ -352,62 +372,8 @@ export class JobService {
         }
       });
 
-    try {
-      const submission =
-        await this.workers
-          .submit(
-            input.workerId,
-            workflow
-          );
-
-      if (!submission) {
-        throw new Error(
-          "Worker adapter unavailable"
-        );
-      }
-
-      await this.jobs
-        .markQueued({
-          id,
-
-          backendJobId:
-            submission
-              .backendJobId,
-
-          backendResponse:
-            submission
-              .backendResponse
-        });
-
-      const created =
-        await this.jobs.get(
-          id
-        );
-
-      if (!created) {
-        throw new Error(
-          "Created job disappeared"
-        );
-      }
-
-      return created;
-    }
-    catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : String(error);
-
-      await this.jobs
-        .markFailed(
-          id,
-          message
-        );
-
-      throw new JobSubmissionError(
-        id,
-        message
-      );
-    }
+    const created = await this.jobs.get(id);
+    if (!created) throw new Error("Created job disappeared");
+    return created;
   }
 }

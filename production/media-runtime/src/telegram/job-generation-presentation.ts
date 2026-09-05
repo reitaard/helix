@@ -161,7 +161,7 @@ export function renderJobGeneration(
 
   const kind = readString(generation, "kind");
 
-  if (kind !== "t2v" && kind !== "t2i") {
+  if (kind !== "t2v" && kind !== "t2i" && kind !== "face.swap") {
     return null;
   }
 
@@ -179,20 +179,12 @@ export function renderJobGeneration(
   ];
 
   const prompt = readString(generation, "prompt");
-  const workflowVariant = readString(
-    generation,
-    "workflowVariant"
-  );
+  const workflowVariant = readString(generation, "workflowVariant");
   const files = artifactFiles(result);
 
-  lines.push(
-    `<b>Workflow</b> · <i>${escapeHtml(
-      workflowVariant ??
-      (kind === "t2i"
-        ? "FLUX.2 Klein 4B INT8 W8A8"
-        : "LTX 2.5 T2V")
-    )}</i>`
-  );
+  lines.push(`<b>Workflow</b> · <i>${escapeHtml(
+    workflowVariant ?? (kind === "t2i" ? "FLUX.2 Klein 4B INT8 W8A8" : kind === "face.swap" ? "FaceFusion face swap" : "LTX 2.5 T2V")
+  )}</i>`);
 
   if (prompt) {
     lines.push(
@@ -202,12 +194,30 @@ export function renderJobGeneration(
     );
   }
 
-  if (backendJobId) {
+  if (backendJobId && kind !== "face.swap") {
     lines.push(
       `<b>Comfy Prompt</b> · <code>${escapeHtml(
         backendJobId
       )}</code>`
     );
+  }
+
+  if (kind === "face.swap") {
+    const model = readString(generation, "model");
+    const selection = readString(settings, "faceSelectorMode");
+    const position = readNumber(settings, "referenceFacePosition");
+    const weight = readNumber(settings, "weight");
+    const boost = readString(settings, "pixelBoost");
+    const targetKind = readString(generation, "targetMediaKind");
+    if (model) lines.push(`<b>Model</b> · <b>${escapeHtml(model)}</b>`);
+    if (targetKind) lines.push(`<b>Target</b> · <b>${escapeHtml(displayWord(targetKind))}</b>`);
+    if (selection) lines.push(`<b>Face selection</b> · <b>${escapeHtml(selection)}</b>`);
+    if (position !== null) lines.push(`<b>Reference position</b> · <b>${position}</b>`);
+    if (weight !== null) lines.push(`<b>Swap strength</b> · <b>${weight}</b>`);
+    if (boost) lines.push(`<b>Pixel boost</b> · <b>${escapeHtml(boost)}</b>`);
+    if (backendJobId) lines.push(`<b>FaceFusion job</b> · <code>${escapeHtml(backendJobId)}</code>`);
+    appendFiles(lines, files);
+    return `<blockquote expandable>${lines.join("\n")}</blockquote>`;
   }
 
   if (kind === "t2i") {

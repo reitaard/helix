@@ -4,6 +4,7 @@ import {
 } from "node:path";
 
 import {
+  mkdir,
   rm
 } from "node:fs/promises";
 
@@ -29,8 +30,8 @@ import {
 } from "../workers/registry.js";
 
 import {
-  TelegramDelivery
-} from "./telegram.js";
+  TelegramDeliveryRouter
+} from "./telegram-router.js";
 
 import type {
   TelegramDestination,
@@ -46,6 +47,12 @@ import {
 
 class PermanentDeliveryError
   extends Error {}
+
+export function telegramBotKey(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "primary";
+  const key = (value as Record<string, unknown>).botKey;
+  return typeof key === "string" && key.length > 0 ? key : "primary";
+}
 
 export function parseDestination(
   value: unknown,
@@ -64,7 +71,13 @@ export function parseDestination(
   const parsed = { chatId: destination.chatId, threadId: destination.threadId as string | null };
   if (parsed.chatId === privateChatId && parsed.threadId === null) return parsed;
   if (!forum || parsed.chatId !== forum.chatId) throw new PermanentDeliveryError("Unapproved Telegram delivery destination");
-  const expectedThread = tool === "image.t2i" ? forum.imageThreadId : tool === "video.t2v" ? forum.videoThreadId : null;
+  const expectedThread = tool === "image.t2i"
+    ? forum.imageThreadId
+    : tool === "video.t2v"
+      ? forum.videoThreadId
+      : tool === "face.swap"
+        ? forum.faceFusionThreadId
+        : null;
   if (!expectedThread || parsed.threadId !== expectedThread) {
     throw new PermanentDeliveryError("Telegram delivery destination does not match job tool");
   }
@@ -91,13 +104,12 @@ function parseArtifact(
   if (
     typeof artifact.filename !==
       "string" ||
-    typeof artifact.subfolder !==
-      "string" ||
+    (artifact.subfolder !== undefined && typeof artifact.subfolder !== "string") ||
     typeof artifact.type !==
       "string"
   ) {
     throw new PermanentDeliveryError(
-      "Artifact is missing filename, subfolder, or type"
+      "Artifact is missing filename or type"
     );
   }
 
@@ -105,12 +117,13 @@ function parseArtifact(
     filename:
       artifact.filename,
 
-    subfolder:
-      artifact.subfolder,
+    ...(typeof artifact.subfolder === "string" ? { subfolder: artifact.subfolder } : {}),
 
     type:
       artifact.type,
 
+    ...(typeof artifact.artifactId === "string" ? { artifactId: artifact.artifactId } : {}),
+    ...(artifact.mediaKind === "image" || artifact.mediaKind === "video" ? { mediaKind: artifact.mediaKind } : {}),
     ...(
       typeof artifact.nodeId ===
         "string"
@@ -141,13 +154,10 @@ export class DeliveryWorker {
       WorkerRegistry,
 
     private readonly telegram:
-      TelegramDelivery,
+      TelegramDeliveryRouter,
 
     private readonly spoolDir:
       string,
-
-    private readonly privateChatId: string,
-    private readonly forum: TelegramForumConfig | null,
 
     private readonly intervalMs =
       3000,
@@ -237,7 +247,10 @@ export class DeliveryWorker {
           delivery.profileId
         );
 
-      await this.telegram.editHtml(
+      const route = this.telegram.get(lifecycle.botKey);
+      if (!route) throw new Error(`Telegram bot is not configured: ${lifecycle.botKey}`);
+
+      await route.delivery.editHtml(
         lifecycle.messageId,
         terminal
           ? deliveryFailedProgressHtml(lifecycle, workerName, message)
@@ -247,7 +260,7 @@ export class DeliveryWorker {
               attemptCount,
               retryAfterSeconds ?? 0
             ),
-        { chatId: lifecycle.chatId, threadId: null }
+        { chatId: lifecycle.chatId, threadId: lifecycle.threadId }
       );
 
       await this.lifecycles
@@ -299,11 +312,14 @@ export class DeliveryWorker {
             );
           }
 
+          const botKey = telegramBotKey(delivery.destination);
+          const route = this.telegram.get(botKey);
+          if (!route) throw new PermanentDeliveryError(`Telegram bot is not configured: ${botKey}`);
           const telegramDestination = parseDestination(
             delivery.destination,
             delivery.tool,
-            this.privateChatId,
-            this.forum
+            route.privateChatId,
+            route.forum
           );
 
           const artifact =
@@ -319,6 +335,8 @@ export class DeliveryWorker {
                   "/"
                 )
             );
+
+          await mkdir(this.spoolDir, { recursive: true });
 
           destination =
             join(
@@ -351,10 +369,11 @@ export class DeliveryWorker {
               ? `${media.width}×${media.height}`
               : "Unknown";
 
-          const mediaMetadata =
-            delivery.tool === "image.t2i"
-              ? { kind: "image" as const, value: `${resolution} · ${formatBytes(media.sizeBytes)}` }
-              : { kind: "video" as const, value: `${resolution} · ${formatDuration(media.durationSeconds)} · ${formatBytes(media.sizeBytes)}`, audio: media.audioPresent ? "Present" : "Absent" };
+          const isVideo = artifact.mediaKind === "video" ||
+            (artifact.mediaKind !== "image" && (media.durationSeconds !== null || media.audioPresent));
+          const mediaMetadata = isVideo
+            ? { kind: "video" as const, value: `${resolution} · ${formatDuration(media.durationSeconds)} · ${formatBytes(media.sizeBytes)}`, audio: media.audioPresent ? "Present" : "Absent" }
+            : { kind: "image" as const, value: `${resolution} · ${formatBytes(media.sizeBytes)}` };
 
           const workerName =
             this.workers.profileDisplayName(
@@ -398,14 +417,14 @@ export class DeliveryWorker {
 
           const document =
             replaceLifecycle
-              ? await this.telegram.editDocument({
+              ? await route.delivery.editDocument({
                   messageId: lifecycle.messageId,
                   filePath: destination,
                   filename: safeFilename,
                   metadata,
-                  destination: { chatId: lifecycle.chatId, threadId: null }
+                  destination: { chatId: lifecycle.chatId, threadId: lifecycle.threadId }
                 })
-              : await this.telegram.sendDocument({
+              : await route.delivery.sendDocument({
                   filePath: destination,
                   filename: safeFilename,
                   metadata,

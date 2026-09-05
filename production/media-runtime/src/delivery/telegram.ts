@@ -417,6 +417,25 @@ export class TelegramDelivery {
     );
   }
 
+  async editHtmlClearingKeyboard(
+    messageId: string,
+    html: string,
+    destination: TelegramDestination = { chatId: this.chatId, threadId: null }
+  ): Promise<TelegramMessageResult> {
+    return parseEditMessageResult(
+      await this.postJson("editMessageText", {
+        chat_id: destination.chatId,
+        message_id: telegramMessageId(messageId),
+        text: html,
+        parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
+        reply_markup: { inline_keyboard: [] }
+      }),
+      "Telegram editMessageText",
+      messageId
+    );
+  }
+
   async sendDocumentFile(
     input: {
       filePath: string;

@@ -30,6 +30,12 @@ import {
   JobService
 } from "./jobs/service.js";
 
+import { JobDispatcher } from "./jobs/dispatcher.js";
+import { DispatchRepository } from "./repositories/dispatch-repository.js";
+import { FaceFusionConversationRepository } from "./repositories/facefusion-conversation-repository.js";
+import { FaceFusionSettingsRepository } from "./repositories/facefusion-settings-repository.js";
+import { FaceFusionJobCatalog } from "./repositories/facefusion-job-catalog.js";
+
 import {
   DeliveryRepository
 } from "./repositories/delivery-repository.js";
@@ -101,6 +107,7 @@ import {
 import {
   TelegramDelivery
 } from "./delivery/telegram.js";
+import { TelegramDeliveryRouter } from "./delivery/telegram-router.js";
 
 import {
   TelegramCommandService
@@ -153,6 +160,7 @@ import {
 import {
   TelegramAlertService
 } from "./telegram/alert-service.js";
+import { TelegramFaceFusionService } from "./telegram/facefusion-service.js";
 
 import {
   ComfyUpdateChecker
@@ -178,16 +186,20 @@ await db.query(
 const workerRepository =
   new WorkerRepository(db);
 
-for (
-  const worker of
-  config.workers
-) {
-  await workerRepository
-    .upsertWorker({
-      id: worker.id,
-      profile: "comfy",
-      adapter: worker.adapter
-    });
+for (const resource of config.executionResources) {
+  await workerRepository.upsertExecutionResource({
+    id: resource.id,
+    capacity: resource.maxConcurrentGpuJobs
+  });
+}
+
+for (const worker of config.workers) {
+  await workerRepository.upsertWorker({
+    id: worker.id,
+    profile: worker.productionProfiles.map(profile => profile.id).join(","),
+    adapter: worker.adapter,
+    resourceId: worker.resourceId
+  });
 }
 
 const registry =
@@ -201,18 +213,16 @@ const workers =
     workerRepository
   );
 
-const physicalWorker =
-  config.workers[0] ?? null;
+const comfyWorker = config.workers.find(worker => worker.adapter === "comfy") ?? null;
+const facefusionWorker = config.workers.find(worker => worker.adapter === "facefusion") ?? null;
 
-const nolanProfile =
-  physicalWorker?.productionProfiles.find(
-    profile => profile.id === "nolan"
-  ) ?? null;
+const nolanProfile = comfyWorker?.productionProfiles.find(
+  profile => profile.id === "nolan"
+) ?? null;
 
-const leibovitzProfile =
-  physicalWorker?.productionProfiles.find(
-    profile => profile.id === "leibovitz"
-  ) ?? null;
+const leibovitzProfile = comfyWorker?.productionProfiles.find(
+  profile => profile.id === "leibovitz"
+) ?? null;
 
 const jobRepository =
   new JobRepository(db);
@@ -269,13 +279,23 @@ const t2vSettingsRepository =
 const telegramPollOffsetRepository =
   new TelegramPollOffsetRepository(db);
 
-const telegramDelivery =
-  config.telegram
-    ? new TelegramDelivery(
-        config.telegram.botToken,
-        config.telegram.chatId
-      )
-    : null;
+const telegramDelivery = config.telegram
+  ? new TelegramDelivery(config.telegram.botToken, config.telegram.chatId)
+  : null;
+const facefusionTelegramDelivery = config.facefusionTelegram
+  ? new TelegramDelivery(config.facefusionTelegram.botToken, config.facefusionTelegram.chatId)
+  : null;
+const telegramDeliveryRouter = new TelegramDeliveryRouter([
+  ...(telegramDelivery && config.telegram ? [{ key: "primary", delivery: telegramDelivery, privateChatId: config.telegram.chatId, forum: config.telegram.forum }] : []),
+  ...(facefusionTelegramDelivery && config.facefusionTelegram ? [{
+    key: "facefusion",
+    delivery: facefusionTelegramDelivery,
+    privateChatId: config.facefusionTelegram.chatId,
+    forum: config.facefusionTelegram.forum
+      ? { chatId: config.facefusionTelegram.forum.chatId, faceFusionThreadId: config.facefusionTelegram.forum.threadId }
+      : null
+  }] : [])
+]);
 
 const t2vModeService =
   new T2VModeService(
@@ -283,10 +303,10 @@ const t2vModeService =
   );
 
 const t2vProfileService =
-  physicalWorker
+  comfyWorker
     ? new T2VProfileService(
         t2vSettingsRepository,
-        physicalWorker.endpoint
+        comfyWorker.endpoint
       )
     : null;
 
@@ -331,7 +351,7 @@ const telegramT2VSettingsService =
 
 const telegramT2VResetService =
   config.telegram &&
-  physicalWorker &&
+  comfyWorker &&
   nolanProfile &&
   t2vProfileService
     ? new TelegramT2VResetService(
@@ -357,9 +377,14 @@ const jobs =
     deliveryRepository
   );
 
+const dispatcher = new JobDispatcher(
+  new DispatchRepository(db),
+  registry
+);
+
 const telegramCancelService =
   config.telegram &&
-  physicalWorker &&
+  comfyWorker &&
   nolanProfile
     ? new TelegramCancelService(
         config.telegram.chatId,
@@ -373,7 +398,7 @@ const telegramCancelService =
 const telegramT2VService =
   config.telegram &&
   telegramDelivery &&
-  physicalWorker &&
+  comfyWorker &&
   nolanProfile &&
   t2vProfileService &&
   telegramT2VModeService &&
@@ -381,7 +406,7 @@ const telegramT2VService =
   telegramT2VResetService
     ? new TelegramT2VService(
         config.telegram.chatId,
-        physicalWorker.id,
+        comfyWorker.id,
         nolanProfile.displayName,
         config.t2vWorkflowPath,
         jobs,
@@ -399,14 +424,14 @@ const telegramT2VService =
 const telegramT2IService =
   config.telegram &&
   telegramDelivery &&
-  physicalWorker &&
+  comfyWorker &&
   leibovitzProfile &&
   t2iProfileService &&
   telegramT2ISettingsService &&
   telegramT2IResetService
     ? new TelegramT2IService(
         config.telegram.chatId,
-        physicalWorker.id,
+        comfyWorker.id,
         leibovitzProfile.displayName,
         config.t2iWorkflowPath,
         jobs,
@@ -424,42 +449,39 @@ const reconciler =
     jobRepository,
     registry,
     3000,
-    config.telegram
+    config.telegram || config.facefusionTelegram
       ? ["telegram"]
       : [],
 
     config.jobTimeoutMs
   );
 
-const deliveryWorker =
-  telegramDelivery
-    ? new DeliveryWorker(
-        deliveryRepository,
-        telegramJobLifecycleRepository,
-        registry,
-        telegramDelivery,
-        config.spoolDir,
-        telegramDelivery ? config.telegram?.chatId ?? "" : "",
-        config.telegram?.forum ?? null
-      )
-    : null;
+const deliveryWorker = telegramDeliveryRouter.keys().length > 0
+  ? new DeliveryWorker(
+      deliveryRepository,
+      telegramJobLifecycleRepository,
+      registry,
+      telegramDeliveryRouter,
+      config.spoolDir
+    )
+  : null;
 
 const telegramProgressService =
   telegramDelivery &&
-  physicalWorker
+  comfyWorker
     ? new TelegramProgressService(
-        physicalWorker.id,
+        comfyWorker.id,
         registry,
         telegramJobLifecycleRepository,
-        telegramDelivery
+        telegramDeliveryRouter
       )
     : null;
 
 const telegramDownloadsService =
   telegramDelivery &&
-  physicalWorker
+  comfyWorker
     ? new TelegramDownloadsService(
-        physicalWorker.id,
+        comfyWorker.id,
         config.spoolDir,
         registry,
         artifactSourceRepository,
@@ -468,21 +490,21 @@ const telegramDownloadsService =
     : null;
 
 const comfyUpdateChecker =
-  physicalWorker
+  comfyWorker
     ? new ComfyUpdateChecker(
-        physicalWorker
+        comfyWorker
           .revision
       )
     : null;
 
 const telegramAlertService =
   config.telegram &&
-  physicalWorker
+  comfyWorker
     ? new TelegramAlertService(
         config.telegram.botToken,
         config.telegram.chatId,
-        physicalWorker.id,
-        physicalWorker.name,
+        comfyWorker.id,
+        comfyWorker.name,
         operatorAlertRepository,
         registry
       )
@@ -490,7 +512,7 @@ const telegramAlertService =
 
 const telegramCommandService =
   config.telegram &&
-  physicalWorker &&
+  comfyWorker &&
   comfyUpdateChecker &&
   telegramCancelService &&
   telegramT2VService &&
@@ -499,7 +521,7 @@ const telegramCommandService =
     ? new TelegramCommandService(
         config.telegram.botToken,
         config.telegram.chatId,
-        physicalWorker.id,
+        comfyWorker.id,
         comfyUpdateChecker,
         db,
         registry,
@@ -513,6 +535,29 @@ const telegramCommandService =
         telegramT2IService,
         config.telegram.forum,
         telegramPollOffsetRepository
+      )
+    : null;
+
+const facefusionConversationRepository = new FaceFusionConversationRepository(db);
+const facefusionSettingsRepository = new FaceFusionSettingsRepository(db);
+const facefusionJobCatalog = new FaceFusionJobCatalog(db);
+const telegramFaceFusionService =
+  config.facefusionTelegram && facefusionTelegramDelivery && facefusionWorker
+    ? new TelegramFaceFusionService(
+        config.facefusionTelegram.botToken,
+        config.facefusionTelegram.chatId,
+        facefusionWorker.id,
+        jobs,
+        facefusionConversationRepository,
+        facefusionSettingsRepository,
+        telegramJobLifecycleRepository,
+        telegramPollOffsetRepository,
+        registry,
+        facefusionTelegramDelivery,
+        config.spoolDir,
+        config.facefusionInputMaxBytes,
+        facefusionJobCatalog,
+        config.facefusionTelegram.forum
       )
     : null;
 
@@ -531,6 +576,8 @@ async function shutdown(
   );
 
   telegramCommandService?.stop();
+  telegramFaceFusionService?.stop();
+  dispatcher.stop();
   telegramProgressService?.stop();
   telegramT2VService?.stop();
   telegramT2IService?.stop();
@@ -570,6 +617,7 @@ try {
   });
 
   telegramProgressService?.start();
+  dispatcher.start();
   reconciler.start();
   deliveryWorker?.start();
   telegramAlertService?.start();
@@ -577,11 +625,14 @@ try {
   telegramT2VService?.start();
   telegramT2IService?.start();
   telegramCommandService?.start();
+  void telegramFaceFusionService?.start();
 }
 catch (error) {
   app.log.error(error);
 
   telegramCommandService?.stop();
+  telegramFaceFusionService?.stop();
+  dispatcher.stop();
   telegramProgressService?.stop();
   telegramT2VService?.stop();
   telegramT2IService?.stop();

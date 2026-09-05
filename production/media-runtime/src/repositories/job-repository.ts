@@ -14,6 +14,10 @@ interface MediaJobRow {
 
   backend_job_id:
     string | null;
+  resource_id?: string | null;
+  dispatch_state?: string | null;
+  dispatch_token?: string | null;
+  dispatch_claimed_at?: Date | null;
 
   idempotency_key:
     string | null;
@@ -41,6 +45,10 @@ export interface MediaJob {
 
   backendJobId:
     string | null;
+  resourceId: string | null;
+  dispatchState: string | null;
+  dispatchToken: string | null;
+  dispatchClaimedAt: string | null;
 
   idempotencyKey:
     string | null;
@@ -76,6 +84,10 @@ function mapJob(
 
     backendJobId:
       row.backend_job_id,
+    resourceId: row.resource_id ?? null,
+    dispatchState: row.dispatch_state ?? null,
+    dispatchToken: row.dispatch_token ?? null,
+    dispatchClaimedAt: row.dispatch_claimed_at?.toISOString() ?? null,
 
     idempotencyKey:
       row.idempotency_key,
@@ -159,6 +171,10 @@ export class JobRepository {
           profile_id,
           adapter,
           backend_job_id,
+          resource_id,
+          dispatch_state,
+          dispatch_token,
+          dispatch_claimed_at,
           idempotency_key,
           request,
           result,
@@ -227,6 +243,7 @@ export class JobRepository {
       workerId: string;
       profileId: string;
       adapter: string;
+      resourceId: string;
 
       idempotencyKey:
         string | null;
@@ -252,6 +269,7 @@ export class JobRepository {
           worker_id,
           profile_id,
           adapter,
+          resource_id,
           idempotency_key,
           delivery_context,
           request
@@ -264,8 +282,9 @@ export class JobRepository {
           $4,
           $5,
           $6,
-          $7::jsonb,
-          $8::jsonb
+          $7,
+          $8::jsonb,
+          $9::jsonb
         )
         `,
         [
@@ -274,6 +293,7 @@ export class JobRepository {
           input.workerId,
           input.profileId,
           input.adapter,
+          input.resourceId,
           input.idempotencyKey,
           input.deliveryContext ? JSON.stringify(input.deliveryContext) : null,
           JSON.stringify(
@@ -411,6 +431,7 @@ export class JobRepository {
         UPDATE media_jobs
         SET
           status = 'failed',
+          dispatch_state = 'completed',
           error = $2::jsonb,
           updated_at = NOW(),
           finished_at = NOW()
@@ -826,6 +847,7 @@ export class JobRepository {
           UPDATE media_jobs
           SET
             status = 'succeeded',
+            dispatch_state = 'completed',
             result = $2::jsonb,
             started_at =
               COALESCE(
@@ -973,6 +995,7 @@ export class JobRepository {
           UPDATE media_jobs
           SET
             status = 'failed',
+            dispatch_state = 'completed',
             error = $2::jsonb,
             finished_at = NOW(),
             updated_at = NOW()
@@ -1063,6 +1086,7 @@ export class JobRepository {
           UPDATE media_jobs
           SET
             status = 'cancelled',
+            dispatch_state = 'completed',
             finished_at = NOW(),
             updated_at = NOW()
           WHERE id = $1
@@ -1161,6 +1185,7 @@ export class JobRepository {
           UPDATE media_jobs
           SET
             status = 'timed_out',
+            dispatch_state = 'completed',
             error = $2::jsonb,
             finished_at = NOW(),
             updated_at = NOW()
@@ -1220,5 +1245,43 @@ export class JobRepository {
     }
   }
 
+
+  async cancelWaiting(id: string): Promise<boolean> {
+    const client = await this.db.connect();
+    try {
+      await client.query("BEGIN");
+      const updated = await client.query(
+        `
+        UPDATE media_jobs
+        SET status = 'cancelled', dispatch_state = 'completed',
+            finished_at = NOW(), updated_at = NOW()
+        WHERE id = $1
+          AND status = 'accepted'
+          AND dispatch_state = 'pending'
+          AND backend_job_id IS NULL
+        RETURNING id
+        `,
+        [id]
+      );
+      if ((updated.rowCount ?? 0) === 1) {
+        await client.query(
+          `
+          INSERT INTO media_job_events (job_id, sequence, event_type, stage, payload)
+          SELECT $1, COALESCE(MAX(sequence), 0) + 1,
+                 'job.cancelled', 'cancelled', '{"waitingForResource":true}'::jsonb
+          FROM media_job_events WHERE job_id = $1
+          `,
+          [id]
+        );
+      }
+      await client.query("COMMIT");
+      return (updated.rowCount ?? 0) === 1;
+    }
+    catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+    finally { client.release(); }
+  }
 
 }
