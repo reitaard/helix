@@ -495,6 +495,29 @@ test("FaceFusion active-session profile changes preserve captured handles and up
   } finally { await h.restore(); }
 });
 
+test("FaceFusion revalidates stored target duration against settings at generate", async () => {
+  const created = [];
+  const h = await faceFusionServiceHarness(undefined, { async create(input) { created.push(input); return { id: `job-${created.length}`, jobNumber: String(created.length) }; } });
+  const generate = async state => h.service.processUpdate({ update_id: 78, callback_query: { id: "cb", data: "ff:generate", from: { id: "42" }, message: { message_id: state.confirmationMessageId, chat: { id: "42", type: "private" } } } });
+  try {
+    await h.service.processUpdate(privateMessage({ text: "/f" }));
+    await h.service.processUpdate(privateMessage({ photo: [{ file_id: "source-50" }] }));
+    await h.service.processUpdate(privateMessage({ video: { file_id: "target-50", file_name: "target-50s.mp4" } }));
+    await h.service.processUpdate(privateMessage({ text: "/f set time 30" }));
+    await generate([...h.states.values()][0]);
+    assert.equal(created.length, 0);
+    assert.match(rendered(h.sent.at(-1).html), /Video is too long\.\nCurrent limit · 30s/);
+    assert.equal([...h.states.values()][0].phase, "confirming");
+
+    await h.service.processUpdate(privateMessage({ text: "/c" }));
+    await h.service.processUpdate(privateMessage({ text: "/f" }));
+    await h.service.processUpdate(privateMessage({ photo: [{ file_id: "source-30" }] }));
+    await h.service.processUpdate(privateMessage({ video: { file_id: "target-30", file_name: "target-30s.mp4" } }));
+    await generate([...h.states.values()][0]);
+    assert.equal(created.length, 1);
+  } finally { await h.restore(); }
+});
+
 test("FaceFusion reset syncs only its owned active session", async () => {
   const h = await faceFusionServiceHarness();
   try {

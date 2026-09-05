@@ -325,6 +325,10 @@ export class TelegramFaceFusionService {
     return `${profileTitle("FaceFusion")}\n${message}`;
   }
 
+  private durationRejected(limit: number) {
+    return `${profileTitle("FaceFusion")}\nVideo is too long.\nCurrent limit · ${limit}s`;
+  }
+
   private async setSetting(userId: string, destination: FaceFusionDestination, dev: boolean, rawName: string, rawValue: string) {
     if (dev && !this.isPrivateOperator(destination, userId)) return this.devDenied();
     const name = settingName(rawName);
@@ -472,7 +476,7 @@ export class TelegramFaceFusionService {
       try { uploaded = await this.downloadAndUpload(media, state.phase === "awaiting_source" ? "source" : "target", session); }
       catch (error) {
         if (error instanceof FaceFusionDurationError) {
-          await this.telegram.sendHtml(`${profileTitle("FaceFusion")}\nVideo is too long.\nCurrent limit · ${error.limit}s\nUse developer mode from the private operator chat for longer targets.`, destination); return;
+          await this.telegram.sendHtml(this.durationRejected(error.limit), destination); return;
         }
         if (error instanceof InvalidFaceFusionMediaError) {
           await this.telegram.sendHtml(`${profileTitle("FaceFusion")}\n${state.phase === "awaiting_source" ? "Send a valid source face image." : "Send a valid target image or video."}`, destination); return;
@@ -522,6 +526,11 @@ export class TelegramFaceFusionService {
     if (action === "ff:confirm") { await this.showConfirmation(userId, destination); return; }
     if (action !== "ff:generate" || !state.sourceInputHandle || !state.targetInputHandle) return;
 
+    const durationLimit = faceFusionDurationLimit(session);
+    if (session.target?.mediaKind === "video" && session.target.durationSeconds !== null && session.target.durationSeconds > durationLimit) {
+      await this.telegram.sendHtml(this.durationRejected(durationLimit), destination);
+      return;
+    }
     const settings = normalizeFaceFusionSettings(session.generation);
     let jobCreated = false;
     try {
@@ -529,7 +538,7 @@ export class TelegramFaceFusionService {
         tool: "face.swap", workerId: this.workerId, profileId: "faceswap",
         workflow: { sourceInputId: state.sourceInputHandle, targetInputId: state.targetInputHandle, settings },
         inputs: {},
-        generation: { kind: "face.swap", model: FACEFUSION_DISPLAY_MODEL, settings, targetMediaKind: state.targetMediaKind, target: session.target, access: session.dev ? "dev" : "normal", durationLimitSeconds: faceFusionDurationLimit(session) },
+        generation: { kind: "face.swap", model: FACEFUSION_DISPLAY_MODEL, settings, targetMediaKind: state.targetMediaKind, target: session.target, access: session.dev ? "dev" : "normal", durationLimitSeconds: durationLimit },
         deliveryContext: { provider: "telegram", botKey: "facefusion", chatId: destination.chatId, threadId: destination.threadId, userId },
         idempotencyKey: `telegram:facefusion:${this.bot.id}:${destination.chatId}:${destination.threadId ?? "private"}:${callbackMessage.message_id ?? update.update_id}`
       });

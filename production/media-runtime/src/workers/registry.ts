@@ -66,9 +66,12 @@ export class WorkerRegistry {
     const canonicalId = this.canonicalId(id); const worker = this.definitions.get(canonicalId); const adapter = this.adapters.get(canonicalId);
     if (!worker || !adapter) return null;
     const result = await adapter.readiness();
-    const executionReady = result.transportReady && result.checks.runtime && result.checks.queue && result.checks.capabilities;
+    const checksReady = result.checks.runtime && result.checks.queue && result.checks.capabilities;
     const faceFusionPolicyFailure = adapter.kind === "facefusion" && result.errors.some(error => error.startsWith("FaceFusion worker API authentication") || error.startsWith("FaceFusion worker reported ready=") || error.startsWith("FaceFusion readiness check failed:"));
-    const state: WorkerState = !result.transportReady ? faceFusionPolicyFailure ? "degraded" : "offline" : executionReady ? (result.queue?.running ?? 0) > 0 ? "busy" : "cold_ready" : "degraded";
+    const executionReady = adapter.kind === "facefusion" ? result.transportReady && checksReady : checksReady;
+    const state: WorkerState = adapter.kind === "facefusion"
+      ? faceFusionPolicyFailure ? "degraded" : !result.transportReady ? "offline" : executionReady ? (result.queue?.running ?? 0) > 0 ? "busy" : "cold_ready" : "degraded"
+      : !result.checks.runtime ? "offline" : executionReady ? (result.queue?.running ?? 0) > 0 ? "busy" : "cold_ready" : "degraded";
     return { workerId: worker.id, name: worker.name, revision: worker.revision, state, ...result };
   }
   async queue(id: string) { const adapter = this.adapters.get(this.canonicalId(id)); return adapter instanceof ComfyAdapter ? adapter.queueSummary() : null; }

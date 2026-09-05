@@ -48,6 +48,11 @@ test("legacy Comfy ID is canonical across registry and job creation", async () =
   assert.equal(created[0].request.workerId, canonical);
 });
 
+test("WorkerRegistry keeps Comfy execution-ready when advisory events transport is unavailable", async () => {
+  const registry = new WorkerRegistry([workers[0]], new Map([["comfy", { ...adapter("comfy"), async readiness() { return { adapter: "comfy", transportReady: false, checks: { runtime: true, queue: true, capabilities: true, events: false }, latencyMs: 1, errors: ["WebSocket unavailable"] }; } }]]));
+  assert.equal((await registry.readiness("comfy")).state, "cold_ready");
+});
+
 test("WorkerRegistry marks FaceFusion auth-disabled readiness as degraded", async () => {
   const registry = new WorkerRegistry([workers[1]], new Map([["facefusion", { ...adapter("facefusion"), async readiness() { return { adapter: "facefusion", transportReady: false, checks: { runtime: false, queue: false, capabilities: false, events: false }, latencyMs: 1, errors: ["FaceFusion worker API authentication is not configured"] }; } }]]));
   const ready = await registry.readiness("facefusion");
