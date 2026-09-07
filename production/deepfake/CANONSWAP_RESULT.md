@@ -2,7 +2,7 @@
 
 Date: **2026-09-07**
 
-Status: **optimized CanonSwap execution is now proven on the local RTX 4060; quality comparison against FaceFusion is still pending review of the completed 20-second output.**
+Status: **optimized CanonSwap execution is proven on the local RTX 4060, but the completed 20-second quality review is a fail for this target. CanonSwap is rejected as the current Helix Production candidate because it preserves camera engagement / gaze behavior worse than FaceFusion while also running far slower.**
 
 ## Environment
 
@@ -159,43 +159,41 @@ total GPU memory shown by Task Manager: ~10.5 GB
 
 The run completed without OOM and reconstructed the final MP4 with target audio.
 
-## Interpretation
+## Completed visual review
 
-CanonSwap is now **operationally viable for research on the RTX 4060**, but it is far slower than the FaceFusion baseline.
+The full 605-frame output was reviewed against the earlier FaceFusion HyperSwap 1B/1C results on the same talking-head source material.
 
-FaceFusion D0 measured roughly:
+The decisive failure is **target camera engagement / gaze preservation**.
 
-```text
-~4.99 processed fps
-```
-
-whereas the optimized CanonSwap 20-second run measured roughly:
+Observed CanonSwap behavior:
 
 ```text
-~0.20 overall fps
+- the generated face repeatedly appears to look upward or away from the camera;
+- eye direction / facial attitude does not follow the target performance as faithfully as the FaceFusion outputs;
+- the result therefore feels less like the original on-camera delivery even when the face itself remains temporally coherent;
+- on this UGC/talking-head clip, this behavior is immediately more distracting than FaceFusion's smoother/generic identity-rendering weakness.
 ```
 
-The engines are not performing identical pipelines, so this is not a pure model-speed benchmark, but CanonSwap is clearly in a much slower execution class on this worker.
+Representative aligned-frame inspection confirmed the user's observation: CanonSwap changes the perceived gaze and facial orientation enough that the subject often appears to avoid direct camera engagement, while HyperSwap 1B/1C retain the target's direct-to-camera performance more convincingly.
 
-Because the user has stated that time is not currently the primary constraint, CanonSwap should remain in contention **only if its finished visual quality is materially better** than HyperSwap 1B/1C.
+CanonSwap exposes experimental eye/lip retargeting controls in its inherited LivePortrait-style configuration, but those paths are marked WIP / not recommended in the published config. Because the current failure is a core performance-preservation problem and FaceFusion already performs better on this dimension, further CanonSwap tuning is not justified at this stage.
 
-## Next decision gate
-
-Do not optimize CanonSwap further before reviewing the completed 20-second result.
-
-Compare against the best FaceFusion candidates on:
+## Verdict
 
 ```text
-identity fidelity
-mouth openness / speech performance
-eye motion and blinking
-head-turn robustness
-skin/detail quality
-face boundary / paste-back quality
-temporal stability
-FP16 artifacts
+execution feasibility:        PASS after local optimization
+20-second completion:         PASS
+memory fit on RTX 4060:       PASS with shared-memory spill
+runtime competitiveness:      FAIL
+camera/gaze preservation:     FAIL
+finished quality vs 1B/1C:    FAIL
+current Production candidate: REJECT
 ```
 
-If CanonSwap clearly wins quality, continue production-oriented optimization and consider a larger-GPU worker later.
+CanonSwap remains useful as architectural research evidence: Helix should keep a swappable face-engine boundary rather than hard-coding FaceFusion. However, CanonSwap should not receive additional optimization effort for the current Production route unless a future target class specifically benefits from its canonical-space behavior.
 
-If quality is only comparable to FaceFusion, prefer the operationally simpler/faster engine path and continue evaluating newer FaceFusion models or another architecture.
+## Next decision
+
+Return to the faster FaceFusion path, but do **not** lock Helix architecture to FaceFusion.
+
+The next high-value model test is the newer FaceFusion 3.9 `alphaface_256` path on the same source/target material, with HyperSwap 1B/1C retained as established baselines. Only after that result should reference preparation or further backend challengers be prioritized.
