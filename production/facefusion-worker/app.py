@@ -5,7 +5,6 @@ import math
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import threading
 import time
@@ -222,12 +221,20 @@ def save_job(job_id: str, record: dict[str, Any]) -> None:
     atomic_json(job_state_path(job_id), record)
 
 
+def safe_error(value: Any) -> dict[str, str]:
+    if isinstance(value, dict) and value.get("code") in SAFE_JOB_ERRORS:
+        return {"code": str(value["code"])}
+    return {"code": "processing_failed"}
+
+
 def job_response(record: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {"status": record["status"]}
     if record["status"] == "succeeded":
         result["artifact"] = record["artifact"]
     elif record["status"] == "failed":
-        result["error"] = record["error"]
+        # 0.2.0 failed job records did not persist a structured error. Keep
+        # historical reads safe and compatible without exposing raw logs.
+        result["error"] = safe_error(record.get("error"))
     return result
 
 
@@ -324,6 +331,7 @@ def run_job(job_id: str) -> None:
     finally:
         with state_lock:
             processes.pop(job_id, None)
+            cancelled_jobs.discard(job_id)
             if active_job_id == job_id:
                 active_job_id = None
 
@@ -496,7 +504,6 @@ def get_job(job_id: str, authorization: str | None = Header(default=None)) -> di
 
 @app.post("/v1/jobs/{job_id}/cancel")
 def cancel_job(job_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    global active_job_id
     require_auth(authorization)
     with state_lock:
         record = load_job(job_id)
@@ -511,8 +518,9 @@ def cancel_job(job_id: str, authorization: str | None = Header(default=None)) ->
         record.pop("artifact", None)
         record.pop("error", None)
         save_job(job_id, record)
-        if active_job_id == job_id:
-            active_job_id = None
+        # Do not release active_job_id here. terminate() is asynchronous and the
+        # old FaceFusion process may still own CUDA. The runner finally block
+        # releases worker capacity only after the process has actually exited.
         return job_response(record)
 
 
