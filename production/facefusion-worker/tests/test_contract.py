@@ -46,7 +46,7 @@ class WorkerContractTests(unittest.TestCase):
         self.assertEqual(self.app.classify_failure("traceback secret path", ""), "processing_failed")
         self.assertEqual(self.app.job_response({"status": "failed"}), {"status": "failed", "error": {"code": "processing_failed"}})
 
-    def test_cancel_keeps_capacity_reserved_until_runner_exits(self):
+    def test_cancel_waits_for_process_and_keeps_capacity_reserved(self):
         job_id = "job_cancel_capacity"
         original_active = self.app.active_job_id
         original_processes = dict(self.app.processes)
@@ -55,12 +55,19 @@ class WorkerContractTests(unittest.TestCase):
         class FakeProcess:
             def __init__(self):
                 self.terminated = False
+                self.waited = False
+                self.exited = False
 
             def poll(self):
-                return None
+                return 0 if self.exited else None
 
             def terminate(self):
                 self.terminated = True
+
+            def wait(self, timeout=None):
+                self.waited = True
+                self.exited = True
+                return 0
 
         try:
             self.app.save_job(job_id, {"status": "running", "request": {}, "createdAt": 0})
@@ -70,6 +77,7 @@ class WorkerContractTests(unittest.TestCase):
             result = self.app.cancel_job(job_id, authorization="Bearer test-token")
             self.assertEqual(result, {"status": "cancelled"})
             self.assertTrue(fake.terminated)
+            self.assertTrue(fake.waited)
             self.assertEqual(self.app.active_job_id, job_id)
         finally:
             self.app.active_job_id = original_active

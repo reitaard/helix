@@ -13,6 +13,7 @@ import uuid
 
 from fastapi import Body, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 
 WORKER_NAME = "helix-facefusion-worker"
 WORKER_VERSION = "0.3.0"
@@ -52,6 +53,7 @@ SAFE_JOB_ERRORS = {
 
 app = FastAPI(title="Helix FaceFusion Worker", version=WORKER_VERSION)
 state_lock = threading.RLock()
+face_probe_lock = threading.Lock()
 active_job_id: str | None = None
 processes: dict[str, subprocess.Popen[str]] = {}
 cancelled_jobs: set[str] = set()
@@ -114,11 +116,14 @@ def detect_face_count(path: Path) -> int:
     env = os.environ.copy()
     env["HELIX_FACEFUSION_ROOT"] = str(FACEFUSION_ROOT)
     try:
-        result = subprocess.run(
-            [str(FACEFUSION_PYTHON), str(FACE_PROBE), str(path)],
-            cwd=str(FACEFUSION_ROOT), env=env, capture_output=True, text=True,
-            timeout=120, check=False
-        )
+        # The subprocess itself is CPU-only. Serialize probes so several forum
+        # uploads cannot cold-load FaceFusion detector models at once.
+        with face_probe_lock:
+            result = subprocess.run(
+                [str(FACEFUSION_PYTHON), str(FACE_PROBE), str(path)],
+                cwd=str(FACEFUSION_ROOT), env=env, capture_output=True, text=True,
+                timeout=120, check=False
+            )
     except Exception as exc:
         raise detail("face_analysis_failed", 503) from exc
 
@@ -292,8 +297,13 @@ def run_job(job_id: str) -> None:
         output = output_dir / f"result{extension}"
         command = build_command(source, target, output, record["request"]["settings"])
 
-        process = subprocess.Popen(command, cwd=str(FACEFUSION_ROOT), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # Re-check cancellation and register the subprocess atomically. Without
+        # this boundary a cancel could observe "no process" after the runner had
+        # already decided to launch CUDA work.
         with state_lock:
+            if job_id in cancelled_jobs:
+                return
+            process = subprocess.Popen(command, cwd=str(FACEFUSION_ROOT), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             processes[job_id] = process
         stdout, stderr = process.communicate()
         stdout_path.write_text(stdout, encoding="utf-8", errors="replace")
@@ -413,12 +423,14 @@ async def upload_input(
                 if bytes_written > MAX_INPUT_BYTES:
                     raise detail("input_too_large", 413)
                 output.write(chunk)
-        media_kind, media = probe_media(stored, filename)
+        # Keep long ffprobe/FaceFusion subprocess work off the ASGI event loop,
+        # so status/readiness/cancel requests remain responsive during uploads.
+        media_kind, media = await run_in_threadpool(probe_media, stored, filename)
         if role == "source" and media_kind != "image":
             raise detail("source_must_be_image", 422)
         face_count: int | None = None
         if media_kind == "image":
-            face_count = detect_face_count(stored)
+            face_count = await run_in_threadpool(detect_face_count, stored)
             if face_count == 0:
                 raise detail("no_source_face_detected" if role == "source" else "no_target_face_detected", 422)
         meta = {
@@ -511,16 +523,39 @@ def cancel_job(job_id: str, authorization: str | None = Header(default=None)) ->
             return job_response(record)
         cancelled_jobs.add(job_id)
         process = processes.get(job_id)
-        if process and process.poll() is None:
+        if process is None:
+            # The runner has not atomically registered CUDA work, so its second
+            # cancellation check guarantees no process can now be launched.
+            record["status"] = "cancelled"
+            record["finishedAt"] = time.time()
+            record.pop("artifact", None)
+            record.pop("error", None)
+            save_job(job_id, record)
+            return job_response(record)
+
+    # A running subprocess must be gone before Helix is told cancellation
+    # succeeded; otherwise PostgreSQL may release the shared RTX 4060 resource
+    # and dispatch Comfy while FaceFusion still owns CUDA.
+    try:
+        if process.poll() is None:
             process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+    except Exception as exc:
+        with state_lock:
+            cancelled_jobs.discard(job_id)
+        raise detail("cancel_failed", 503) from exc
+
+    with state_lock:
+        record = load_job(job_id)
         record["status"] = "cancelled"
         record["finishedAt"] = time.time()
         record.pop("artifact", None)
         record.pop("error", None)
         save_job(job_id, record)
-        # Do not release active_job_id here. terminate() is asynchronous and the
-        # old FaceFusion process may still own CUDA. The runner finally block
-        # releases worker capacity only after the process has actually exited.
         return job_response(record)
 
 
