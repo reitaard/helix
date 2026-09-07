@@ -49,7 +49,7 @@ const envSchema = z.object({
     z.string().url().optional(),
 
   HELIX_FACEFUSION_WORKER_REVISION:
-    z.string().min(1).default("0.2.0"),
+    z.string().min(1).default("0.3.0"),
 
   HELIX_FACEFUSION_WORKER_TOKEN:
     z.string().min(1).optional(),

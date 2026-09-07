@@ -25,6 +25,7 @@ import {
   type FaceFusionProfileSettings,
   type FaceFusionSessionSettings
 } from "../facefusion/profile-settings.js";
+import { faceFusionInputMessage } from "../facefusion/errors.js";
 import { validateFaceFusionMedia } from "../facefusion/media-validation.js";
 import { commandForBot } from "./context.js";
 import { escapeHtml, profileTitle } from "./presentation.js";
@@ -41,6 +42,7 @@ interface Update { update_id: number; message?: Message; callback_query?: { id?:
 interface Envelope<T> { ok?: boolean; result?: T; description?: string }
 
 class InvalidFaceFusionMediaError extends Error {}
+class FaceFusionSemanticInputError extends Error {}
 class FaceFusionDurationError extends Error { constructor(readonly limit: number) { super("FaceFusion video exceeds duration policy"); } }
 
 function settingName(value: string) {
@@ -310,7 +312,15 @@ export class TelegramFaceFusionService {
       if (metadata.mediaKind === "video" && metadata.durationSeconds! > faceFusionDurationLimit(session)) {
         throw new FaceFusionDurationError(faceFusionDurationLimit(session));
       }
-      const uploaded = await this.workers.uploadInput(this.workerId, path, { filename: media.filename, mediaKind: media.mediaKind, role });
+      let uploaded;
+      try {
+        uploaded = await this.workers.uploadInput(this.workerId, path, { filename: media.filename, mediaKind: media.mediaKind, role });
+      }
+      catch (error) {
+        const message = faceFusionInputMessage(error, role);
+        if (message) throw new FaceFusionSemanticInputError(message);
+        throw error;
+      }
       if (!uploaded) throw new Error("FaceFusion input upload is unavailable");
       return { handle: uploaded.handle, metadata };
     }
@@ -477,6 +487,9 @@ export class TelegramFaceFusionService {
       catch (error) {
         if (error instanceof FaceFusionDurationError) {
           await this.telegram.sendHtml(this.durationRejected(error.limit), destination); return;
+        }
+        if (error instanceof FaceFusionSemanticInputError) {
+          await this.telegram.sendHtml(`${profileTitle("FaceFusion")}\n${escapeHtml(error.message).replaceAll("\n", "<br>")}`, destination); return;
         }
         if (error instanceof InvalidFaceFusionMediaError) {
           await this.telegram.sendHtml(`${profileTitle("FaceFusion")}\n${state.phase === "awaiting_source" ? "Send a valid source face image." : "Send a valid target image or video."}`, destination); return;
