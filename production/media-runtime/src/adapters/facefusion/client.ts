@@ -3,16 +3,25 @@ import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 
 export const FACEFUSION_WORKER_NAME = "helix-facefusion-worker";
-export const FACEFUSION_WORKER_VERSION = "0.2.0";
+export const FACEFUSION_WORKER_VERSION = "0.3.0";
 export const FACEFUSION_BACKEND = "facefusion";
 export const FACEFUSION_PROFILE = "faceswap";
 export const FACEFUSION_TOOL = "face.swap";
 export const FACEFUSION_MODEL_DISPLAY_NAME = "HyperSwap B";
 export const FACEFUSION_MODEL_ID = "hyperswap_1b_256";
+export const FACEFUSION_ERROR_CODES = [
+  "no_source_face_detected",
+  "no_target_face_detected",
+  "face_analysis_failed",
+  "processing_failed",
+  "output_missing",
+  "worker_restarted"
+] as const;
 
 export type FaceFusionInputRole = "source" | "target";
 export type FaceFusionMediaKind = "image" | "video";
 export type FaceFusionJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+export type FaceFusionErrorCode = typeof FACEFUSION_ERROR_CODES[number];
 
 export interface FaceFusionHealthResponse {
   ok: true;
@@ -37,6 +46,7 @@ export interface FaceFusionReadinessResponse {
     facefusionEntry: boolean;
     facefusionPython: boolean;
     hyperswapBModel: boolean;
+    faceProbe: boolean;
     inputRoot: boolean;
     outputRoot: boolean;
     jobRoot: boolean;
@@ -48,6 +58,7 @@ export interface FaceFusionInputResponse {
   role: FaceFusionInputRole;
   mediaKind: FaceFusionMediaKind;
   sizeBytes: number;
+  faceCount: number | null;
 }
 
 export interface FaceFusionArtifactMetadata {
@@ -56,9 +67,12 @@ export interface FaceFusionArtifactMetadata {
   sizeBytes: number;
 }
 
+export interface FaceFusionJobError { code: FaceFusionErrorCode }
+
 export interface FaceFusionJobResponse {
   status: FaceFusionJobStatus;
   artifact?: FaceFusionArtifactMetadata;
+  error?: FaceFusionJobError;
 }
 
 export interface FaceFusionJobRequest {
@@ -106,6 +120,10 @@ function nonnegativeInteger(value: unknown, label: string): asserts value is num
   if (!Number.isSafeInteger(value) || Number(value) < 0) throw new Error(`FaceFusion ${label} must be a non-negative integer`);
 }
 
+function positiveInteger(value: unknown, label: string): asserts value is number {
+  if (!Number.isSafeInteger(value) || Number(value) < 1) throw new Error(`FaceFusion ${label} must be a positive integer`);
+}
+
 function parseHealth(value: unknown): FaceFusionHealthResponse {
   const body = object(value, "health");
   if (body.ok !== true) throw new Error("FaceFusion health ok must be true");
@@ -131,7 +149,7 @@ function parseReadiness(value: unknown): FaceFusionReadinessResponse {
   if (capacity.activeJobId !== null && typeof capacity.activeJobId !== "string") throw new Error("FaceFusion readiness activeJobId must be null or string");
   boolean(body.apiAuthConfigured, "readiness apiAuthConfigured");
   const checks = object(body.checks, "readiness checks");
-  for (const key of ["facefusionRoot", "facefusionEntry", "facefusionPython", "hyperswapBModel", "inputRoot", "outputRoot", "jobRoot"] as const) {
+  for (const key of ["facefusionRoot", "facefusionEntry", "facefusionPython", "hyperswapBModel", "faceProbe", "inputRoot", "outputRoot", "jobRoot"] as const) {
     boolean(checks[key], `readiness checks.${key}`);
   }
   return body as unknown as FaceFusionReadinessResponse;
@@ -146,6 +164,8 @@ function parseInput(value: unknown, expectedRole: FaceFusionInputRole): FaceFusi
   if (body.mediaKind !== "image" && body.mediaKind !== "video") throw new Error("FaceFusion input mediaKind must be image or video");
   if (expectedRole === "source" && body.mediaKind !== "image") throw new Error("FaceFusion source input must be an image");
   nonnegativeInteger(body.sizeBytes, "input sizeBytes");
+  if (body.mediaKind === "image") positiveInteger(body.faceCount, "input faceCount");
+  else if (body.faceCount !== null) throw new Error("FaceFusion video input faceCount must be null");
   return body as unknown as FaceFusionInputResponse;
 }
 
@@ -158,19 +178,30 @@ function parseArtifact(value: unknown): FaceFusionArtifactMetadata {
   return body as unknown as FaceFusionArtifactMetadata;
 }
 
+function parseJobError(value: unknown): FaceFusionJobError {
+  const body = object(value, "job error");
+  if (typeof body.code !== "string" || !FACEFUSION_ERROR_CODES.includes(body.code as FaceFusionErrorCode)) {
+    throw new Error("FaceFusion job error code is invalid");
+  }
+  return { code: body.code as FaceFusionErrorCode };
+}
+
 function parseJob(value: unknown): FaceFusionJobResponse {
   const body = object(value, "job");
   if (!["queued", "running", "succeeded", "failed", "cancelled"].includes(String(body.status))) {
     throw new Error("FaceFusion job status is invalid");
   }
   if (body.status === "succeeded") {
+    if (body.error !== undefined && body.error !== null) throw new Error("FaceFusion successful job must not expose an error");
     return { status: "succeeded", artifact: parseArtifact(body.artifact) };
   }
   if (body.artifact !== undefined && body.artifact !== null) throw new Error("FaceFusion non-successful job must not expose an artifact");
-  return { status: body.status as Exclude<FaceFusionJobStatus, "succeeded"> };
+  if (body.status === "failed") return { status: "failed", error: parseJobError(body.error) };
+  if (body.error !== undefined && body.error !== null) throw new Error("FaceFusion non-failed job must not expose an error");
+  return { status: body.status as "queued" | "running" | "cancelled" };
 }
 
-/** Exact transport boundary for helix-facefusion-worker 0.2.0. */
+/** Exact transport boundary for helix-facefusion-worker 0.3.0. */
 export class FaceFusionClient {
   private readonly baseUrl: string;
 

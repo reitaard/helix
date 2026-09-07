@@ -4,7 +4,7 @@ import {
   FaceFusionHttpError,
   faceFusionWireParsers
 } from "../dist/adapters/facefusion/client.js";
-import { FaceFusionAdapter } from "../dist/adapters/facefusion/adapter.js";
+import { FaceFusionAdapter, faceFusionNormalization } from "../dist/adapters/facefusion/adapter.js";
 
 const SOURCE_ID = "00112233445546778899aabbccddeeff";
 const TARGET_ID = "ffeeddccbbaa4988bbaa009988776655";
@@ -28,6 +28,7 @@ function readiness(overrides = {}) {
       facefusionEntry: true,
       facefusionPython: true,
       hyperswapBModel: true,
+      faceProbe: true,
       inputRoot: true,
       outputRoot: true,
       jobRoot: true
@@ -36,13 +37,13 @@ function readiness(overrides = {}) {
   };
 }
 
-test("FaceFusion adapter maps the exact worker 0.2.0 contract", async () => {
+test("FaceFusion adapter maps the exact worker 0.3.0 contract", async () => {
   const original = globalThis.fetch;
   const requests = [];
   let jobReads = 0;
   globalThis.fetch = async (url, init = {}) => {
     requests.push({ url: String(url), init });
-    if (String(url).endsWith("/v1/health")) return json({ ok: true, worker: "helix-facefusion-worker", version: "0.2.0" });
+    if (String(url).endsWith("/v1/health")) return json({ ok: true, worker: "helix-facefusion-worker", version: "0.3.0" });
     if (String(url).endsWith("/v1/readiness")) return json(readiness());
     if (String(url).endsWith("/v1/jobs") && init.method === "POST") return json({ status: "queued" });
     if (String(url).endsWith("/v1/jobs/job_123")) return ++jobReads === 1
@@ -53,7 +54,7 @@ test("FaceFusion adapter maps the exact worker 0.2.0 contract", async () => {
   };
   try {
     const adapter = new FaceFusionAdapter("http://100.110.21.79:8791/", "test-token");
-    assert.equal((await adapter.liveness()).backendVersion, "0.2.0");
+    assert.equal((await adapter.liveness()).backendVersion, "0.3.0");
     const ready = await adapter.readiness();
     assert.equal(ready.transportReady, true);
     assert.equal(ready.checks.events, false);
@@ -89,13 +90,14 @@ test("FaceFusion adapter maps the exact worker 0.2.0 contract", async () => {
   finally { globalThis.fetch = original; }
 });
 
-test("FaceFusion readiness requires overall readiness, authentication, and every required check", async () => {
+test("FaceFusion readiness requires overall readiness, authentication, face probe, and every required check", async () => {
   const original = globalThis.fetch;
   try {
     for (const [body, expected] of [
       [readiness(), { transportReady: true, runtime: true, error: null }],
       [readiness({ ready: false, apiAuthConfigured: false }), { transportReady: false, runtime: false, error: /API authentication is not configured/ }],
-      [readiness({ checks: { ...readiness().checks, outputRoot: false } }), { transportReady: false, runtime: false, error: /outputRoot/ }]
+      [readiness({ checks: { ...readiness().checks, outputRoot: false } }), { transportReady: false, runtime: false, error: /outputRoot/ }],
+      [readiness({ ready: false, checks: { ...readiness().checks, faceProbe: false } }), { transportReady: false, runtime: false, error: /faceProbe/ }]
     ]) {
       globalThis.fetch = async () => json(body);
       const result = await new FaceFusionAdapter("http://worker", "test-token").readiness();
@@ -107,8 +109,19 @@ test("FaceFusion readiness requires overall readiness, authentication, and every
   } finally { globalThis.fetch = original; }
 });
 
+test("FaceFusion wire parsers require semantic image metadata and structured failures", () => {
+  assert.deepEqual(faceFusionWireParsers.parseInput({ id: SOURCE_ID, role: "source", mediaKind: "image", sizeBytes: 10, faceCount: 1 }, "source"), {
+    id: SOURCE_ID, role: "source", mediaKind: "image", sizeBytes: 10, faceCount: 1
+  });
+  assert.deepEqual(faceFusionWireParsers.parseInput({ id: TARGET_ID, role: "target", mediaKind: "video", sizeBytes: 10, faceCount: null }, "target").faceCount, null);
+  assert.throws(() => faceFusionWireParsers.parseInput({ id: SOURCE_ID, role: "source", mediaKind: "image", sizeBytes: 10, faceCount: 0 }, "source"), /positive integer/);
+  assert.throws(() => faceFusionWireParsers.parseJob({ status: "failed" }), /job error/);
+  assert.deepEqual(faceFusionWireParsers.parseJob({ status: "failed", error: { code: "processing_failed" } }), { status: "failed", error: { code: "processing_failed" } });
+  assert.equal(faceFusionNormalization.executionStatus({ status: "failed", error: { code: "worker_restarted" } }, "job").error, "FaceFusion worker restarted during execution.");
+});
+
 test("FaceFusion wire parsers reject aliases and contract drift", () => {
-  assert.throws(() => faceFusionWireParsers.parseHealth({ version: "0.2.0" }), /health ok/);
+  assert.throws(() => faceFusionWireParsers.parseHealth({ version: "0.3.0" }), /health ok/);
   assert.throws(() => faceFusionWireParsers.parseReadiness(readiness({ backend: "comfy" })), /readiness backend/);
   assert.throws(() => faceFusionWireParsers.parseJob({ state: "processing" }), /status is invalid/);
   assert.throws(() => faceFusionWireParsers.parseJob({ status: "completed" }), /status is invalid/);
@@ -116,12 +129,9 @@ test("FaceFusion wire parsers reject aliases and contract drift", () => {
 });
 
 test("FaceFusion input parser enforces UUID4 hex, role and detected media kind", () => {
-  assert.deepEqual(faceFusionWireParsers.parseInput({ id: SOURCE_ID, role: "source", mediaKind: "image", sizeBytes: 10 }, "source"), {
-    id: SOURCE_ID, role: "source", mediaKind: "image", sizeBytes: 10
-  });
-  assert.throws(() => faceFusionWireParsers.parseInput({ id: "../../input.jpg", role: "source", mediaKind: "image", sizeBytes: 10 }, "source"), /UUID4 hex/);
-  assert.throws(() => faceFusionWireParsers.parseInput({ id: SOURCE_ID, role: "target", mediaKind: "image", sizeBytes: 10 }, "source"), /role must be source/);
-  assert.throws(() => faceFusionWireParsers.parseInput({ id: SOURCE_ID, role: "source", mediaKind: "video", sizeBytes: 10 }, "source"), /source input must be an image/);
+  assert.throws(() => faceFusionWireParsers.parseInput({ id: "../../input.jpg", role: "source", mediaKind: "image", sizeBytes: 10, faceCount: 1 }, "source"), /UUID4 hex/);
+  assert.throws(() => faceFusionWireParsers.parseInput({ id: SOURCE_ID, role: "target", mediaKind: "image", sizeBytes: 10, faceCount: 1 }, "source"), /role must be source/);
+  assert.throws(() => faceFusionWireParsers.parseInput({ id: SOURCE_ID, role: "source", mediaKind: "video", sizeBytes: 10, faceCount: null }, "source"), /source input must be an image/);
 });
 
 test("FaceFusion HTTP 409 preserves exact conflict and busy details", () => {

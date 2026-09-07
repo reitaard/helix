@@ -5,6 +5,7 @@ import type {
   AdapterReadiness,
   MediaAdapter
 } from "../../domain/media-adapter.js";
+import { faceFusionExecutionMessage } from "../../facefusion/errors.js";
 import { faceFusionAdapterRequest } from "../../facefusion/settings.js";
 import {
   FACEFUSION_WORKER_VERSION,
@@ -30,7 +31,8 @@ function executionStatus(body: FaceFusionJobResponse, backendJobId: string): Ada
     };
   }
   if (body.status === "failed") {
-    return { state: "failed", artifacts: [], error: "FaceFusion execution failed" };
+    if (!body.error) throw new Error("FaceFusion failed job has no structured error");
+    return { state: "failed", artifacts: [], error: faceFusionExecutionMessage(body.error.code) };
   }
   if (body.status === "cancelled") {
     return { state: "cancelled", artifacts: [] };
