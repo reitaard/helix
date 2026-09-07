@@ -8,20 +8,19 @@ import unittest
 from fastapi import HTTPException, UploadFile
 
 
+_TEST_TEMP = tempfile.TemporaryDirectory()
+_TEST_ROOT = Path(_TEST_TEMP.name)
+os.environ["HELIX_FACEFUSION_DATA_ROOT"] = str(_TEST_ROOT / "data")
+os.environ["HELIX_FACEFUSION_ROOT"] = str(_TEST_ROOT / "facefusion")
+os.environ["HELIX_FACEFUSION_PYTHON"] = str(_TEST_ROOT / "python.exe")
+os.environ["HELIX_FACEFUSION_API_TOKEN"] = "test-token"
+_TEST_APP = importlib.import_module("app")
+
+
 class WorkerContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp = tempfile.TemporaryDirectory()
-        root = Path(cls.temp.name)
-        os.environ["HELIX_FACEFUSION_DATA_ROOT"] = str(root / "data")
-        os.environ["HELIX_FACEFUSION_ROOT"] = str(root / "facefusion")
-        os.environ["HELIX_FACEFUSION_PYTHON"] = str(root / "python.exe")
-        os.environ["HELIX_FACEFUSION_API_TOKEN"] = "test-token"
-        cls.app = importlib.import_module("app")
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.temp.cleanup()
+        cls.app = _TEST_APP
 
     def test_settings_contract_accepts_worker_capabilities(self):
         value = self.app.validate_settings({
@@ -97,7 +96,7 @@ class WorkerContractTests(unittest.TestCase):
 
 class WorkerInputSemanticTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.app = WorkerContractTests.app
+        self.app = _TEST_APP
         self.original_probe = self.app.probe_media
         self.original_detect = self.app.detect_face_count
 
@@ -134,6 +133,10 @@ class WorkerInputSemanticTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["faceCount"], 2)
         self.assertRegex(result["id"], self.app.UUID4_HEX)
         self.app.delete_input_files(result["id"])
+
+
+def tearDownModule():
+    _TEST_TEMP.cleanup()
 
 
 if __name__ == "__main__":
