@@ -85,7 +85,7 @@ test("source image with no detected face stays awaiting_source and creates no ha
     await h.service.processUpdate(privateMessage({ photo: [{ file_id: "no-face" }] }));
     assert.equal(h.state().phase, "awaiting_source");
     assert.equal(h.state().sourceInputHandle, null);
-    assert.match(text(h.sent.at(-1).html), /No face detected in the source image\.\nSend another source image\./);
+    assert.match(text(h.sent.at(-1).html), /No face detected in the source image\. Send another source image\./);
   } finally { await h.restore(); }
 });
 
@@ -100,6 +100,6 @@ test("target image with no detected face keeps accepted source and stays awaitin
     assert.equal(h.state().phase, "awaiting_target");
     assert.equal(h.state().sourceInputHandle, "handle-1");
     assert.equal(h.state().targetInputHandle, null);
-    assert.match(text(h.sent.at(-1).html), /No face detected in the target image\.\nSend another target image or video\./);
+    assert.match(text(h.sent.at(-1).html), /No face detected in the target image\. Send another target image or video\./);
   } finally { await h.restore(); }
 });

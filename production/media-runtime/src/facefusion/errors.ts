@@ -11,13 +11,13 @@ function errorCode(error: unknown): FaceFusionErrorCode | null {
 export function faceFusionInputMessage(error: unknown, role: "source" | "target") {
   const code = errorCode(error);
   if (role === "source" && code === "no_source_face_detected") {
-    return "No face detected in the source image.\nSend another source image.";
+    return "No face detected in the source image. Send another source image.";
   }
   if (role === "target" && code === "no_target_face_detected") {
-    return "No face detected in the target image.\nSend another target image or video.";
+    return "No face detected in the target image. Send another target image or video.";
   }
   if (code === "face_analysis_failed") {
-    return "Could not analyse faces in the image.\nTry another image.";
+    return "Could not analyse faces in the image. Try another image.";
   }
   return null;
 }

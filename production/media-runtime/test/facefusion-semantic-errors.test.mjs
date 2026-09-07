@@ -7,9 +7,9 @@ test("FaceFusion semantic input errors stay bounded and actionable", () => {
   const source = new FaceFusionHttpError("/v1/inputs", 422, { code: "no_source_face_detected" });
   const target = new FaceFusionHttpError("/v1/inputs", 422, { code: "no_target_face_detected" });
   const analyse = new FaceFusionHttpError("/v1/inputs", 503, { code: "face_analysis_failed" });
-  assert.equal(faceFusionInputMessage(source, "source"), "No face detected in the source image.\nSend another source image.");
-  assert.equal(faceFusionInputMessage(target, "target"), "No face detected in the target image.\nSend another target image or video.");
-  assert.equal(faceFusionInputMessage(analyse, "source"), "Could not analyse faces in the image.\nTry another image.");
+  assert.equal(faceFusionInputMessage(source, "source"), "No face detected in the source image. Send another source image.");
+  assert.equal(faceFusionInputMessage(target, "target"), "No face detected in the target image. Send another target image or video.");
+  assert.equal(faceFusionInputMessage(analyse, "source"), "Could not analyse faces in the image. Try another image.");
   assert.equal(faceFusionInputMessage(source, "target"), null);
 });
 
